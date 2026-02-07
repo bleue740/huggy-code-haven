@@ -1,0 +1,229 @@
+import React, { useMemo, useState } from "react";
+import { Monitor, Tablet, Smartphone, Maximize2, Minimize2 } from "lucide-react";
+import { CONSOLE_CAPTURE_SCRIPT } from "../hooks/useConsoleCapture";
+
+interface CodePreviewProps {
+  code: string;
+  isGenerating: boolean;
+}
+
+type DeviceMode = "desktop" | "tablet" | "mobile";
+
+const BABEL_CDN = "https://unpkg.com/@babel/standalone@7.26.10/babel.min.js";
+const REACT_CDN = "https://unpkg.com/react@18.3.1/umd/react.production.min.js";
+const REACT_DOM_CDN = "https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js";
+const TAILWIND_CDN = "https://cdn.tailwindcss.com";
+
+function buildIframeHtml(tsxCode: string): string {
+  return `<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="${TAILWIND_CDN}"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            border: '#1a1a1a',
+            background: '#050505',
+            foreground: '#f5f5f5',
+            primary: { DEFAULT: '#2563eb', foreground: '#ffffff' },
+            muted: { DEFAULT: '#171717', foreground: '#a3a3a3' },
+            card: { DEFAULT: '#111111', foreground: '#f5f5f5' },
+            accent: { DEFAULT: '#1d4ed8', foreground: '#ffffff' },
+          }
+        }
+      }
+    };
+  </script>
+  <script src="${REACT_CDN}"></script>
+  <script src="${REACT_DOM_CDN}"></script>
+  <script src="${BABEL_CDN}"></script>
+  ${CONSOLE_CAPTURE_SCRIPT}
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #050505; color: #f5f5f5; font-family: 'Inter', system-ui, -apple-system, sans-serif; min-height: 100vh; }
+    #root { min-height: 100vh; }
+    .error-container { padding: 2rem; color: #ef4444; font-family: monospace; font-size: 13px; white-space: pre-wrap; background: #1a0000; min-height: 100vh; }
+    .loading-container { display: flex; align-items: center; justify-content: center; min-height: 100vh; color: #a3a3a3; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div id="root"><div class="loading-container">Chargement…</div></div>
+  <script type="text/babel" data-type="module">
+    ${tsxCode}
+  </script>
+  <script>
+    window.addEventListener('error', function(e) {
+      var root = document.getElementById('root');
+      if (root) {
+        root.innerHTML = '<div class="error-container"><strong>Erreur de rendu:</strong>\\n\\n' +
+          (e.message || 'Unknown error') +
+          (e.filename ? '\\n\\nFichier: ' + e.filename + ':' + e.lineno : '') +
+          '</div>';
+      }
+    });
+  </script>
+</body>
+</html>`;
+}
+
+const DEFAULT_CODE = `function App() {
+  return (
+    <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-8">
+      <div className="text-center max-w-2xl">
+        <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-8">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        </div>
+        <h1 className="text-5xl font-black tracking-tight mb-4">Blink AI</h1>
+        <p className="text-neutral-400 text-lg mb-8">
+          Décris l'application que tu veux construire dans le chat.
+          L'IA va générer du vrai code React pour toi.
+        </p>
+        <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600/20 text-blue-400 text-sm font-bold rounded-full border border-blue-500/30">
+          <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+          Prêt à générer
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(React.createElement(App));
+`;
+
+export const CodePreview: React.FC<CodePreviewProps> = ({ code, isGenerating }) => {
+  const [deviceMode, setDeviceMode] = useState<DeviceMode>("desktop");
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const effectiveCode = code?.trim() || DEFAULT_CODE;
+
+  const iframeSrcDoc = useMemo(() => {
+    return buildIframeHtml(effectiveCode);
+  }, [effectiveCode]);
+
+  const deviceConfig = {
+    desktop: { width: "100%", height: "100%" },
+    tablet: { width: "768px", height: "90%" },
+    mobile: { width: "390px", height: "85%" },
+  };
+
+  const currentConfig = deviceConfig[deviceMode];
+
+  return (
+    <div
+      className={`flex-1 bg-[#050505] p-4 flex flex-col items-center overflow-hidden relative transition-all duration-500 ${
+        isFullscreen ? "fixed inset-0 z-[1000] p-0" : ""
+      }`}
+    >
+      {!isFullscreen && (
+        <div className="flex items-center gap-2 mb-4 bg-[#111] p-1.5 rounded-2xl border border-[#1a1a1a] shrink-0 shadow-2xl">
+          <DeviceButton
+            active={deviceMode === "desktop"}
+            onClick={() => setDeviceMode("desktop")}
+            icon={<Monitor size={16} />}
+            label="Desktop"
+          />
+          <DeviceButton
+            active={deviceMode === "tablet"}
+            onClick={() => setDeviceMode("tablet")}
+            icon={<Tablet size={16} />}
+            label="Tablet"
+          />
+          <DeviceButton
+            active={deviceMode === "mobile"}
+            onClick={() => setDeviceMode("mobile")}
+            icon={<Smartphone size={16} />}
+            label="Mobile"
+          />
+          <div className="w-[1px] h-4 bg-[#1a1a1a] mx-1" />
+          <button
+            onClick={() => setIsFullscreen(true)}
+            className="p-2 text-neutral-500 hover:text-white hover:bg-white/5 rounded-lg transition-all"
+            title="Fullscreen Preview"
+          >
+            <Maximize2 size={16} />
+          </button>
+        </div>
+      )}
+
+      {isFullscreen && (
+        <button
+          onClick={() => setIsFullscreen(false)}
+          className="fixed top-6 right-6 z-[1100] bg-white text-black p-3 rounded-full shadow-2xl hover:opacity-90 transition-all border border-neutral-200"
+        >
+          <Minimize2 size={24} />
+        </button>
+      )}
+
+      <div
+        className={`bg-[#050505] relative overflow-hidden flex flex-col border border-[#1a1a1a] transition-all duration-700 ease-in-out shadow-[0_0_100px_rgba(0,0,0,0.8)] ${
+          isFullscreen ? "w-full h-full" : "rounded-2xl"
+        }`}
+        style={{
+          width: isFullscreen ? "100%" : currentConfig.width,
+          height: isFullscreen ? "100%" : currentConfig.height,
+        }}
+      >
+        <div className="h-11 bg-[#111] border-b border-[#1a1a1a] flex items-center px-4 gap-3 shrink-0">
+          <div className="flex gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-[#333]" />
+            <div className="w-3 h-3 rounded-full bg-[#333]" />
+            <div className="w-3 h-3 rounded-full bg-[#333]" />
+          </div>
+          <div className="flex-1 mx-6 bg-[#0a0a0a]/60 rounded-md h-7 border border-[#1a1a1a] flex items-center px-3 text-[11px] text-neutral-500 font-medium overflow-hidden whitespace-nowrap">
+            blink.cloud/preview
+          </div>
+          <div className="flex items-center gap-2">
+            {isGenerating && (
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse" />
+                <span className="text-[10px] font-bold text-blue-500">GENERATING</span>
+              </div>
+            )}
+            <div className="text-[10px] font-bold text-blue-500 whitespace-nowrap">
+              LIVE REACT
+            </div>
+          </div>
+        </div>
+
+        <iframe
+          key={effectiveCode}
+          srcDoc={iframeSrcDoc}
+          className="flex-1 w-full border-none bg-[#050505]"
+          sandbox="allow-scripts allow-same-origin"
+          title="Code Preview"
+        />
+      </div>
+    </div>
+  );
+};
+
+const DeviceButton = ({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) => (
+  <button
+    onClick={onClick}
+    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+      active
+        ? "bg-blue-600 text-white shadow-lg"
+        : "text-neutral-500 hover:text-white hover:bg-white/5"
+    }`}
+    title={label}
+  >
+    {icon}
+    <span className="hidden sm:inline">{label}</span>
+  </button>
+);
