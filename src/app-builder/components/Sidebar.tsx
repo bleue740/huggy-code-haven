@@ -377,8 +377,62 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                   >
                     <Plus size={18} className={showAttachMenu ? 'rotate-45' : ''} style={{ transition: 'transform 0.2s' }} />
                   </button>
+
+                  {showAttachMenu && (
+                    <div className="absolute bottom-full left-0 mb-2 bg-[#1a1a1a] border border-[#333] rounded-2xl p-2 min-w-[180px] shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200 z-50">
+                      <button onClick={() => { setShowAttachMenu(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group">
+                        <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
+                          <ImageIcon size={14} className="text-blue-400" />
+                        </div>
+                        <span>Attach Image</span>
+                      </button>
+                      <button onClick={() => { setShowAttachMenu(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
+                          <FileUp size={14} className="text-emerald-400" />
+                        </div>
+                        <span>Attach File</span>
+                      </button>
+                      <div className="h-[1px] bg-[#333] my-2" />
+                      <button onClick={() => { setShowAttachMenu(false); onScreenshotRequest?.(); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group">
+                        <div className="w-7 h-7 rounded-lg bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
+                          <Camera size={14} className="text-purple-400" />
+                        </div>
+                        <span>Screenshot</span>
+                      </button>
+                      <button onClick={() => { setShowAttachMenu(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group">
+                        <div className="w-7 h-7 rounded-lg bg-orange-500/10 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
+                          <Link size={14} className="text-orange-400" />
+                        </div>
+                        <span>Import URL</span>
+                      </button>
+                      <div className="h-[1px] bg-[#333] my-2" />
+                      <button onClick={() => { setShowAttachMenu(false); onShowHistory?.(); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group">
+                        <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
+                          <HistoryIcon size={14} className="text-amber-400" />
+                        </div>
+                        <span>History</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
 
+                {/* Visual Edit Mode Button */}
+                <button
+                  onClick={() => {
+                    if (onToggleVisualEdit) onToggleVisualEdit();
+                    else setState(prev => ({ ...prev, isVisualEditMode: !prev.isVisualEditMode }));
+                  }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
+                    (state.isVisualEditMode ?? false)
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                      : 'bg-[#262626] text-neutral-300 hover:bg-[#333]'
+                  }`}
+                >
+                  <Sparkles size={13} className={(state.isVisualEditMode ?? false) ? 'text-white' : 'text-blue-400'} />
+                  Visual
+                </button>
+
+                {/* Voice Input Button */}
                 <button
                   onClick={toggleListening}
                   className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isListening ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/30' : 'hover:bg-white/5 text-neutral-400'}`}
@@ -389,7 +443,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
               </div>
 
               <div className="flex items-center gap-1">
-                <button onClick={() => setIsCodeView(false)} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${isCodeView ? 'bg-blue-600 text-white' : 'bg-[#262626] text-neutral-300 hover:bg-[#333]'}`}>
+                <button onClick={() => setIsCodeView(false)} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${!isCodeView ? 'bg-[#262626] text-neutral-300' : 'bg-blue-600 text-white'}`}>
                   <MessageSquare size={13} /> Chat
                 </button>
                 {state.isGenerating ? (
