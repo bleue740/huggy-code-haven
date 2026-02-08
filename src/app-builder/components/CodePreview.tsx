@@ -1,10 +1,12 @@
 import React, { useMemo, useState } from "react";
 import { Monitor, Tablet, Smartphone, Maximize2, Minimize2 } from "lucide-react";
 import { CONSOLE_CAPTURE_SCRIPT } from "../hooks/useConsoleCapture";
+import { GeneratingOverlay } from "./GeneratingOverlay";
 
 interface CodePreviewProps {
   code: string;
   isGenerating: boolean;
+  generationStatus?: string;
 }
 
 type DeviceMode = "desktop" | "tablet" | "mobile";
@@ -96,7 +98,7 @@ const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(React.createElement(App));
 `;
 
-export const CodePreview: React.FC<CodePreviewProps> = ({ code, isGenerating }) => {
+export const CodePreview: React.FC<CodePreviewProps> = ({ code, isGenerating, generationStatus }) => {
   const [deviceMode, setDeviceMode] = useState<DeviceMode>("desktop");
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -191,13 +193,16 @@ export const CodePreview: React.FC<CodePreviewProps> = ({ code, isGenerating }) 
           </div>
         </div>
 
-        <iframe
-          key={effectiveCode}
-          srcDoc={iframeSrcDoc}
-          className="flex-1 w-full border-none bg-[#050505]"
-          sandbox="allow-scripts allow-same-origin"
-          title="Code Preview"
-        />
+        <div className="relative flex-1 w-full">
+          <iframe
+            key={effectiveCode}
+            srcDoc={iframeSrcDoc}
+            className="w-full h-full border-none bg-[#050505]"
+            sandbox="allow-scripts allow-same-origin"
+            title="Code Preview"
+          />
+          <GeneratingOverlay isVisible={isGenerating} statusText={generationStatus} />
+        </div>
       </div>
     </div>
   );
