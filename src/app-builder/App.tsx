@@ -6,6 +6,7 @@ import { LandingPage } from './components/LandingPage';
 import { ConsolePanel } from './components/ConsolePanel';
 import { useConsoleCapture } from './hooks/useConsoleCapture';
 import { useCredits } from './hooks/useCredits';
+import { useAIChat, extractCodeFromResponse } from './hooks/useAIChat';
 import { AppState, Message, AISuggestion, SecurityResult } from './types';
 import { X, CheckCircle2, Zap, Rocket, ShieldCheck, AlertTriangle, Info, Loader2, History } from 'lucide-react';
 import { useNavigate } from "react-router-dom";
@@ -65,10 +66,11 @@ const App: React.FC = () => {
   const navigate = useNavigate();
   const [showLanding, setShowLanding] = useState(true);
   const [consoleOpen, setConsoleOpen] = useState(false);
-  const abortRef = useRef<AbortController | null>(null);
+  const streamingTextRef = useRef('');
 
   const { logs: consoleLogs, clearLogs: clearConsoleLogs } = useConsoleCapture();
-  const { credits, useCredits: deductCredits, isLoading: creditsLoading } = useCredits();
+  const { credits, useCredits: deductCredits, isLoading: creditsLoading, refetch: refetchCredits } = useCredits();
+  const { sendMessage: sendAIMessage, stopStreaming, isStreaming } = useAIChat();
 
   const [state, setState] = useState<AppState>({
     credits: 0,
@@ -172,10 +174,9 @@ const App: React.FC = () => {
   }, []);
 
   const handleStopGenerating = useCallback(() => {
-    abortRef.current?.abort();
-    abortRef.current = null;
+    stopStreaming();
     setState(prev => ({ ...prev, isGenerating: false, aiStatusText: null }));
-  }, []);
+  }, [stopStreaming]);
 
   const handleSendMessage = useCallback(async (customPrompt?: string) => {
     const input = (customPrompt ?? state.currentInput).trim();
@@ -193,23 +194,87 @@ const App: React.FC = () => {
       currentInput: customPrompt ? prev.currentInput : '',
     }));
 
-    // Simulate AI response since there's no edge function yet
-    setTimeout(() => {
-      const assistantMessage: Message = {
-        id: (Date.now()).toString(),
-        role: 'assistant',
-        content: `J'ai bien reçu ta demande : "${input}". Pour générer du code, il faut configurer la fonction AI backend. En attendant, tu peux modifier le code directement dans l'éditeur à gauche (Ctrl+K).`,
-        timestamp: Date.now(),
-      };
-      setState(prev => ({
-        ...prev,
-        isGenerating: false,
-        aiStatusText: null,
-        history: [...prev.history, assistantMessage],
-      }));
-      fetchSuggestions();
-    }, 2000);
-  }, [state.currentInput, state.isGenerating, showLanding, fetchSuggestions]);
+    streamingTextRef.current = '';
+
+    // Build conversation messages for AI
+    const chatMessages = [...state.history, userMessage]
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .slice(-10)
+      .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+
+    // Current project code as context
+    const projectContext = buildConcatenatedCode(state.files);
+
+    await sendAIMessage(chatMessages, {
+      onDelta: (chunk) => {
+        streamingTextRef.current += chunk;
+        const currentText = streamingTextRef.current;
+        setState(prev => {
+          const last = prev.history[prev.history.length - 1];
+          if (last?.role === 'assistant' && last.id.startsWith('stream_')) {
+            return {
+              ...prev,
+              history: prev.history.map((m, i) =>
+                i === prev.history.length - 1 ? { ...m, content: currentText } : m
+              ),
+            };
+          }
+          return {
+            ...prev,
+            history: [
+              ...prev.history,
+              { id: `stream_${Date.now()}`, role: 'assistant', content: currentText, timestamp: Date.now() },
+            ],
+          };
+        });
+      },
+      onDone: (fullText) => {
+        // Extract code from the AI response
+        const extractedCode = extractCodeFromResponse(fullText);
+        if (extractedCode) {
+          setState(prev => ({
+            ...prev,
+            files: { ...prev.files, 'App.tsx': extractedCode },
+            activeFile: 'App.tsx',
+          }));
+          toast.success('✨ Code généré et injecté dans la preview !');
+        }
+
+        setState(prev => ({
+          ...prev,
+          isGenerating: false,
+          aiStatusText: null,
+        }));
+
+        // Refresh credits after generation
+        refetchCredits();
+        fetchSuggestions();
+      },
+      onError: (error, code) => {
+        const errorMessage: Message = {
+          id: `err_${Date.now()}`,
+          role: 'assistant',
+          content: `⚠️ ${error}`,
+          timestamp: Date.now(),
+        };
+        setState(prev => ({
+          ...prev,
+          isGenerating: false,
+          aiStatusText: null,
+          history: [...prev.history, errorMessage],
+        }));
+
+        if (code === 402) {
+          setState(prev => ({ ...prev, showUpgradeModal: true }));
+        }
+
+        toast.error(error);
+      },
+      onStatusChange: (status) => {
+        setState(prev => ({ ...prev, aiStatusText: status }));
+      },
+    }, projectContext);
+  }, [state.currentInput, state.isGenerating, state.history, state.files, showLanding, sendAIMessage, refetchCredits, fetchSuggestions]);
 
   const handlePublish = useCallback(async () => {
     setState(prev => ({ ...prev, isDeploying: true, deploymentProgress: 0 }));
@@ -310,7 +375,7 @@ const App: React.FC = () => {
             isCodeView={state.isCodeView}
             isGenerating={state.isGenerating}
           />
-          <CodePreview code={concatenatedCode} isGenerating={state.isGenerating} />
+          <CodePreview code={concatenatedCode} isGenerating={state.isGenerating} generationStatus={state.aiStatusText ?? undefined} />
           <ConsolePanel logs={consoleLogs} onClear={clearConsoleLogs} isOpen={consoleOpen} onToggle={() => setConsoleOpen(!consoleOpen)} />
         </div>
 
