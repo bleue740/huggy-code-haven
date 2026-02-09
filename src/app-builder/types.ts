@@ -56,6 +56,7 @@ export interface AppState {
   deployedUrl?: string | null;
   customDomain?: string | null;
   deploymentHistory?: { id: string; url: string; created_at: string }[];
+  projectName?: string;
   showUpgradeModal?: boolean;
   isRunningSecurity?: boolean;
   showSecurityModal?: boolean;
