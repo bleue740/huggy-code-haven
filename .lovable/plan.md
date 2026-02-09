@@ -1,23 +1,20 @@
 
 
-# Plan : Menu dropdown pour le header "Blink AI" (comme Lovable)
+# Plan : Corriger le dropdown et ajouter un Dashboard
 
-## Probleme actuel
+## Bug 1 : Dropdown coupe par overflow-hidden
 
-Le header "Blink AI" avec l'icone ChevronDown (lignes 195-199 de `Sidebar.tsx`) est **purement statique** : cliquer dessus ne fait rien. Dans Lovable, cliquer sur le nom du projet ouvre un menu dropdown avec des actions de gestion de projet.
+Le conteneur parent du bouton "Blink AI" (ligne 206 de Sidebar.tsx) a la classe CSS `overflow-hidden`. Comme le dropdown est positionne en `absolute` a l'interieur de ce conteneur, il est invisible car coupe par le parent.
 
-## Ce qui sera implemente
+**Correction** : Retirer `overflow-hidden` du conteneur header et ajouter `overflow-visible` pour que le dropdown puisse depasser du conteneur.
 
-Un menu dropdown qui s'ouvre au clic sur "Blink AI" avec les options suivantes :
+---
 
-1. **Nom du projet** (editable inline) -- affiche le nom du projet actuel avec possibilite de le renommer
-2. **New Chat** -- reinitialise la conversation sans perdre le code
-3. **New Project** -- cree un nouveau projet vierge
-4. **Rename Project** -- permet de renommer le projet
-5. **Project Settings** -- placeholder pour les parametres futurs
-6. **Back to Home** -- retour a la landing page
+## Bug 2 : "Back to Home" doit mener au Dashboard
 
-Le menu se fermera automatiquement en cliquant a l'exterieur, avec une animation d'ouverture fluide.
+Actuellement, cliquer sur "Back to Home" affiche la landing page marketing (la page d'accueil avec le champ de saisie "Build a modern SaaS..."). Dans Lovable, ce bouton ramene a un **Dashboard** qui liste les projets de l'utilisateur.
+
+**Solution** : Creer un composant `Dashboard` qui affiche la liste des projets et remplacer le comportement de "Back to Home" par la navigation vers ce Dashboard.
 
 ---
 
@@ -25,41 +22,31 @@ Le menu se fermera automatiquement en cliquant a l'exterieur, avec une animation
 
 ### Fichier modifie : `src/app-builder/components/Sidebar.tsx`
 
-**Changements :**
-- Ajouter un state `showProjectMenu` pour controler le dropdown
-- Transformer le `div` statique (lignes 195-199) en un `button` cliquable qui toggle le menu
-- Ajouter un popup dropdown positionne sous le header avec les options listees
-- Ajouter un `useRef` + `useEffect` pour fermer le menu au clic exterieur (meme pattern que le `attachMenuRef` existant)
-- Le menu utilisera le meme style visuel que le menu d'attachements existant (fond `#1a1a1a`, bordure `#333`, rounded-2xl)
+- **Ligne 206** : Remplacer `overflow-hidden` par `overflow-visible` dans le conteneur header
+- **Ligne 307** : Renommer "Back to Home" en "Dashboard" et changer l'icone `Home` par `Layout` (ou `LayoutDashboard`)
 
-### Fichier modifie : `src/app-builder/types.ts`
+### Fichier cree : `src/app-builder/components/Dashboard.tsx`
 
-**Changements :**
-- Ajouter `projectName?: string` dans `AppState` pour stocker le nom du projet
+Nouveau composant Dashboard qui affiche :
+- Header avec le logo Blink AI et un bouton "New Project"
+- Grille de projets de l'utilisateur charges depuis la base de donnees (table `projects`)
+- Chaque carte de projet montre : nom, date de derniere modification, bouton "Ouvrir"
+- Un etat vide si aucun projet n'existe avec un CTA pour en creer un
+- Design coherent avec le theme sombre existant
 
 ### Fichier modifie : `src/app-builder/App.tsx`
 
-**Changements :**
-- Initialiser `projectName` dans le state (valeur par defaut : "New Project", ou charge depuis la base de donnees)
-- Passer les callbacks necessaires a la Sidebar : `onNewChat`, `onRenameProject`, `onBackToLanding`
-- Ajouter `handleNewChat` : reinitialise l'historique de conversation tout en gardant le code actuel
-- Ajouter `handleRenameProject` : met a jour le nom dans le state + sauvegarde en base
-- Mettre a jour l'interface `SidebarProps` pour inclure les nouveaux callbacks
-
-### Interaction attendue
-
-1. L'utilisateur clique sur "Blink AI" + ChevronDown
-2. Un dropdown apparait avec animation (slide-in-from-top + fade-in)
-3. Le nom du projet s'affiche en haut du menu (ex: "New Project")
-4. Les options sont listees avec icones
-5. Cliquer sur une option execute l'action et ferme le menu
-6. Cliquer a l'exterieur ferme le menu
+- Ajouter un state `showDashboard` (boolean) a cote de `showLanding`
+- Modifier `onBackToLanding` pour activer `showDashboard` au lieu de `showLanding`
+- Ajouter un rendu conditionnel : si `showDashboard` est true, afficher le composant `Dashboard`
+- Ajouter un callback `handleOpenProject(projectId)` pour charger un projet depuis le dashboard
+- Ajouter un callback `handleCreateNewProject` pour creer un nouveau projet et ouvrir l'editeur
 
 ### Fichiers concernes
 
 | Fichier | Action |
 |---------|--------|
-| `src/app-builder/components/Sidebar.tsx` | Modifier -- ajouter le dropdown menu |
-| `src/app-builder/types.ts` | Modifier -- ajouter `projectName` au state |
-| `src/app-builder/App.tsx` | Modifier -- ajouter les callbacks et initialiser le nom du projet |
+| `src/app-builder/components/Sidebar.tsx` | Modifier -- corriger overflow + renommer bouton |
+| `src/app-builder/components/Dashboard.tsx` | Creer -- composant Dashboard avec liste de projets |
+| `src/app-builder/App.tsx` | Modifier -- ajouter navigation Dashboard |
 
