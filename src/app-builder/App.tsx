@@ -130,7 +130,7 @@ const App: React.FC = () => {
       if (existing && existing.length > 0) {
         const proj = existing[0] as any;
         const files = deserializeFiles(proj.code);
-        setState(prev => ({ ...prev, projectId: proj.id, files, activeFile: 'App.tsx' }));
+        setState(prev => ({ ...prev, projectId: proj.id, projectName: proj.name || 'New Project', files, activeFile: 'App.tsx' }));
         return;
       }
 
@@ -315,17 +315,42 @@ const App: React.FC = () => {
     }, 2500);
   }, []);
 
+  const handleNewChat = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      history: [{ id: Date.now().toString(), role: 'assistant', content: "Nouvelle conversation. Votre code est conservé. Comment puis-je vous aider ?", timestamp: Date.now() }],
+      currentInput: '',
+    }));
+  }, []);
+
   const handleNewProject = useCallback(() => {
     if (confirm("Créer un nouveau projet ? Les changements actuels seront perdus.")) {
       setState(prev => ({
         ...prev,
         files: { ...DEFAULT_FILES },
         activeFile: 'App.tsx',
+        projectName: 'New Project',
         history: [{ id: Date.now().toString(), role: 'assistant', content: "Projet réinitialisé. Comment puis-je vous aider ?", timestamp: Date.now() }],
         selectedWidgetId: undefined,
       }));
     }
   }, []);
+
+  const handleRenameProject = useCallback(async (name: string) => {
+    setState(prev => ({ ...prev, projectName: name }));
+    try {
+      if (state.projectId) {
+        const { data } = await supabase.auth.getUser();
+        const userId = data.user?.id;
+        if (userId) {
+          await supabase.from("projects").update({ name } as any).eq("id", state.projectId).eq("user_id", userId);
+        }
+      }
+      toast.success(`Projet renommé : ${name}`);
+    } catch {
+      /* ignore */
+    }
+  }, [state.projectId]);
 
   const handleStartFromLanding = (prompt: string) => {
     setState(prev => ({ ...prev, currentInput: prompt }));
@@ -363,6 +388,10 @@ const App: React.FC = () => {
           onScreenshotRequest={handleScreenshotRequest}
           onToggleVisualEdit={handleToggleVisualEdit}
           onShowHistory={handleShowHistory}
+          onNewChat={handleNewChat}
+          onNewProject={handleNewProject}
+          onRenameProject={handleRenameProject}
+          onBackToLanding={() => setShowLanding(true)}
         />
         <div className="flex-1 flex flex-col min-w-0">
           <TopNav

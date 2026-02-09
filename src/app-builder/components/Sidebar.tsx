@@ -5,7 +5,8 @@ import {
   PanelLeftClose, PanelLeftOpen, MessageSquarePlus,
   Table, CircleDashed, Square, Undo2, Redo2, FileCode2,
   History as HistoryIcon, Mic, MicOff, Image as ImageIcon,
-  FileUp, Camera, Link, X,
+  FileUp, Camera, Link, X, Pencil, FolderPlus, Settings, Home,
+  MessageCirclePlus,
 } from 'lucide-react';
 import { AppState, AISuggestion } from '../types';
 import { FileTree } from './FileTree';
@@ -20,6 +21,10 @@ interface SidebarProps {
   onScreenshotRequest?: () => void;
   onToggleVisualEdit?: () => void;
   onShowHistory?: () => void;
+  onNewChat?: () => void;
+  onNewProject?: () => void;
+  onRenameProject?: (name: string) => void;
+  onBackToLanding?: () => void;
 }
 
 const MAX_CHARS = 10000;
@@ -50,7 +55,7 @@ const ShimmerLine = ({ width = 'w-full', delay = 0 }: { width?: string; delay?: 
 );
 
 export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
-  ({ state, setState, onSend, onStop, onScreenshotRequest, onToggleVisualEdit, onShowHistory }, ref) => {
+  ({ state, setState, onSend, onStop, onScreenshotRequest, onToggleVisualEdit, onShowHistory, onNewChat, onNewProject, onRenameProject, onBackToLanding }, ref) => {
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [showScrollBottom, setShowScrollBottom] = useState(false);
     const [inputHistory, setInputHistory] = useState<string[]>([]);
@@ -59,10 +64,14 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
     const [generationStartTime, setGenerationStartTime] = useState<number | null>(null);
     const [elapsedSeconds, setElapsedSeconds] = useState(0);
     const [showAttachMenu, setShowAttachMenu] = useState(false);
+    const [showProjectMenu, setShowProjectMenu] = useState(false);
+    const [isRenaming, setIsRenaming] = useState(false);
+    const [renameValue, setRenameValue] = useState('');
     const chatEndRef = useRef<HTMLDivElement>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
     const chatInputRef = useRef<HTMLTextAreaElement>(null);
     const attachMenuRef = useRef<HTMLDivElement>(null);
+    const projectMenuRef = useRef<HTMLDivElement>(null);
     const isCodeView = state.isCodeView;
     const isVisualEditMode = state.isVisualEditMode ?? false;
     const setIsCodeView = (val: boolean) => setState(prev => ({ ...prev, isCodeView: val }));
@@ -78,12 +87,16 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
         if (attachMenuRef.current && !attachMenuRef.current.contains(e.target as Node)) {
           setShowAttachMenu(false);
         }
+        if (projectMenuRef.current && !projectMenuRef.current.contains(e.target as Node)) {
+          setShowProjectMenu(false);
+          setIsRenaming(false);
+        }
       };
-      if (showAttachMenu) {
+      if (showAttachMenu || showProjectMenu) {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
       }
-    }, [showAttachMenu]);
+    }, [showAttachMenu, showProjectMenu]);
 
     useEffect(() => {
       if (state.isGenerating) {
@@ -192,10 +205,109 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
       >
         <div className={`p-4 flex items-center shrink-0 overflow-hidden ${isCollapsed ? 'flex-col gap-4' : 'justify-between'}`}>
           {!isCollapsed && (
-            <div className="flex items-center gap-2 text-white font-medium p-1 rounded shrink-0">
-              <div className="w-5 h-5 bg-gradient-to-br from-blue-400 to-blue-600 rounded-md" />
-              <span className="truncate">Blink AI</span>
-              <ChevronDown size={14} className="text-neutral-500" />
+            <div className="relative" ref={projectMenuRef}>
+              <button
+                onClick={() => setShowProjectMenu(!showProjectMenu)}
+                className="flex items-center gap-2 text-white font-medium p-1.5 rounded-lg hover:bg-white/5 transition-colors shrink-0 cursor-pointer"
+              >
+                <div className="w-5 h-5 bg-gradient-to-br from-blue-400 to-blue-600 rounded-md" />
+                <span className="truncate max-w-[140px]">{state.projectName || 'Blink AI'}</span>
+                <ChevronDown size={14} className={`text-neutral-500 transition-transform duration-200 ${showProjectMenu ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showProjectMenu && (
+                <div className="absolute top-full left-0 mt-2 bg-[#1a1a1a] border border-[#333] rounded-2xl p-2 min-w-[220px] shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 z-[100]">
+                  {/* Project Name Header */}
+                  <div className="px-3 py-2.5 border-b border-[#333] mb-2">
+                    {isRenaming ? (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (renameValue.trim()) {
+                            onRenameProject?.(renameValue.trim());
+                            setIsRenaming(false);
+                            setShowProjectMenu(false);
+                          }
+                        }}
+                        className="flex items-center gap-2"
+                      >
+                        <input
+                          autoFocus
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          className="flex-1 bg-[#111] border border-[#444] rounded-lg px-2 py-1.5 text-sm text-white outline-none focus:border-blue-500 transition-colors"
+                          placeholder="Nom du projet"
+                          onKeyDown={(e) => { if (e.key === 'Escape') { setIsRenaming(false); } }}
+                        />
+                        <button type="submit" className="text-blue-400 hover:text-blue-300 text-xs font-bold">OK</button>
+                      </form>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-widest truncate">{state.projectName || 'New Project'}</span>
+                        <button
+                          onClick={() => { setRenameValue(state.projectName || 'New Project'); setIsRenaming(true); }}
+                          className="p-1 hover:bg-white/10 rounded-md transition-colors text-neutral-500 hover:text-white"
+                        >
+                          <Pencil size={12} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Menu Items */}
+                  <button
+                    onClick={() => { setShowProjectMenu(false); onNewChat?.(); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
+                      <MessageCirclePlus size={14} className="text-blue-400" />
+                    </div>
+                    <span>New Chat</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setShowProjectMenu(false); onNewProject?.(); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
+                      <FolderPlus size={14} className="text-emerald-400" />
+                    </div>
+                    <span>New Project</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setRenameValue(state.projectName || 'New Project'); setIsRenaming(true); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
+                      <Pencil size={14} className="text-purple-400" />
+                    </div>
+                    <span>Rename Project</span>
+                  </button>
+
+                  <div className="h-[1px] bg-[#333] my-2" />
+
+                  <button
+                    onClick={() => { setShowProjectMenu(false); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-neutral-500/10 flex items-center justify-center group-hover:bg-neutral-500/20 transition-colors">
+                      <Settings size={14} className="text-neutral-400" />
+                    </div>
+                    <span>Project Settings</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setShowProjectMenu(false); onBackToLanding?.(); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-orange-500/10 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
+                      <Home size={14} className="text-orange-400" />
+                    </div>
+                    <span>Back to Home</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
           <div className={`flex items-center gap-3 ${isCollapsed ? 'flex-col' : ''}`}>
