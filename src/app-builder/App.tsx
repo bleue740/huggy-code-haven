@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { TopNav } from './components/TopNav';
 import { CodePreview } from './components/CodePreview';
 import { LandingPage } from './components/LandingPage';
+import { Dashboard } from './components/Dashboard';
 import { ConsolePanel } from './components/ConsolePanel';
 import { useConsoleCapture } from './hooks/useConsoleCapture';
 import { useCredits } from './hooks/useCredits';
@@ -65,6 +66,7 @@ function deserializeFiles(raw: string | null | undefined): Record<string, string
 const App: React.FC = () => {
   const navigate = useNavigate();
   const [showLanding, setShowLanding] = useState(true);
+  const [showDashboard, setShowDashboard] = useState(false);
   const [consoleOpen, setConsoleOpen] = useState(false);
   const streamingTextRef = useRef('');
 
@@ -357,6 +359,67 @@ const App: React.FC = () => {
     handleSendMessage(prompt);
   };
 
+  const handleBackToDashboard = useCallback(() => {
+    setShowDashboard(true);
+    setShowLanding(false);
+  }, []);
+
+  const handleOpenProject = useCallback(async (projectId: string) => {
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    if (!userId) return;
+
+    const { data: proj, error } = await supabase
+      .from('projects')
+      .select('id, name, code, schema, updated_at')
+      .eq('id', projectId)
+      .eq('user_id', userId)
+      .single();
+
+    if (error || !proj) {
+      toast.error('Impossible de charger le projet.');
+      return;
+    }
+
+    const files = deserializeFiles((proj as any).code);
+    setState(prev => ({
+      ...prev,
+      projectId: proj.id,
+      projectName: proj.name || 'New Project',
+      files,
+      activeFile: 'App.tsx',
+      history: [{ id: Date.now().toString(), role: 'assistant', content: `Projet "${proj.name}" chargé. Comment puis-je vous aider ?`, timestamp: Date.now() }],
+    }));
+    setShowDashboard(false);
+    setShowLanding(false);
+  }, []);
+
+  const handleCreateNewFromDashboard = useCallback(async () => {
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    if (!userId) return;
+
+    const defaultSchema = { version: '3.0.0', app_name: 'New Project', components: [] };
+    const { data: inserted } = await supabase
+      .from('projects')
+      .insert({ user_id: userId, name: 'New Project', schema: defaultSchema, code: serializeFiles(DEFAULT_FILES) } as any)
+      .select('id')
+      .single();
+
+    if (inserted) {
+      setState(prev => ({
+        ...prev,
+        projectId: (inserted as any).id,
+        projectName: 'New Project',
+        files: { ...DEFAULT_FILES },
+        activeFile: 'App.tsx',
+        history: [{ id: Date.now().toString(), role: 'assistant', content: "Nouveau projet créé. Décrivez votre application !", timestamp: Date.now() }],
+      }));
+    }
+    setShowDashboard(false);
+    setShowLanding(false);
+  }, []);
+
   const handleToggleVisualEdit = useCallback(() => {
     setState(prev => ({ ...prev, isVisualEditMode: !prev.isVisualEditMode }));
   }, []);
@@ -377,6 +440,14 @@ const App: React.FC = () => {
     );
   }
 
+  if (showDashboard) {
+    return (
+      <div className="dark">
+        <Dashboard onOpenProject={handleOpenProject} onCreateNewProject={handleCreateNewFromDashboard} />
+      </div>
+    );
+  }
+
   return (
     <div className="dark">
       <div className="flex h-screen bg-[#050505] overflow-hidden select-none relative">
@@ -391,7 +462,7 @@ const App: React.FC = () => {
           onNewChat={handleNewChat}
           onNewProject={handleNewProject}
           onRenameProject={handleRenameProject}
-          onBackToLanding={() => setShowLanding(true)}
+          onBackToLanding={handleBackToDashboard}
         />
         <div className="flex-1 flex flex-col min-w-0">
           <TopNav

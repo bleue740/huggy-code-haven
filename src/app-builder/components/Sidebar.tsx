@@ -5,7 +5,7 @@ import {
   PanelLeftClose, PanelLeftOpen, MessageSquarePlus,
   Table, CircleDashed, Square, Undo2, Redo2, FileCode2,
   History as HistoryIcon, Mic, MicOff, Image as ImageIcon,
-  FileUp, Camera, Link, X, Pencil, FolderPlus, Settings, Home,
+  FileUp, Camera, Link, X, Pencil, FolderPlus, Settings, LayoutDashboard,
   MessageCirclePlus,
 } from 'lucide-react';
 import { AppState, AISuggestion } from '../types';
@@ -203,7 +203,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
         ref={ref}
         className={`flex flex-col border-r border-[#1a1a1a] bg-[#0a0a0a] text-neutral-400 text-sm h-full relative transition-all duration-300 ${isCollapsed ? 'w-[64px]' : 'w-[380px]'}`}
       >
-        <div className={`p-4 flex items-center shrink-0 overflow-hidden ${isCollapsed ? 'flex-col gap-4' : 'justify-between'}`}>
+        <div className={`p-4 flex items-center shrink-0 overflow-visible ${isCollapsed ? 'flex-col gap-4' : 'justify-between'}`}>
           {!isCollapsed && (
             <div className="relative" ref={projectMenuRef}>
               <button
@@ -302,9 +302,9 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                     className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group"
                   >
                     <div className="w-7 h-7 rounded-lg bg-orange-500/10 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
-                      <Home size={14} className="text-orange-400" />
+                      <LayoutDashboard size={14} className="text-orange-400" />
                     </div>
-                    <span>Back to Home</span>
+                    <span>Dashboard</span>
                   </button>
                 </div>
               )}
