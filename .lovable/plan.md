@@ -1,112 +1,141 @@
 
-# Plan : Suggestions intelligentes + Communaute Showcase
 
-## 1. Suggestions pre-remplissent le textarea (au lieu de lancer)
+# Audit complet de Blink AI + Integration Anthropic API
 
-Actuellement, cliquer sur une suggestion appelle `onStart(item.text)` ce qui lance directement la generation. On va changer ce comportement :
+## Etat actuel du SaaS
 
-- Cliquer sur une suggestion remplit le textarea avec un **prompt enrichi** (pas juste le titre court)
-- L'utilisateur peut le modifier avant d'envoyer
-- Le textarea scroll automatiquement en vue et recoit le focus
+### Ce qui fonctionne
+- Auth (login/signup) avec redirection post-login
+- Dashboard multi-projets (CRUD, rename, duplicate, delete)
+- Chat IA avec streaming SSE (Gemini Flash/Pro + GPT-5)
+- Preview live React dans iframe (Babel + Tailwind CDN)
+- Editeur de code multi-fichiers avec CodeMirror
+- Systeme de credits (100 gratuits, deduction par requete)
+- Landing page avec sections Features, How it Works, Pricing, Community
+- Suggestions dynamiques via edge function
+- Console capture des logs iframe
+- Voice input (speech-to-text)
+- Settings (profil, subscription, delete account)
+- Pricing page (3 plans)
 
-Mapping des prompts enrichis :
-- "AI Landing Page Builder" --> "Build a modern AI-powered landing page with a hero section, feature grid, pricing cards, testimonials carousel, and a CTA with gradient effects. Use dark theme with blue accents."
-- "SaaS Dashboard for Analytics" --> "Create a SaaS analytics dashboard with sidebar navigation, KPI cards, line/bar charts, a data table with filters, and a dark glassmorphism design."
-- "Booking System for Doctors" --> "Build a doctor appointment booking system with a calendar view, time slot picker, patient form, booking confirmation, and appointment list. Clean medical UI."
-- "Project Management Tool" --> "Create a project management tool with kanban board, task cards with drag indicators, project sidebar, team avatars, and progress tracking. Modern dark UI."
+### Tables en base
+- `projects` (id, user_id, name, schema, code)
+- `users_credits` (user_id, credits, lifetime_used)
+- `deployments` (user_id, project_id, slug, schema_snapshot, url)
+- `community_showcases` (project_id, title, deploy_url, score, expires_at)
 
-## 2. Bouton "Refresh suggestions" avec IA
+### Edge functions
+- `ai-chat` : streaming avec routing de modele (simple/complex/fix)
+- `generate-suggestions` : generation de 4 idees via tool calling
 
-Sous la grille de suggestions, ajouter un bouton discret "More ideas" avec une icone RefreshCw.
+---
 
-### Fonctionnement
-- Au clic, appelle une **nouvelle edge function** `generate-suggestions` qui demande a l'IA 4 idees d'apps originales
-- Pendant le chargement : animation de rotation sur l'icone
-- Les nouvelles suggestions remplacent les actuelles avec une animation fade
-- Les suggestions sont retournees sous forme structuree (titre court + prompt complet) via tool calling
+## Ce qui manque pour un SaaS fonctionnel et puissant
 
-### Edge function `supabase/functions/generate-suggestions/index.ts`
-- Appelle Lovable AI Gateway avec `google/gemini-3-flash-preview`
-- Utilise le tool calling pour obtenir un JSON structure : `[{ icon: "Layout|Zap|Calendar|Briefcase", title: "...", prompt: "..." }]`
-- **Pas besoin d'auth** : cette fonction est publique (les suggestions sont pour tout le monde)
-- Rate limit cote client : max 1 appel toutes les 10 secondes (desactiver le bouton temporairement)
+### 1. CRITIQUE - Deploiement reel inexistant
+Le bouton "Publish" est **100% simule** (setTimeout de 3s, pas de vrai deploy). La page `PublishedDeployment` affiche juste "Published: slug" sans aucun rendu du code. C'est la fonctionnalite la plus importante manquante.
 
-## 3. Section "Community Showcase"
+### 2. CRITIQUE - Paiement inexistant
+Le bouton "Passer Pro" ne fait que `credits + 50` localement. Pas de Stripe, pas de paiement reel, pas de gestion d'abonnement. Les plans Pricing sont purement visuels.
 
-Nouvelle section entre Pricing et le CTA final, montrant les meilleurs projets publies par des utilisateurs gratuits.
+### 3. CRITIQUE - Security scan simule
+Le scan retourne des resultats en dur apres un timeout de 2.5s. Aucune analyse reelle du code.
 
-### Base de donnees
-Nouvelle table `community_showcases` :
+### 4. IMPORTANT - Pas de multi-conversation
+Un seul historique de chat par projet. Pas de sauvegarde des conversations, pas d'historique persistant.
 
-```sql
-CREATE TABLE public.community_showcases (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL,
-  title TEXT NOT NULL,
-  description TEXT,
-  thumbnail_url TEXT,
-  deploy_url TEXT NOT NULL,
-  featured_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  expires_at TIMESTAMPTZ NOT NULL DEFAULT (now() + interval '72 hours'),
-  score INTEGER DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-```
+### 5. IMPORTANT - Pas de templates
+Le bouton "Templates" dans le Dashboard ne fait rien. Pas de galerie de templates pre-construits.
 
-- `featured_at` / `expires_at` : rotation automatique toutes les 72h
-- `score` : permet de trier les meilleurs en premier
-- RLS : lecture publique (tout le monde voit la vitrine), insertion reservee aux admins ou a une logique automatique
+### 6. IMPORTANT - Credits manipulables cote client
+`useCredits.ts` fait des updates directs de la table `users_credits` depuis le client. Un utilisateur pourrait s'ajouter des credits via la console browser. La deduction devrait etre uniquement cote serveur (deja fait dans `ai-chat`, mais le client peut aussi modifier).
 
-### Affichage sur la landing page
-- Requete les showcases dont `expires_at > now()`, tries par score descendant, LIMIT 6
-- Grille 3x2 (2 colonnes sur mobile)
-- Chaque carte affiche :
-  - Titre du projet
-  - Description courte (2 lignes max)
-  - Bouton "Visit" qui ouvre le `deploy_url` dans un nouvel onglet
-  - Badge "Built with Blink" en overlay
-- Si aucun showcase n'existe : afficher un message "Be the first to showcase your app!" avec CTA
+### 7. MODERE - Pas d'export/download du code
+Les utilisateurs ne peuvent pas telecharger leur code source en ZIP.
 
-### Pour le moment (pas de donnees)
-Comme il n'y a pas encore de projets dans la vitrine, on va :
-- Creer la table et les policies
-- Afficher la section avec des **donnees mock en dur** en fallback quand la table est vide
-- Les mock disparaitront automatiquement quand de vrais projets seront ajoutes
+### 8. MODERE - Recharts non charge dans la preview
+Le system prompt mentionne Recharts comme global disponible, mais le CDN Recharts n'est pas inclus dans l'iframe HTML. Les charts generes ne fonctionneront pas.
 
-## Fichiers concernes
+### 9. MODERE - Pas de Lucide dans la preview
+Le system prompt mentionne `lucide` comme global, mais aucun CDN Lucide n'est charge dans l'iframe.
+
+### 10. MINEUR - GitHub integration placeholder
+Le bouton "Connect GitHub" affiche un toast "coming soon". Pas d'integration reelle.
+
+### 11. MINEUR - Custom Domain placeholder
+Meme chose : toast "coming soon".
+
+### 12. MINEUR - Delete account incomplet
+`handleDeleteAccount` supprime les projets et deconnecte, mais ne supprime pas reellement le compte auth (impossible depuis le client sans service_role).
+
+---
+
+## A propos de l'Anthropic API
+
+L'Anthropic API (Claude) n'est **pas disponible via le Lovable AI Gateway**. Les modeles supportes sont uniquement Google Gemini et OpenAI GPT.
+
+Pour integrer Anthropic, il faudrait :
+1. Que tu obtiennes une **cle API Anthropic** depuis console.anthropic.com
+2. Creer une edge function qui appelle directement `https://api.anthropic.com/v1/messages`
+3. Stocker la cle en secret dans le backend
+
+### Plan d'implementation Anthropic
+
+| Etape | Detail |
+|-------|--------|
+| 1. Secret API | Stocker `ANTHROPIC_API_KEY` comme secret backend |
+| 2. Edge function `ai-chat` | Ajouter un 4eme modele `anthropic/claude-sonnet` dans le routing |
+| 3. Adapter le format | L'API Anthropic utilise un format different (pas compatible OpenAI) : headers `x-api-key` + `anthropic-version`, body avec `max_tokens` obligatoire, streaming via SSE `content_block_delta` |
+| 4. Routing | Ajouter un cas `"precision"` ou `"advanced"` qui route vers Claude pour les taches complexes |
+| 5. Format SSE | Parser les events Anthropic (`content_block_delta` au lieu de `choices[0].delta.content`) et les re-emettre au format attendu par le client |
+
+### Fichiers a modifier
 
 | Fichier | Action |
 |---------|--------|
-| `src/app-builder/components/LandingPage.tsx` | Modifier -- suggestions pre-remplissent le textarea, bouton refresh, section Community |
-| `supabase/functions/generate-suggestions/index.ts` | Creer -- edge function pour generer des suggestions IA |
-| Migration SQL | Creer table `community_showcases` + RLS policies |
-| `supabase/config.toml` | Pas de modification (auto-gere) |
+| `supabase/functions/ai-chat/index.ts` | Ajouter le routing Anthropic + adapter le streaming |
+| Secret `ANTHROPIC_API_KEY` | A configurer via le backend |
 
-## Details techniques
+### Architecture du streaming Anthropic
 
-### LandingPage.tsx - Changements
-- Nouveau state `suggestions` (initialement les 4 par defaut) pour rendre la liste dynamique
-- Nouveau state `isRefreshing` pour l'animation du bouton
-- Fonction `handleSuggestionClick(prompt)` : met a jour `inputValue` avec le prompt enrichi + focus le textarea
-- Fonction `refreshSuggestions()` : appelle l'edge function, met a jour le state
-- Nouveau composant inline `CommunityShowcase` : fetch les showcases depuis la DB, fallback mock
-- Ref sur le textarea pour le focus programmatique
-
-### Edge function generate-suggestions
-- Pas d'auth requise (publique)
-- Tool calling avec schema : tableau de 4 objets `{ icon, title, prompt }`
-- Rate limit : reponse rapide grace a gemini-3-flash-preview
-- Gestion erreurs 429/402
-
-### Flux utilisateur
+Le client n'a pas besoin de changer. L'edge function recevra le stream Anthropic et le re-formatera en SSE compatible OpenAI avant de le renvoyer au client :
 
 ```text
-Landing Page :
-  1. User voit 4 suggestions
-  2. Clique sur "SaaS Dashboard" --> textarea se remplit avec le prompt detaille
-  3. User modifie ou envoie directement
-  4. Clique "More ideas" --> 4 nouvelles suggestions apparaissent
-  5. Scrolle vers Community --> voit les meilleurs projets
-  6. Clique "Visit" --> ouvre le site dans un nouvel onglet
+Client <--SSE OpenAI format-- Edge Function <--SSE Anthropic format-- Anthropic API
 ```
+
+L'edge function agira comme un proxy de traduction :
+- Anthropic envoie : `event: content_block_delta` + `{"delta":{"text":"..."}}`
+- On re-emet : `data: {"choices":[{"delta":{"content":"..."}}]}`
+- Le client existant (`useAIChat.ts`) fonctionne sans modification
+
+### Routing de modele mis a jour
+
+| Complexite | Modele actuel | Avec Anthropic |
+|------------|---------------|----------------|
+| simple | Gemini 3 Flash | Gemini 3 Flash (inchange) |
+| complex | Gemini 3 Pro | Claude Sonnet (meilleur pour le code) |
+| fix | GPT-5 | GPT-5 (inchange, ou Claude selon preference) |
+
+---
+
+## Resume des priorites
+
+### A faire en premier (pour un SaaS reel)
+1. Integration Anthropic API (ce plan)
+2. Deploiement reel (preview publique)
+3. Integration Stripe pour les paiements
+4. Securiser les credits (supprimer les updates client)
+
+### A faire ensuite
+5. Charger Recharts + Lucide dans l'iframe preview
+6. Export ZIP du code
+7. Templates gallery
+8. Multi-conversations persistantes
+
+### Nice to have
+9. Security scan reel (analyse AST du code)
+10. GitHub sync
+11. Custom domains
+12. Delete account complet via edge function
+
