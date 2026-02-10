@@ -466,14 +466,13 @@ const App: React.FC = () => {
         />
         <div className="flex-1 flex flex-col min-w-0">
           <TopNav
-            onBackToLanding={() => setShowLanding(true)}
             onPublish={handlePublish}
             onUpgrade={handleUpgrade}
             onRunSecurity={handleRunSecurity}
-            onNewProject={handleNewProject}
             onToggleCodeView={() => setState(prev => ({ ...prev, isCodeView: !prev.isCodeView }))}
             isCodeView={state.isCodeView}
             isGenerating={state.isGenerating}
+            projectName={state.projectName}
           />
           <CodePreview code={concatenatedCode} isGenerating={state.isGenerating} generationStatus={state.aiStatusText ?? undefined} />
           <ConsolePanel logs={consoleLogs} onClear={clearConsoleLogs} isOpen={consoleOpen} onToggle={() => setConsoleOpen(!consoleOpen)} />
