@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Github,
   Link2,
+  Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -20,6 +21,7 @@ interface TopNavProps {
   onPublish?: () => void;
   onUpgrade?: () => void;
   onRunSecurity?: () => void;
+  onExportZip?: () => void;
   onToggleCodeView?: () => void;
   isCodeView?: boolean;
   isGenerating?: boolean;
@@ -30,6 +32,7 @@ export const TopNav: React.FC<TopNavProps> = ({
   onPublish,
   onUpgrade,
   onRunSecurity,
+  onExportZip,
   onToggleCodeView,
   isCodeView,
   isGenerating,
@@ -144,6 +147,12 @@ export const TopNav: React.FC<TopNavProps> = ({
                 label="Run Security Scan"
                 description="Check for vulnerabilities"
                 onClick={() => { onRunSecurity?.(); setShowPublishMenu(false); }}
+              />
+              <DropdownItem
+                icon={<Download size={14} />}
+                label="Download ZIP"
+                description="Export your code as ZIP"
+                onClick={() => { onExportZip?.(); setShowPublishMenu(false); }}
               />
               <div className="h-px bg-[#333] mx-2 my-1" />
               <DropdownItem

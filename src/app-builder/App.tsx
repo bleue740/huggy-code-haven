@@ -10,6 +10,7 @@ import { useCredits } from './hooks/useCredits';
 import { useAIChat, extractCodeFromResponse } from './hooks/useAIChat';
 import { AppState, Message, AISuggestion, SecurityResult } from './types';
 import { analyzeCodeSecurity } from './utils/securityAnalyzer';
+import { exportProjectAsZip } from './utils/exportZip';
 import { X, CheckCircle2, Zap, Rocket, ShieldCheck, AlertTriangle, Info, Loader2, History } from 'lucide-react';
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -393,6 +394,17 @@ const App: React.FC = () => {
     });
   }, [state.files]);
 
+  const handleExportZip = useCallback(async () => {
+    try {
+      toast.info('📦 Génération du ZIP…');
+      await exportProjectAsZip(state.files, state.projectName || 'blink-project');
+      toast.success('✅ ZIP téléchargé !');
+    } catch (e: any) {
+      console.error('Export ZIP error:', e);
+      toast.error('Erreur lors de l\'export ZIP');
+    }
+  }, [state.files, state.projectName]);
+
   const handleNewChat = useCallback(() => {
     setState(prev => ({
       ...prev,
@@ -563,6 +575,7 @@ const App: React.FC = () => {
             onPublish={handlePublish}
             onUpgrade={handleUpgrade}
             onRunSecurity={handleRunSecurity}
+            onExportZip={handleExportZip}
             onToggleCodeView={() => setState(prev => ({ ...prev, isCodeView: !prev.isCodeView }))}
             isCodeView={state.isCodeView}
             isGenerating={state.isGenerating}
