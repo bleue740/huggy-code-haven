@@ -37,9 +37,14 @@ export function useAIChat() {
       callbacks.onStatusChange('Connexion au modèle IA…');
 
       try {
-        // Get the user's session token (not the anon key)
+        // Get the user's session token — require auth
         const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+        if (!session?.access_token) {
+          callbacks.onError("Connectez-vous pour utiliser Blink AI.", 401);
+          setIsStreaming(false);
+          return;
+        }
+        const token = session.access_token;
 
         const resp = await fetch(CHAT_URL, {
           method: 'POST',
