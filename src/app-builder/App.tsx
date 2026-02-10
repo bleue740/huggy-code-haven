@@ -286,6 +286,9 @@ const App: React.FC = () => {
       onDone: (fullText) => {
         // Extract code from the AI response
         const extractedCode = extractCodeFromResponse(fullText);
+        const codeApplied = !!extractedCode;
+        const codeLineCount = extractedCode ? extractedCode.split('\n').length : 0;
+
         if (extractedCode) {
           setState(prev => ({
             ...prev,
@@ -295,10 +298,18 @@ const App: React.FC = () => {
           toast.success('✨ Code généré et injecté dans la preview !');
         }
 
+        // Strip code blocks from the chat message, keep only explanation
+        const explanationOnly = fullText.replace(/```[\w]*\s*\n[\s\S]*?```/g, '').trim();
+
         setState(prev => ({
           ...prev,
           isGenerating: false,
           aiStatusText: null,
+          history: prev.history.map((m) =>
+            m.id.startsWith('stream_')
+              ? { ...m, content: explanationOnly || fullText, codeApplied, codeLineCount }
+              : m
+          ),
         }));
 
         // Refresh credits after generation

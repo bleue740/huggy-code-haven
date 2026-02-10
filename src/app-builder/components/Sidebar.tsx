@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { AppState, AISuggestion } from '../types';
 import { BackendConnectCard } from './BackendConnectCard';
+import { ChatMessage } from './ChatMessage';
 import { FileTree } from './FileTree';
 import { CodeEditor } from './CodeEditor';
 import { useVoiceInput } from '../hooks/useVoiceInput';
@@ -397,7 +398,11 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                           <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-tight">{msg.role === 'assistant' ? 'BLINK' : 'YOU'}</span>
                           <span className="text-[9px] text-neutral-600 font-mono">{formatTime(msg.timestamp)}</span>
                         </div>
-                        <div className={`text-[13px] leading-relaxed whitespace-pre-wrap ${msg.role === 'assistant' ? 'text-neutral-200' : 'text-neutral-400'}`}>{msg.content}</div>
+                        {msg.role === 'assistant' ? (
+                          <ChatMessage message={msg} />
+                        ) : (
+                          <div className="text-[13px] leading-relaxed text-neutral-400">{msg.content}</div>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -3,6 +3,8 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  codeApplied?: boolean;
+  codeLineCount?: number;
 }
 
 export interface AISuggestion {
