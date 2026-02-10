@@ -65,8 +65,9 @@ function deserializeFiles(raw: string | null | undefined): Record<string, string
 
 const App: React.FC = () => {
   const navigate = useNavigate();
-  const [showLanding, setShowLanding] = useState(true);
+  const [showLanding, setShowLanding] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string | undefined>();
   const streamingTextRef = useRef('');
@@ -119,7 +120,11 @@ const App: React.FC = () => {
       const { data } = await supabase.auth.getUser();
       const userId = data.user?.id;
       setUserEmail(data.user?.email ?? undefined);
-      if (!userId) return;
+      if (!userId) {
+        setShowLanding(true);
+        setAuthChecked(true);
+        return;
+      }
 
       const { data: existing, error } = await supabase
         .from("projects")
@@ -129,12 +134,18 @@ const App: React.FC = () => {
         .limit(1);
 
       if (!mounted) return;
-      if (error) return;
+      if (error) {
+        setShowDashboard(true);
+        setAuthChecked(true);
+        return;
+      }
 
       if (existing && existing.length > 0) {
         const proj = existing[0] as any;
         const files = deserializeFiles(proj.code);
         setState(prev => ({ ...prev, projectId: proj.id, projectName: proj.name || 'New Project', files, activeFile: 'App.tsx' }));
+        setShowDashboard(true);
+        setAuthChecked(true);
         return;
       }
 
@@ -146,6 +157,8 @@ const App: React.FC = () => {
         .single();
       if (!mounted) return;
       setState(prev => ({ ...prev, projectId: (inserted as any)?.id }));
+      setShowDashboard(true);
+      setAuthChecked(true);
     })();
     return () => { mounted = false; };
   }, []);
@@ -363,6 +376,11 @@ const App: React.FC = () => {
   }, [state.projectId]);
 
   const handleStartFromLanding = (prompt: string) => {
+    // If not authenticated, redirect to auth
+    if (!userEmail) {
+      navigate("/auth", { state: { from: "/app" } });
+      return;
+    }
     setState(prev => ({ ...prev, currentInput: prompt }));
     handleSendMessage(prompt);
   };
@@ -440,10 +458,20 @@ const App: React.FC = () => {
     setState(prev => ({ ...prev, showHistoryModal: true }));
   }, []);
 
+  if (!authChecked) {
+    return (
+      <div className="dark">
+        <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      </div>
+    );
+  }
+
   if (showLanding) {
     return (
       <div className="dark">
-        <LandingPage onStart={handleStartFromLanding} />
+        <LandingPage onStart={handleStartFromLanding} isAuthenticated={!!userEmail} />
       </div>
     );
   }

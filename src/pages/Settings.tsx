@@ -67,7 +67,7 @@ const Settings: React.FC = () => {
       {/* Header */}
       <header className="border-b border-[#1a1a1a] px-6 md:px-8 py-4 flex items-center gap-4">
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/app')}
           className="p-2 hover:bg-white/5 rounded-xl transition-colors text-neutral-400 hover:text-white"
         >
           <ArrowLeft size={20} />
