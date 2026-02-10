@@ -7,8 +7,44 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// ── Backend needs detection ────────────────────────────────────────
+type BackendNeed = "database" | "auth" | "storage" | "scraping";
+
+function detectBackendNeeds(prompt: string): BackendNeed[] {
+  const lower = prompt.toLowerCase();
+  const needs: BackendNeed[] = [];
+
+  const dbKeywords = [
+    "base de données", "base de donnees", "sauvegarder", "persister", "crud",
+    "stocker", "table", "utilisateurs", "database", "save", "persist",
+    "backend", "données", "donnees", "enregistrer", "historique",
+    "todo list", "todo app", "notes app", "blog", "e-commerce",
+  ];
+  const authKeywords = [
+    "login", "inscription", "authentification", "mot de passe",
+    "connexion utilisateur", "signup", "sign in", "sign up", "auth",
+    "register", "password", "account", "compte",
+  ];
+  const storageKeywords = [
+    "upload", "fichier", "image", "photo", "stockage", "file",
+    "télécharger", "telecharger", "avatar", "media",
+  ];
+  const scrapingKeywords = [
+    "scraper", "scraping", "extraire", "crawler", "crawl",
+    "site web", "firecrawl", "web search", "recherche web",
+    "extract", "parse url", "parse site",
+  ];
+
+  if (dbKeywords.some(k => lower.includes(k))) needs.push("database");
+  if (authKeywords.some(k => lower.includes(k))) needs.push("auth");
+  if (storageKeywords.some(k => lower.includes(k))) needs.push("storage");
+  if (scrapingKeywords.some(k => lower.includes(k))) needs.push("scraping");
+
+  return needs;
+}
+
 // ── Model routing ──────────────────────────────────────────────────
-type Complexity = "simple" | "complex" | "fix";
+type Complexity = "simple" | "complex" | "fix" | "data";
 type Provider = "lovable" | "anthropic";
 
 interface ModelChoice {
@@ -16,19 +52,23 @@ interface ModelChoice {
   model: string;
 }
 
-function detectComplexity(prompt: string): Complexity {
+function detectComplexity(prompt: string, backendNeeds: BackendNeed[]): Complexity {
   const lower = prompt.toLowerCase();
+
+  const fixKeywords = [
+    "bug", "fix", "erreur", "corrig", "refactor", "améliore", "optimise",
+    "debug", "problème", "ne fonctionne pas", "broken", "issue",
+  ];
   const complexKeywords = [
     "dashboard", "app complète", "application complète", "multi-page",
     "e-commerce", "saas", "admin panel", "crm", "projet complet",
     "full app", "landing page complète", "plateforme",
   ];
-  const fixKeywords = [
-    "bug", "fix", "erreur", "corrig", "refactor", "améliore", "optimise",
-    "debug", "problème", "ne fonctionne pas", "broken", "issue",
-  ];
-  if (fixKeywords.some((k) => lower.includes(k))) return "fix";
-  if (complexKeywords.some((k) => lower.includes(k))) return "complex";
+
+  if (fixKeywords.some(k => lower.includes(k))) return "fix";
+  if (backendNeeds.includes("scraping")) return "data";
+  if (backendNeeds.length > 0) return "complex";
+  if (complexKeywords.some(k => lower.includes(k))) return "complex";
   if (lower.length > 500) return "complex";
   return "simple";
 }
@@ -38,15 +78,16 @@ function pickModel(complexity: Complexity): ModelChoice {
     case "simple":
       return { provider: "lovable", model: "google/gemini-3-flash-preview" };
     case "complex":
-      // Route complex tasks to Anthropic Claude Sonnet
       return { provider: "anthropic", model: "claude-sonnet-4-20250514" };
     case "fix":
       return { provider: "lovable", model: "openai/gpt-5" };
+    case "data":
+      return { provider: "lovable", model: "google/gemini-2.5-pro" };
   }
 }
 
 // ── System prompt ──────────────────────────────────────────────────
-const SYSTEM_PROMPT = `You are Blink AI — an elite full-stack React code generator.
+const BASE_SYSTEM_PROMPT = `You are Blink AI — an elite full-stack React code generator.
 
 ## OUTPUT RULES — READ CAREFULLY
 1. You MUST return a **single, complete, self-contained JSX code block** wrapped in \`\`\`tsx ... \`\`\`.
@@ -76,7 +117,7 @@ const SYSTEM_PROMPT = `You are Blink AI — an elite full-stack React code gener
 - Make all UIs fully responsive (mobile-first)
 - Include micro-interactions and smooth transitions
 - Use semantic HTML for accessibility
-- NEVER use external URLs or APIs that might fail
+- NEVER use external URLs or APIs that might fail (unless Supabase or Firecrawl are connected)
 - Generate realistic mock data when needed
 
 ## SECURITY
@@ -97,15 +138,60 @@ Then output a single \`\`\`tsx code block with the complete app.
 Do NOT split across multiple code blocks.
 Do NOT add any code after the tsx block.`;
 
+const SUPABASE_PROMPT_ADDON = `
+
+## SUPABASE INTEGRATION (CONNECTED)
+The user has connected a Supabase project. Generate code that uses the Supabase JS client.
+- The Supabase client is pre-initialized and available as a global: \`const supabaseClient = window.__SUPABASE_CLIENT__;\`
+- Use \`supabaseClient.from('table').select('*')\` for queries
+- Use \`supabaseClient.from('table').insert([{...}])\` for inserts
+- Use \`supabaseClient.from('table').update({...}).eq('id', id)\` for updates
+- Use \`supabaseClient.from('table').delete().eq('id', id)\` for deletes
+- Use \`supabaseClient.auth.signInWithPassword({ email, password })\` for login
+- Use \`supabaseClient.auth.signUp({ email, password })\` for registration
+- Use \`supabaseClient.auth.signOut()\` for logout
+- Use \`supabaseClient.auth.getUser()\` to get current user
+- Use \`supabaseClient.storage.from('bucket').upload(path, file)\` for file uploads
+- Always handle loading states and errors gracefully
+- The Supabase JS library is loaded via CDN - use the global \`supabase\` object`;
+
+const SUPABASE_MOCK_PROMPT_ADDON = `
+
+## BACKEND NEEDED (NOT CONNECTED YET)
+The user's request needs a backend (database/auth/storage) but Supabase is not connected yet.
+- Generate the UI with mock data stored in React state (useState)
+- Structure the code so it's easy to replace mocks with real Supabase calls later
+- Add comments like \`// TODO: Replace with supabaseClient.from('table').select('*')\` where real DB calls would go
+- Make the mock data realistic and comprehensive
+- Include a banner or note in the UI saying "Mode démo - Connectez Supabase pour persister les données"`;
+
+const FIRECRAWL_PROMPT_ADDON = `
+
+## FIRECRAWL (WEB SCRAPING - CONNECTED)
+A Firecrawl proxy is available for web scraping and search. Use the global helpers:
+- \`window.__FIRECRAWL__.scrape(url, options)\` - Extract content from a URL. Returns { success, data }
+- \`window.__FIRECRAWL__.search(query, options)\` - Search the web. Returns { success, data }
+- \`window.__FIRECRAWL__.map(url, options)\` - Discover all URLs on a site. Returns { success, links }
+- \`window.__FIRECRAWL__.crawl(url, options)\` - Crawl an entire website. Returns { success, data }
+- These are async functions that call the backend proxy
+- Always show loading states while fetching
+- Handle errors gracefully with try/catch`;
+
+const FIRECRAWL_MOCK_PROMPT_ADDON = `
+
+## WEB SCRAPING NEEDED (NOT CONNECTED YET)
+The user wants web scraping/search but Firecrawl is not activated.
+- Generate mock scraped data that looks realistic
+- Add comments like \`// TODO: Replace with window.__FIRECRAWL__.scrape(url)\`
+- Include a note saying "Mode démo - Activez Firecrawl pour le scraping réel"`;
+
 // ── Anthropic streaming proxy ──────────────────────────────────────
-// Translates Anthropic SSE events into OpenAI-compatible SSE format
 async function streamAnthropic(
   apiKey: string,
   model: string,
   systemPrompt: string,
   messages: Array<{ role: string; content: string }>,
 ): Promise<Response> {
-  // Anthropic expects system as a top-level param, not in messages
   const anthropicMessages = messages.filter((m) => m.role !== "system");
 
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
@@ -131,12 +217,10 @@ async function streamAnthropic(
     throw new Error(`Anthropic API error: ${resp.status}`);
   }
 
-  // Create a TransformStream that converts Anthropic SSE to OpenAI SSE
   const { readable, writable } = new TransformStream();
   const writer = writable.getWriter();
   const encoder = new TextEncoder();
 
-  // Process Anthropic stream in the background
   (async () => {
     try {
       const reader = resp.body!.getReader();
@@ -161,7 +245,6 @@ async function streamAnthropic(
               const event = JSON.parse(jsonStr);
 
               if (event.type === "content_block_delta" && event.delta?.text) {
-                // Re-emit as OpenAI-compatible SSE
                 const openAIChunk = {
                   choices: [{ delta: { content: event.delta.text } }],
                 };
@@ -178,7 +261,6 @@ async function streamAnthropic(
         }
       }
 
-      // Ensure [DONE] is sent
       await writer.write(encoder.encode("data: [DONE]\n\n"));
     } catch (e) {
       console.error("Anthropic stream processing error:", e);
@@ -253,7 +335,7 @@ serve(async (req: Request) => {
     }
 
     // Parse body
-    const { messages, projectContext } = await req.json();
+    const { messages, projectContext, supabaseUrl, supabaseAnonKey, firecrawlEnabled } = await req.json();
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new Response(JSON.stringify({ error: "Messages array required" }), {
         status: 400,
@@ -261,16 +343,34 @@ serve(async (req: Request) => {
       });
     }
 
-    // Route model
+    // Detect backend needs from the latest user message
     const lastUserMsg = [...messages].reverse().find((m: { role: string }) => m.role === "user");
-    const complexity = detectComplexity(lastUserMsg?.content ?? "");
+    const backendNeeds = detectBackendNeeds(lastUserMsg?.content ?? "");
+    const complexity = detectComplexity(lastUserMsg?.content ?? "", backendNeeds);
     const { provider, model } = pickModel(complexity);
-    console.log(`[ai-chat] complexity=${complexity} provider=${provider} model=${model} user=${userId}`);
+    console.log(`[ai-chat] complexity=${complexity} provider=${provider} model=${model} user=${userId} backendNeeds=${backendNeeds.join(",")}`);
 
-    // Build system content
-    let fullSystem = SYSTEM_PROMPT;
+    // Build conditional system prompt
+    let fullSystem = BASE_SYSTEM_PROMPT;
+
+    // Supabase integration
+    const hasSupabase = !!supabaseUrl && !!supabaseAnonKey;
+    if (hasSupabase) {
+      fullSystem += SUPABASE_PROMPT_ADDON;
+    } else if (backendNeeds.some(n => ["database", "auth", "storage"].includes(n))) {
+      fullSystem += SUPABASE_MOCK_PROMPT_ADDON;
+    }
+
+    // Firecrawl integration
+    if (firecrawlEnabled) {
+      fullSystem += FIRECRAWL_PROMPT_ADDON;
+    } else if (backendNeeds.includes("scraping")) {
+      fullSystem += FIRECRAWL_MOCK_PROMPT_ADDON;
+    }
+
+    // Project context
     if (projectContext) {
-      fullSystem += `\n\nCurrent project code:\n\`\`\`tsx\n${projectContext.slice(0, 8000)}\n\`\`\`\nThe user wants to modify or extend this code. Preserve existing functionality unless asked to replace it.`;
+      fullSystem += `\n\nCurrent project code:\n\`\`\`tsx\n${projectContext.slice(0, 12000)}\n\`\`\`\nThe user wants to modify or extend this code. Preserve existing functionality unless asked to replace it.`;
     }
 
     // Deduct credit before streaming
@@ -282,6 +382,14 @@ serve(async (req: Request) => {
       .eq("user_id", userId);
     console.log(`[ai-chat] Credit deducted: ${currentCredits} -> ${newCredits}`);
 
+    // Prepare the response with backend hints header
+    const responseHeaders: Record<string, string> = {
+      ...corsHeaders,
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    };
+
     // ── Route to Anthropic ──
     if (provider === "anthropic") {
       const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
@@ -292,7 +400,33 @@ serve(async (req: Request) => {
         });
       }
 
-      return await streamAnthropic(anthropicKey, model, fullSystem, messages);
+      // Wrap the Anthropic stream to prepend backend hints
+      const anthropicResponse = await streamAnthropic(anthropicKey, model, fullSystem, messages);
+      
+      if (backendNeeds.length > 0) {
+        const { readable, writable } = new TransformStream();
+        const writer = writable.getWriter();
+        const encoder = new TextEncoder();
+
+        (async () => {
+          // Send backend hint first
+          const hint = { type: "backend_hint", needs: backendNeeds };
+          await writer.write(encoder.encode(`data: ${JSON.stringify(hint)}\n\n`));
+
+          // Then pipe the rest
+          const reader = anthropicResponse.body!.getReader();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            await writer.write(value);
+          }
+          await writer.close();
+        })();
+
+        return new Response(readable, { headers: responseHeaders });
+      }
+
+      return anthropicResponse;
     }
 
     // ── Route to Lovable AI Gateway (Gemini / GPT) ──
@@ -343,14 +477,29 @@ serve(async (req: Request) => {
       });
     }
 
-    return new Response(aiResponse.body, {
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      },
-    });
+    // If backend needs detected, prepend a hint event
+    if (backendNeeds.length > 0) {
+      const { readable, writable } = new TransformStream();
+      const writer = writable.getWriter();
+      const encoder = new TextEncoder();
+
+      (async () => {
+        const hint = { type: "backend_hint", needs: backendNeeds };
+        await writer.write(encoder.encode(`data: ${JSON.stringify(hint)}\n\n`));
+
+        const reader = aiResponse.body!.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          await writer.write(value);
+        }
+        await writer.close();
+      })();
+
+      return new Response(readable, { headers: responseHeaders });
+    }
+
+    return new Response(aiResponse.body, { headers: responseHeaders });
   } catch (e) {
     console.error("ai-chat error:", e);
     return new Response(

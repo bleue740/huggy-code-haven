@@ -9,6 +9,7 @@ import {
   MessageCirclePlus,
 } from 'lucide-react';
 import { AppState, AISuggestion } from '../types';
+import { BackendConnectCard } from './BackendConnectCard';
 import { FileTree } from './FileTree';
 import { CodeEditor } from './CodeEditor';
 import { useVoiceInput } from '../hooks/useVoiceInput';
@@ -26,6 +27,9 @@ interface SidebarProps {
   onNewProject?: () => void;
   onRenameProject?: (name: string) => void;
   onBackToLanding?: () => void;
+  onConnectSupabase?: () => void;
+  onEnableFirecrawl?: () => void;
+  onDismissBackendHints?: () => void;
 }
 
 const MAX_CHARS = 10000;
@@ -56,7 +60,7 @@ const ShimmerLine = ({ width = 'w-full', delay = 0 }: { width?: string; delay?: 
 );
 
 export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
-  ({ state, setState, onSend, onStop, onScreenshotRequest, onToggleVisualEdit, onShowHistory, onNewChat, onNewProject, onRenameProject, onBackToLanding }, ref) => {
+  ({ state, setState, onSend, onStop, onScreenshotRequest, onToggleVisualEdit, onShowHistory, onNewChat, onNewProject, onRenameProject, onBackToLanding, onConnectSupabase, onEnableFirecrawl, onDismissBackendHints }, ref) => {
     const navigate = useNavigate();
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [showScrollBottom, setShowScrollBottom] = useState(false);
@@ -398,6 +402,18 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                     </div>
                   </div>
                 ))
+              )}
+
+              {/* Backend Connect Card - shown when AI detects backend needs */}
+              {(state.backendHints?.length ?? 0) > 0 && !state.isGenerating && (
+                <BackendConnectCard
+                  needs={state.backendHints!}
+                  onConnectSupabase={() => onConnectSupabase?.()}
+                  onEnableFirecrawl={() => onEnableFirecrawl?.()}
+                  onDismiss={() => onDismissBackendHints?.()}
+                  supabaseConnected={!!state.supabaseUrl}
+                  firecrawlEnabled={state.firecrawlEnabled}
+                />
               )}
 
               {state.isGenerating && (

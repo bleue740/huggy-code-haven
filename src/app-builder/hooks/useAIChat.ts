@@ -8,6 +8,7 @@ export interface StreamCallbacks {
   onDone: (fullText: string) => void;
   onError: (error: string, code?: number) => void;
   onStatusChange: (status: string) => void;
+  onBackendHint?: (needs: string[]) => void;
 }
 
 interface ChatMessage {
@@ -29,7 +30,8 @@ export function useAIChat() {
     async (
       messages: ChatMessage[],
       callbacks: StreamCallbacks,
-      projectContext?: string
+      projectContext?: string,
+      backendConfig?: { supabaseUrl?: string | null; supabaseAnonKey?: string | null; firecrawlEnabled?: boolean }
     ) => {
       const controller = new AbortController();
       abortRef.current = controller;
@@ -52,7 +54,13 @@ export function useAIChat() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ messages, projectContext }),
+          body: JSON.stringify({
+            messages,
+            projectContext,
+            supabaseUrl: backendConfig?.supabaseUrl,
+            supabaseAnonKey: backendConfig?.supabaseAnonKey,
+            firecrawlEnabled: backendConfig?.firecrawlEnabled,
+          }),
           signal: controller.signal,
         });
 
@@ -115,6 +123,11 @@ export function useAIChat() {
 
             try {
               const parsed = JSON.parse(jsonStr);
+              // Check for backend hint events
+              if (parsed.type === 'backend_hint' && parsed.needs) {
+                callbacks.onBackendHint?.(parsed.needs);
+                continue;
+              }
               const content = parsed.choices?.[0]?.delta?.content as string | undefined;
               if (content) {
                 fullText += content;

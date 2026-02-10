@@ -37,6 +37,8 @@ export interface AIEvent {
   timestamp: number;
 }
 
+export type BackendNeed = 'database' | 'auth' | 'storage' | 'scraping';
+
 export interface AppState {
   projectId?: string;
   credits: number;
@@ -64,4 +66,10 @@ export interface AppState {
   showSecurityModal?: boolean;
   securityScore?: number;
   securityResults?: SecurityResult[];
+  // Full-stack backend integration
+  supabaseUrl?: string | null;
+  supabaseAnonKey?: string | null;
+  firecrawlEnabled?: boolean;
+  backendHints?: BackendNeed[];
+  showSupabaseModal?: boolean;
 }
