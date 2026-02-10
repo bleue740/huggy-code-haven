@@ -146,6 +146,24 @@ const App: React.FC = () => {
         setState(prev => ({ ...prev, projectId: proj.id, projectName: proj.name || 'New Project', files, activeFile: 'App.tsx' }));
         setShowDashboard(true);
         setAuthChecked(true);
+
+        // Check for pending prompt from pre-login landing page
+        const pendingPrompt = sessionStorage.getItem('blink_pending_prompt');
+        if (pendingPrompt) {
+          sessionStorage.removeItem('blink_pending_prompt');
+          // Defer to next tick so state is settled
+          setTimeout(() => {
+            setShowDashboard(false);
+            setShowLanding(false);
+          }, 100);
+          setTimeout(() => {
+            const input = pendingPrompt.trim();
+            if (input) {
+              // Trigger the message send via a custom event workaround
+              setState(prev => ({ ...prev, currentInput: input }));
+            }
+          }, 200);
+        }
         return;
       }
 
@@ -376,8 +394,11 @@ const App: React.FC = () => {
   }, [state.projectId]);
 
   const handleStartFromLanding = (prompt: string) => {
-    // If not authenticated, redirect to auth
+    // If not authenticated, store prompt and redirect to auth
     if (!userEmail) {
+      if (prompt.trim()) {
+        sessionStorage.setItem('blink_pending_prompt', prompt);
+      }
       navigate("/auth", { state: { from: "/app" } });
       return;
     }
