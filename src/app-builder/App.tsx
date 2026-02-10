@@ -68,6 +68,7 @@ const App: React.FC = () => {
   const [showLanding, setShowLanding] = useState(true);
   const [showDashboard, setShowDashboard] = useState(false);
   const [consoleOpen, setConsoleOpen] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | undefined>();
   const streamingTextRef = useRef('');
 
   const { logs: consoleLogs, clearLogs: clearConsoleLogs } = useConsoleCapture();
@@ -117,6 +118,7 @@ const App: React.FC = () => {
     (async () => {
       const { data } = await supabase.auth.getUser();
       const userId = data.user?.id;
+      setUserEmail(data.user?.email ?? undefined);
       if (!userId) return;
 
       const { data: existing, error } = await supabase
@@ -449,7 +451,7 @@ const App: React.FC = () => {
   if (showDashboard) {
     return (
       <div className="dark">
-        <Dashboard onOpenProject={handleOpenProject} onCreateNewProject={handleCreateNewFromDashboard} />
+        <Dashboard onOpenProject={handleOpenProject} onCreateNewProject={handleCreateNewFromDashboard} userEmail={userEmail} />
       </div>
     );
   }

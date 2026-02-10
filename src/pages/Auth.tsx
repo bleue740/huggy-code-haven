@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { z } from "zod";
+import { Info } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/hooks/useSession";
 
@@ -15,6 +16,7 @@ export default function AuthPage() {
   const { user } = useSession();
 
   const from = (location.state as any)?.from || "/";
+  const isRedirected = Boolean((location.state as any)?.from);
 
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
@@ -64,10 +66,20 @@ export default function AuthPage() {
   return (
     <main className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-6">
       <section className="w-full max-w-md bg-[#111] border border-[#1a1a1a] rounded-2xl p-6">
+        {isRedirected && (
+          <div className="flex items-center gap-2 px-4 py-3 mb-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm">
+            <Info size={16} className="shrink-0" />
+            <span className="font-medium">Connectez-vous pour continuer</span>
+          </div>
+        )}
         <header className="mb-6">
           <h1 className="text-xl font-black tracking-tight">Blink • Auth</h1>
           <p className="text-sm text-neutral-500 mt-1">
-            {mode === "login" ? "Connecte-toi pour accéder au builder." : "Crée ton compte pour sauvegarder tes projets."}
+            {isRedirected
+              ? "Vous devez être connecté pour accéder à cette fonctionnalité."
+              : mode === "login"
+                ? "Connecte-toi pour accéder au builder."
+                : "Crée ton compte pour sauvegarder tes projets."}
           </p>
         </header>
 
