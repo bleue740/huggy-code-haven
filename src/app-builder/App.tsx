@@ -9,6 +9,7 @@ import { useConsoleCapture } from './hooks/useConsoleCapture';
 import { useCredits } from './hooks/useCredits';
 import { useAIChat, extractCodeFromResponse } from './hooks/useAIChat';
 import { AppState, Message, AISuggestion, SecurityResult } from './types';
+import { analyzeCodeSecurity } from './utils/securityAnalyzer';
 import { X, CheckCircle2, Zap, Rocket, ShieldCheck, AlertTriangle, Info, Loader2, History } from 'lucide-react';
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -385,18 +386,12 @@ const App: React.FC = () => {
 
   const handleRunSecurity = useCallback(() => {
     setState(prev => ({ ...prev, showSecurityModal: true, isRunningSecurity: true, securityScore: 0, securityResults: [] }));
-    setTimeout(() => {
-      const results: SecurityResult[] = [
-        { name: "SSL/TLS Encryption", status: 'passed', description: "All traffic encrypted via TLS 1.3." },
-        { name: "XSS Protection", status: 'passed', description: "Automatic input sanitization active." },
-        { name: "CSRF Protection", status: 'passed', description: "Anti-forgery tokens validated." },
-        { name: "Rate Limiting", status: 'warning', description: "Per-endpoint tuning recommended." },
-        { name: "Dependency Audit", status: 'passed', description: "All dependencies up to date." },
-        { name: "Headers Security", status: 'info', description: "CSP header could be more restrictive." },
-      ];
-      setState(prev => ({ ...prev, isRunningSecurity: false, securityScore: 94, securityResults: results }));
-    }, 2500);
-  }, []);
+    // Run real static analysis on project files
+    requestAnimationFrame(() => {
+      const { results, score } = analyzeCodeSecurity(state.files);
+      setState(prev => ({ ...prev, isRunningSecurity: false, securityScore: score, securityResults: results }));
+    });
+  }, [state.files]);
 
   const handleNewChat = useCallback(() => {
     setState(prev => ({
