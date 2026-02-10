@@ -14,6 +14,56 @@ export type Database = {
   }
   public: {
     Tables: {
+      community_showcases: {
+        Row: {
+          created_at: string
+          deploy_url: string
+          description: string | null
+          expires_at: string
+          featured_at: string
+          id: string
+          project_id: string | null
+          score: number | null
+          thumbnail_url: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          deploy_url: string
+          description?: string | null
+          expires_at?: string
+          featured_at?: string
+          id?: string
+          project_id?: string | null
+          score?: number | null
+          thumbnail_url?: string | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          deploy_url?: string
+          description?: string | null
+          expires_at?: string
+          featured_at?: string
+          id?: string
+          project_id?: string | null
+          score?: number | null
+          thumbnail_url?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_showcases_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deployments: {
         Row: {
           created_at: string

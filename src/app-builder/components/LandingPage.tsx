@@ -1,11 +1,52 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Plus, Zap, ArrowUp, Layout, Calendar, Briefcase, ChevronRight, Sparkles, Menu, X, Code, Monitor, Rocket, FolderTree, Shield, RefreshCw, MessageSquare } from 'lucide-react';
+import { Plus, Zap, ArrowUp, Layout, Calendar, Briefcase, ChevronRight, Sparkles, Menu, X, Code, Monitor, Rocket, FolderTree, Shield, RefreshCw, MessageSquare, ExternalLink } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 
 interface LandingPageProps {
   onStart: (prompt: string) => void;
   isAuthenticated?: boolean;
 }
+
+interface Suggestion {
+  icon: string;
+  title: string;
+  prompt: string;
+}
+
+const iconMap: Record<string, React.ReactNode> = {
+  Layout: <Layout size={14} className="text-blue-500" />,
+  Zap: <Zap size={14} className="text-orange-500" />,
+  Calendar: <Calendar size={14} className="text-blue-600" />,
+  Briefcase: <Briefcase size={14} className="text-emerald-500" />,
+  Code: <Code size={14} className="text-purple-500" />,
+  Shield: <Shield size={14} className="text-cyan-500" />,
+  Monitor: <Monitor size={14} className="text-pink-500" />,
+  Rocket: <Rocket size={14} className="text-red-500" />,
+};
+
+const defaultSuggestions: Suggestion[] = [
+  { icon: "Layout", title: "AI Landing Page Builder", prompt: "Build a modern AI-powered landing page with a hero section, feature grid, pricing cards, testimonials carousel, and a CTA with gradient effects. Use dark theme with blue accents." },
+  { icon: "Zap", title: "SaaS Dashboard for Analytics", prompt: "Create a SaaS analytics dashboard with sidebar navigation, KPI cards, line/bar charts, a data table with filters, and a dark glassmorphism design." },
+  { icon: "Calendar", title: "Booking System for Doctors", prompt: "Build a doctor appointment booking system with a calendar view, time slot picker, patient form, booking confirmation, and appointment list. Clean medical UI." },
+  { icon: "Briefcase", title: "Project Management Tool", prompt: "Create a project management tool with kanban board, task cards with drag indicators, project sidebar, team avatars, and progress tracking. Modern dark UI." },
+];
+
+interface ShowcaseItem {
+  id: string;
+  title: string;
+  description: string | null;
+  deploy_url: string;
+}
+
+const mockShowcases: ShowcaseItem[] = [
+  { id: '1', title: 'TaskFlow Pro', description: 'A beautiful project management app with kanban boards and team collaboration.', deploy_url: '#' },
+  { id: '2', title: 'FitTrack AI', description: 'AI-powered fitness tracking with workout plans and nutrition insights.', deploy_url: '#' },
+  { id: '3', title: 'InvoiceSnap', description: 'Smart invoicing tool with automatic payment reminders and analytics.', deploy_url: '#' },
+  { id: '4', title: 'LearnHub', description: 'Online course platform with progress tracking and interactive quizzes.', deploy_url: '#' },
+  { id: '5', title: 'BookMyDoc', description: 'Doctor appointment scheduler with real-time availability and reminders.', deploy_url: '#' },
+  { id: '6', title: 'ShopDash', description: 'E-commerce analytics dashboard with sales trends and inventory alerts.', deploy_url: '#' },
+];
 
 /* ───────── Scroll animation wrapper ───────── */
 const AnimatedSection: React.FC<{ children: React.ReactNode; className?: string; delay?: number }> = ({ children, className = '', delay = 0 }) => {
@@ -37,14 +78,62 @@ const AnimatedSection: React.FC<{ children: React.ReactNode; className?: string;
 export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticated }) => {
   const [inputValue, setInputValue] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>(defaultSuggestions);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshCooldown, setRefreshCooldown] = useState(false);
+  const [showcases, setShowcases] = useState<ShowcaseItem[]>([]);
+  const [showcasesLoaded, setShowcasesLoaded] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const navigate = useNavigate();
 
-  const suggestions = [
-    { icon: <Layout size={14} className="text-blue-500" />, text: "AI Landing Page Builder" },
-    { icon: <Zap size={14} className="text-orange-500" />, text: "SaaS Dashboard for Analytics" },
-    { icon: <Calendar size={14} className="text-blue-600" />, text: "Booking System for Doctors" },
-    { icon: <Briefcase size={14} className="text-emerald-500" />, text: "Project Management Tool" },
-  ];
+  // Fetch community showcases
+  useEffect(() => {
+    const fetchShowcases = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('community_showcases')
+          .select('id, title, description, deploy_url')
+          .gt('expires_at', new Date().toISOString())
+          .order('score', { ascending: false })
+          .limit(6);
+        if (!error && data && data.length > 0) {
+          setShowcases(data);
+        }
+      } catch { /* fallback to mock */ }
+      setShowcasesLoaded(true);
+    };
+    fetchShowcases();
+  }, []);
+
+  const handleSuggestionClick = (prompt: string) => {
+    setInputValue(prompt);
+    textareaRef.current?.focus();
+    textareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  const refreshSuggestions = async () => {
+    if (isRefreshing || refreshCooldown) return;
+    setIsRefreshing(true);
+    try {
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-suggestions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+      });
+      if (!resp.ok) throw new Error('Failed');
+      const data = await resp.json();
+      if (data.suggestions && data.suggestions.length > 0) {
+        setSuggestions(data.suggestions);
+      }
+    } catch {
+      // Keep current suggestions on error
+    }
+    setIsRefreshing(false);
+    setRefreshCooldown(true);
+    setTimeout(() => setRefreshCooldown(false), 10000);
+  };
 
   const features = [
     { icon: <Code size={22} />, color: 'text-blue-400 bg-blue-500/10', title: 'AI Code Generation', desc: 'Describe what you want, get production-ready React code.' },
@@ -86,6 +175,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
     setIsMenuOpen(false);
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  const displayedShowcases = showcases.length > 0 ? showcases : mockShowcases;
 
   return (
     <div className="min-h-screen bg-[#050505] text-white font-['Inter',sans-serif] selection:bg-blue-600/30 overflow-x-hidden">
@@ -164,6 +255,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
 
         <div className="w-full max-w-4xl bg-[#111] border border-white/5 rounded-[40px] shadow-[0_40px_80px_rgba(0,0,0,0.5)] p-8 md:p-10 mb-20 group transition-all hover:border-blue-500/30 focus-within:ring-8 focus-within:ring-blue-500/5">
           <textarea
+            ref={textareaRef}
             className="w-full bg-transparent border-none focus:ring-0 text-2xl md:text-3xl text-white placeholder-neutral-700 resize-none h-40 scrollbar-none outline-none font-bold leading-tight"
             placeholder="Build a CRM for real estate with client tracking..."
             value={inputValue}
@@ -187,20 +279,31 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
           </div>
         </div>
 
+        {/* Suggestions grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
           {suggestions.map((item, idx) => (
             <button
-              key={idx}
-              onClick={() => onStart(item.text)}
+              key={`${item.title}-${idx}`}
+              onClick={() => handleSuggestionClick(item.prompt)}
               className="flex flex-col items-center gap-4 px-6 py-8 bg-[#111] border border-white/5 rounded-[32px] hover:border-blue-500/50 hover:bg-[#161616] transition-all shadow-sm group"
             >
               <div className="p-4 bg-white/5 rounded-2xl group-hover:scale-110 transition-transform group-hover:bg-white/10">
-                {item.icon}
+                {iconMap[item.icon] || <Sparkles size={14} className="text-blue-400" />}
               </div>
-              <span className="text-[14px] font-black text-white">{item.text}</span>
+              <span className="text-[14px] font-black text-white">{item.title}</span>
             </button>
           ))}
         </div>
+
+        {/* Refresh suggestions button */}
+        <button
+          onClick={refreshSuggestions}
+          disabled={isRefreshing || refreshCooldown}
+          className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-neutral-500 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
+          {isRefreshing ? 'Generating...' : 'More ideas'}
+        </button>
       </section>
 
       {/* Stats / Social Proof */}
@@ -249,7 +352,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
           </div>
         </AnimatedSection>
         <div className="grid md:grid-cols-3 gap-8 relative">
-          {/* Connector line (desktop) */}
           <div className="hidden md:block absolute top-16 left-[16.6%] right-[16.6%] border-t-2 border-dashed border-white/10" />
           {steps.map((s, i) => (
             <AnimatedSection key={i} delay={i * 120}>
@@ -306,6 +408,50 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
         </div>
       </section>
 
+      {/* Community Showcase */}
+      <section id="community" className="max-w-6xl mx-auto px-6 py-24">
+        <AnimatedSection>
+          <div className="text-center mb-16">
+            <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-4">Community Showcase</h2>
+            <p className="text-neutral-400 text-lg max-w-2xl mx-auto">
+              Discover what makers are building with Blink AI. Featured projects rotate every 72 hours.
+            </p>
+          </div>
+        </AnimatedSection>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-5">
+          {displayedShowcases.map((item, i) => (
+            <AnimatedSection key={item.id} delay={i * 80}>
+              <div className="bg-[#111] border border-white/5 rounded-3xl p-6 hover:border-blue-500/30 transition-all group relative overflow-hidden">
+                <div className="absolute top-4 right-4">
+                  <span className="text-[10px] font-black uppercase tracking-wider bg-blue-600/20 text-blue-400 px-2 py-1 rounded-full border border-blue-500/20">
+                    Built with Blink
+                  </span>
+                </div>
+                <h3 className="text-lg font-black text-white mb-2 mt-2">{item.title}</h3>
+                <p className="text-neutral-400 text-sm leading-relaxed line-clamp-2 mb-5">
+                  {item.description || 'An awesome app built with Blink AI.'}
+                </p>
+                <a
+                  href={item.deploy_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  Visit <ExternalLink size={12} />
+                </a>
+              </div>
+            </AnimatedSection>
+          ))}
+        </div>
+        {showcasesLoaded && showcases.length === 0 && (
+          <AnimatedSection>
+            <div className="text-center mt-10">
+              <p className="text-neutral-500 text-sm">These are example projects. <span className="text-blue-400 font-bold">Be the first to showcase your app!</span></p>
+            </div>
+          </AnimatedSection>
+        )}
+      </section>
+
       {/* CTA */}
       <AnimatedSection>
         <section className="max-w-4xl mx-auto px-6 py-24 text-center">
@@ -324,7 +470,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
       <footer className="border-t border-white/5 bg-[#050505]">
         <div className="max-w-6xl mx-auto px-6 py-16">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-10">
-            {/* Logo */}
             <div className="col-span-2 md:col-span-1">
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
@@ -334,8 +479,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
               </div>
               <p className="text-neutral-500 text-sm leading-relaxed">Build production apps with AI in seconds.</p>
             </div>
-
-            {/* Product */}
             <div>
               <h4 className="text-sm font-black text-white uppercase tracking-wider mb-4">Product</h4>
               <ul className="space-y-2 text-sm text-neutral-400">
@@ -343,8 +486,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
                 <li><Link to="/pricing" className="hover:text-white transition-colors">Pricing</Link></li>
               </ul>
             </div>
-
-            {/* Company */}
             <div>
               <h4 className="text-sm font-black text-white uppercase tracking-wider mb-4">Company</h4>
               <ul className="space-y-2 text-sm text-neutral-400">
@@ -352,8 +493,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
                 <li><span className="cursor-default">Contact</span></li>
               </ul>
             </div>
-
-            {/* Legal */}
             <div>
               <h4 className="text-sm font-black text-white uppercase tracking-wider mb-4">Legal</h4>
               <ul className="space-y-2 text-sm text-neutral-400">
@@ -362,7 +501,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
               </ul>
             </div>
           </div>
-
           <div className="border-t border-white/5 mt-12 pt-8 text-center text-neutral-600 text-sm">
             © 2026 Blink AI. All rights reserved.
           </div>
