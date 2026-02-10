@@ -26,6 +26,8 @@ export interface SecurityResult {
   name: string;
   status: 'passed' | 'warning' | 'info';
   description: string;
+  severity?: 'error' | 'warning' | 'info';
+  line?: number;
 }
 
 export interface AIEvent {
