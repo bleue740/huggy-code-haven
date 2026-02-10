@@ -1,20 +1,28 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowLeft, Zap } from "lucide-react";
 
 export default function PricingPage() {
+  const navigate = useNavigate();
+
   return (
     <main className="min-h-screen bg-[#050505] text-white">
-      <header className="max-w-5xl mx-auto px-6 py-12">
-        <h1 className="text-4xl font-black tracking-tight">Pricing</h1>
-        <p className="text-neutral-500 mt-3 max-w-2xl">
-          Choisis un plan pour débloquer des builds illimités, des déploiements persistants et des options avancées.
-        </p>
-        <div className="mt-6">
-          <Link to="/" className="text-blue-500 underline">← Retour au builder</Link>
+      <header className="border-b border-[#1a1a1a] px-6 md:px-8 py-4 flex items-center gap-4">
+        <button
+          onClick={() => navigate('/app')}
+          className="p-2 hover:bg-white/5 rounded-xl transition-colors text-neutral-400 hover:text-white"
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+            <Zap size={16} className="text-white" fill="currentColor" />
+          </div>
+          <span className="text-lg font-bold tracking-tight">Pricing</span>
         </div>
       </header>
 
-      <section className="max-w-5xl mx-auto px-6 pb-16 grid md:grid-cols-3 gap-6">
+      <section className="max-w-5xl mx-auto px-6 py-16 grid md:grid-cols-3 gap-6">
         {[
           { name: "Free", price: "$0", perks: ["1 projet", "Publish basique", "Security scan"], highlight: false },
           { name: "Pro", price: "$29", perks: ["Projets illimités", "Deploy history", "Domaines personnalisés"], highlight: true },

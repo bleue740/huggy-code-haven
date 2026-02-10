@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Plus, Zap, ArrowUp, Layout, Calendar, Briefcase, ChevronRight, Sparkles, Menu, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 interface LandingPageProps {
   onStart: (prompt: string) => void;
+  isAuthenticated?: boolean;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticated }) => {
   const [inputValue, setInputValue] = useState('');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -25,12 +27,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
     }
   };
 
+  const scrollTo = (id: string) => {
+    setIsMenuOpen(false);
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   return (
     <div className="min-h-screen bg-[#050505] text-white font-['Inter',sans-serif] selection:bg-blue-600/30 overflow-x-hidden">
       <div className="absolute top-0 left-0 right-0 h-[1000px] pointer-events-none overflow-hidden -z-10">
         <div className="absolute top-[-200px] left-1/2 -translate-x-1/2 w-[1400px] h-[800px] bg-gradient-to-b from-blue-900/20 via-transparent to-transparent blur-[120px]"></div>
       </div>
 
+      {/* Navbar */}
       <nav className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between sticky top-0 bg-[#050505]/80 backdrop-blur-md z-50 border-b border-white/5">
         <div className="flex items-center gap-12">
           <div className="text-2xl font-black tracking-tighter flex items-center gap-2 cursor-pointer group">
@@ -39,8 +47,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
             </div>
             Blink
           </div>
+          <div className="hidden lg:flex items-center gap-8">
+            <button onClick={() => scrollTo('features')} className="text-sm font-semibold text-neutral-400 hover:text-white transition-colors">Features</button>
+            <Link to="/pricing" className="text-sm font-semibold text-neutral-400 hover:text-white transition-colors">Pricing</Link>
+          </div>
         </div>
         <div className="flex items-center gap-4">
+          <Link to="/auth" className="hidden sm:inline-block text-sm font-semibold text-neutral-400 hover:text-white transition-colors">
+            Sign in
+          </Link>
           <button
             onClick={() => onStart("")}
             className="bg-white text-black px-7 py-3 rounded-2xl text-[14px] font-[800] shadow-xl shadow-white/5 hover:bg-neutral-200 transition-all active:scale-95 flex items-center gap-2"
@@ -53,6 +68,29 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
         </div>
       </nav>
 
+      {/* Mobile Menu Overlay */}
+      {isMenuOpen && (
+        <div className="fixed inset-0 z-[60] bg-[#050505] flex flex-col pt-24 px-8 animate-in fade-in slide-in-from-top-4 duration-200">
+          <button className="absolute top-6 right-6 text-neutral-400 hover:text-white" onClick={() => setIsMenuOpen(false)}>
+            <X size={28} />
+          </button>
+          <div className="space-y-6">
+            <button onClick={() => scrollTo('features')} className="block text-2xl font-black text-white">Features</button>
+            <Link to="/pricing" className="block text-2xl font-black text-white" onClick={() => setIsMenuOpen(false)}>Pricing</Link>
+            <Link to="/auth" className="block text-2xl font-black text-neutral-400" onClick={() => setIsMenuOpen(false)}>Sign in</Link>
+          </div>
+          <div className="mt-12">
+            <button
+              onClick={() => { setIsMenuOpen(false); onStart(""); }}
+              className="w-full bg-white text-black py-4 rounded-2xl text-base font-black flex items-center justify-center gap-2"
+            >
+              Get started for free <ChevronRight size={18} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Hero */}
       <section className="max-w-5xl mx-auto pt-20 pb-32 px-6 flex flex-col items-center text-center">
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/10 text-[12px] font-black text-blue-400 uppercase tracking-[0.15em] mb-12 border border-blue-500/20 shadow-sm">
           <Sparkles size={14} /> AI-POWERED APP BUILDER
@@ -107,6 +145,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
           ))}
         </div>
       </section>
+
+      {/* Features placeholder anchor */}
+      <div id="features" />
     </div>
   );
 };
