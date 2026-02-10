@@ -106,27 +106,36 @@ export type Database = {
         Row: {
           code: string | null
           created_at: string
+          firecrawl_enabled: boolean | null
           id: string
           name: string
           schema: Json | null
+          supabase_anon_key: string | null
+          supabase_url: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           code?: string | null
           created_at?: string
+          firecrawl_enabled?: boolean | null
           id?: string
           name?: string
           schema?: Json | null
+          supabase_anon_key?: string | null
+          supabase_url?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           code?: string | null
           created_at?: string
+          firecrawl_enabled?: boolean | null
           id?: string
           name?: string
           schema?: Json | null
+          supabase_anon_key?: string | null
+          supabase_url?: string | null
           updated_at?: string
           user_id?: string
         }

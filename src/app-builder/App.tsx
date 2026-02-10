@@ -8,10 +8,12 @@ import { ConsolePanel } from './components/ConsolePanel';
 import { useConsoleCapture } from './hooks/useConsoleCapture';
 import { useCredits } from './hooks/useCredits';
 import { useAIChat, extractCodeFromResponse } from './hooks/useAIChat';
-import { AppState, Message, AISuggestion, SecurityResult } from './types';
+import { AppState, Message, AISuggestion, SecurityResult, BackendNeed } from './types';
 import { analyzeCodeSecurity } from './utils/securityAnalyzer';
 import { exportProjectAsZip } from './utils/exportZip';
 import { X, CheckCircle2, Zap, Rocket, ShieldCheck, AlertTriangle, Info, Loader2, History } from 'lucide-react';
+import { SupabaseConnectModal } from './components/SupabaseConnectModal';
+import { FirecrawlConnectCard } from './components/FirecrawlConnectCard';
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -103,7 +105,14 @@ const App: React.FC = () => {
     showSecurityModal: false,
     securityScore: 0,
     securityResults: [],
+    supabaseUrl: null,
+    supabaseAnonKey: null,
+    firecrawlEnabled: false,
+    backendHints: [],
+    showSupabaseModal: false,
   });
+
+  const [showFirecrawlModal, setShowFirecrawlModal] = useState(false);
 
   useEffect(() => {
     if (!creditsLoading) {
@@ -130,7 +139,7 @@ const App: React.FC = () => {
 
       const { data: existing, error } = await supabase
         .from("projects")
-        .select("id, name, schema, code, updated_at")
+        .select("id, name, schema, code, updated_at, supabase_url, supabase_anon_key, firecrawl_enabled")
         .eq("user_id", userId)
         .order("updated_at", { ascending: false })
         .limit(1);
@@ -145,7 +154,16 @@ const App: React.FC = () => {
       if (existing && existing.length > 0) {
         const proj = existing[0] as any;
         const files = deserializeFiles(proj.code);
-        setState(prev => ({ ...prev, projectId: proj.id, projectName: proj.name || 'New Project', files, activeFile: 'App.tsx' }));
+        setState(prev => ({
+          ...prev,
+          projectId: proj.id,
+          projectName: proj.name || 'New Project',
+          files,
+          activeFile: 'App.tsx',
+          supabaseUrl: proj.supabase_url || null,
+          supabaseAnonKey: proj.supabase_anon_key || null,
+          firecrawlEnabled: proj.firecrawl_enabled || false,
+        }));
         setShowDashboard(true);
         setAuthChecked(true);
 
@@ -316,8 +334,15 @@ const App: React.FC = () => {
       onStatusChange: (status) => {
         setState(prev => ({ ...prev, aiStatusText: status }));
       },
-    }, projectContext);
-  }, [state.currentInput, state.isGenerating, state.history, state.files, showLanding, sendAIMessage, refetchCredits, fetchSuggestions]);
+      onBackendHint: (needs) => {
+        setState(prev => ({ ...prev, backendHints: needs as BackendNeed[] }));
+      },
+    }, projectContext, {
+      supabaseUrl: state.supabaseUrl,
+      supabaseAnonKey: state.supabaseAnonKey,
+      firecrawlEnabled: state.firecrawlEnabled,
+    });
+  }, [state.currentInput, state.isGenerating, state.history, state.files, state.supabaseUrl, state.supabaseAnonKey, state.firecrawlEnabled, showLanding, sendAIMessage, refetchCredits, fetchSuggestions]);
 
   const handlePublish = useCallback(async () => {
     if (!state.projectId) {
@@ -405,6 +430,35 @@ const App: React.FC = () => {
     }
   }, [state.files, state.projectName]);
 
+  const handleConnectSupabase = useCallback((url: string, anonKey: string) => {
+    setState(prev => ({ ...prev, supabaseUrl: url, supabaseAnonKey: anonKey, backendHints: [] }));
+    // Persist to project
+    if (state.projectId) {
+      supabase.auth.getUser().then(({ data }) => {
+        if (data.user?.id) {
+          supabase.from('projects').update({ supabase_url: url, supabase_anon_key: anonKey } as any).eq('id', state.projectId!).eq('user_id', data.user.id);
+        }
+      });
+    }
+    toast.success('🔗 Supabase connecté ! L\'IA va maintenant générer du code full-stack.');
+  }, [state.projectId]);
+
+  const handleEnableFirecrawl = useCallback(() => {
+    setState(prev => ({ ...prev, firecrawlEnabled: true, backendHints: [] }));
+    if (state.projectId) {
+      supabase.auth.getUser().then(({ data }) => {
+        if (data.user?.id) {
+          supabase.from('projects').update({ firecrawl_enabled: true } as any).eq('id', state.projectId!).eq('user_id', data.user.id);
+        }
+      });
+    }
+    toast.success('🔥 Firecrawl activé ! Le scraping web est disponible.');
+  }, [state.projectId]);
+
+  const handleDismissBackendHints = useCallback(() => {
+    setState(prev => ({ ...prev, backendHints: [] }));
+  }, []);
+
   const handleNewChat = useCallback(() => {
     setState(prev => ({
       ...prev,
@@ -467,7 +521,7 @@ const App: React.FC = () => {
 
     const { data: proj, error } = await supabase
       .from('projects')
-      .select('id, name, code, schema, updated_at')
+      .select('id, name, code, schema, updated_at, supabase_url, supabase_anon_key, firecrawl_enabled')
       .eq('id', projectId)
       .eq('user_id', userId)
       .single();
@@ -484,6 +538,9 @@ const App: React.FC = () => {
       projectName: proj.name || 'New Project',
       files,
       activeFile: 'App.tsx',
+      supabaseUrl: (proj as any).supabase_url || null,
+      supabaseAnonKey: (proj as any).supabase_anon_key || null,
+      firecrawlEnabled: (proj as any).firecrawl_enabled || false,
       history: [{ id: Date.now().toString(), role: 'assistant', content: `Projet "${proj.name}" chargé. Comment puis-je vous aider ?`, timestamp: Date.now() }],
     }));
     setShowDashboard(false);
@@ -569,6 +626,9 @@ const App: React.FC = () => {
           onNewProject={handleNewProject}
           onRenameProject={handleRenameProject}
           onBackToLanding={handleBackToDashboard}
+          onConnectSupabase={() => setState(prev => ({ ...prev, showSupabaseModal: true }))}
+          onEnableFirecrawl={() => setShowFirecrawlModal(true)}
+          onDismissBackendHints={handleDismissBackendHints}
         />
         <div className="flex-1 flex flex-col min-w-0">
           <TopNav
@@ -581,7 +641,14 @@ const App: React.FC = () => {
             isGenerating={state.isGenerating}
             projectName={state.projectName}
           />
-          <CodePreview code={concatenatedCode} isGenerating={state.isGenerating} generationStatus={state.aiStatusText ?? undefined} />
+          <CodePreview
+            code={concatenatedCode}
+            isGenerating={state.isGenerating}
+            generationStatus={state.aiStatusText ?? undefined}
+            supabaseUrl={state.supabaseUrl}
+            supabaseAnonKey={state.supabaseAnonKey}
+            firecrawlEnabled={state.firecrawlEnabled}
+          />
           <ConsolePanel logs={consoleLogs} onClear={clearConsoleLogs} isOpen={consoleOpen} onToggle={() => setConsoleOpen(!consoleOpen)} />
         </div>
 
@@ -701,6 +768,20 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Supabase Connect Modal */}
+        <SupabaseConnectModal
+          isOpen={state.showSupabaseModal ?? false}
+          onClose={() => setState(prev => ({ ...prev, showSupabaseModal: false }))}
+          onConnect={handleConnectSupabase}
+        />
+
+        {/* Firecrawl Connect Modal */}
+        <FirecrawlConnectCard
+          isOpen={showFirecrawlModal}
+          onClose={() => setShowFirecrawlModal(false)}
+          onEnable={handleEnableFirecrawl}
+        />
       </div>
     </div>
   );

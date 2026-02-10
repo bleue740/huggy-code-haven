@@ -7,6 +7,9 @@ interface CodePreviewProps {
   code: string;
   isGenerating: boolean;
   generationStatus?: string;
+  supabaseUrl?: string | null;
+  supabaseAnonKey?: string | null;
+  firecrawlEnabled?: boolean;
 }
 
 type DeviceMode = "desktop" | "tablet" | "mobile";
@@ -17,8 +20,56 @@ const REACT_DOM_CDN = "https://unpkg.com/react-dom@18.3.1/umd/react-dom.producti
 const TAILWIND_CDN = "https://cdn.tailwindcss.com";
 const RECHARTS_CDN = "https://unpkg.com/recharts@2.15.4/umd/Recharts.js";
 const LUCIDE_CDN = "https://unpkg.com/lucide-react@0.462.0/dist/umd/lucide-react.js";
+const SUPABASE_CDN = "https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js";
 
-function buildIframeHtml(tsxCode: string): string {
+function buildIframeHtml(tsxCode: string, supabaseUrl?: string | null, supabaseAnonKey?: string | null, firecrawlEnabled?: boolean): string {
+  const hasSupabase = !!supabaseUrl && !!supabaseAnonKey;
+  const supabaseScript = hasSupabase
+    ? `<script src="${SUPABASE_CDN}"></script>
+  <script>
+    window.__SUPABASE_CLIENT__ = supabase.createClient("${supabaseUrl}", "${supabaseAnonKey}");
+  </script>`
+    : '';
+
+  const firecrawlScript = firecrawlEnabled
+    ? `<script>
+    window.__FIRECRAWL__ = {
+      async scrape(url, options) {
+        const resp = await fetch("${import.meta.env.VITE_SUPABASE_URL || ''}/functions/v1/firecrawl-proxy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "apikey": "${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || ''}" },
+          body: JSON.stringify({ action: "scrape", url, options })
+        });
+        return resp.json();
+      },
+      async search(query, options) {
+        const resp = await fetch("${import.meta.env.VITE_SUPABASE_URL || ''}/functions/v1/firecrawl-proxy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "apikey": "${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || ''}" },
+          body: JSON.stringify({ action: "search", query, options })
+        });
+        return resp.json();
+      },
+      async map(url, options) {
+        const resp = await fetch("${import.meta.env.VITE_SUPABASE_URL || ''}/functions/v1/firecrawl-proxy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "apikey": "${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || ''}" },
+          body: JSON.stringify({ action: "map", url, options })
+        });
+        return resp.json();
+      },
+      async crawl(url, options) {
+        const resp = await fetch("${import.meta.env.VITE_SUPABASE_URL || ''}/functions/v1/firecrawl-proxy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "apikey": "${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || ''}" },
+          body: JSON.stringify({ action: "crawl", url, options })
+        });
+        return resp.json();
+      }
+    };
+  </script>`
+    : '';
+
   return `<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -51,6 +102,8 @@ function buildIframeHtml(tsxCode: string): string {
     // Expose lucide-react as 'lucide' global for generated code compatibility
     if (window.LucideReact) window.lucide = window.LucideReact;
   </script>
+  ${supabaseScript}
+  ${firecrawlScript}
   <script src="${BABEL_CDN}"></script>
   ${CONSOLE_CAPTURE_SCRIPT}
   <style>
@@ -106,15 +159,15 @@ const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(React.createElement(App));
 `;
 
-export const CodePreview: React.FC<CodePreviewProps> = ({ code, isGenerating, generationStatus }) => {
+export const CodePreview: React.FC<CodePreviewProps> = ({ code, isGenerating, generationStatus, supabaseUrl, supabaseAnonKey, firecrawlEnabled }) => {
   const [deviceMode, setDeviceMode] = useState<DeviceMode>("desktop");
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const effectiveCode = code?.trim() || DEFAULT_CODE;
 
   const iframeSrcDoc = useMemo(() => {
-    return buildIframeHtml(effectiveCode);
-  }, [effectiveCode]);
+    return buildIframeHtml(effectiveCode, supabaseUrl, supabaseAnonKey, firecrawlEnabled);
+  }, [effectiveCode, supabaseUrl, supabaseAnonKey, firecrawlEnabled]);
 
   const deviceConfig = {
     desktop: { width: "100%", height: "100%" },
