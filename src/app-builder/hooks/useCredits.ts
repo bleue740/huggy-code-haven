@@ -43,6 +43,7 @@ export function useCredits() {
         return;
       }
 
+      // Initialize credits for new users (insert only, no update capability)
       const { data: inserted, error: insertErr } = await supabase
         .from('users_credits')
         .insert({ user_id: userId, credits: 100, lifetime_used: 0 })
@@ -67,76 +68,14 @@ export function useCredits() {
     }
   }, []);
 
-  const useCredits = useCallback(async (amount: number = 1): Promise<boolean> => {
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      const userId = userData.user?.id;
-      if (!userId) return false;
-
-      if (state.credits < amount) {
-        return false;
-      }
-
-      const { data: updated, error } = await supabase
-        .from('users_credits')
-        .update({
-          credits: state.credits - amount,
-          lifetime_used: state.lifetimeUsed + amount,
-        })
-        .eq('user_id', userId)
-        .select('credits, lifetime_used')
-        .single();
-
-      if (error) throw error;
-
-      setState((prev) => ({
-        ...prev,
-        credits: (updated as any).credits,
-        lifetimeUsed: (updated as any).lifetime_used,
-      }));
-
-      return true;
-    } catch (e: any) {
-      console.error('Failed to use credits:', e);
-      return false;
-    }
-  }, [state.credits, state.lifetimeUsed]);
-
-  const addCredits = useCallback(async (amount: number): Promise<boolean> => {
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      const userId = userData.user?.id;
-      if (!userId) return false;
-
-      const { data: updated, error } = await supabase
-        .from('users_credits')
-        .update({ credits: state.credits + amount })
-        .eq('user_id', userId)
-        .select('credits, lifetime_used')
-        .single();
-
-      if (error) throw error;
-
-      setState((prev) => ({
-        ...prev,
-        credits: (updated as any).credits,
-      }));
-
-      return true;
-    } catch (e: any) {
-      console.error('Failed to add credits:', e);
-      return false;
-    }
-  }, [state.credits]);
-
   useEffect(() => {
     fetchCredits();
   }, [fetchCredits]);
 
+  // Read-only hook: credits are deducted server-side in the ai-chat edge function.
+  // No useCredits() or addCredits() methods exposed — prevents client-side manipulation.
   return {
     ...state,
-    useCredits,
-    addCredits,
     refetch: fetchCredits,
   };
 }
