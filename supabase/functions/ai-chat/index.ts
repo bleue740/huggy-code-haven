@@ -8,13 +8,13 @@ const corsHeaders = {
 };
 
 // ── Model routing ──────────────────────────────────────────────────
-const MODELS = {
-  fast: "google/gemini-3-flash-preview",
-  quality: "google/gemini-3-pro-preview",
-  precision: "openai/gpt-5",
-} as const;
-
 type Complexity = "simple" | "complex" | "fix";
+type Provider = "lovable" | "anthropic";
+
+interface ModelChoice {
+  provider: Provider;
+  model: string;
+}
 
 function detectComplexity(prompt: string): Complexity {
   const lower = prompt.toLowerCase();
@@ -33,14 +33,15 @@ function detectComplexity(prompt: string): Complexity {
   return "simple";
 }
 
-function pickModel(complexity: Complexity): string {
+function pickModel(complexity: Complexity): ModelChoice {
   switch (complexity) {
     case "simple":
-      return MODELS.fast;
+      return { provider: "lovable", model: "google/gemini-3-flash-preview" };
     case "complex":
-      return MODELS.quality;
+      // Route complex tasks to Anthropic Claude Sonnet
+      return { provider: "anthropic", model: "claude-sonnet-4-20250514" };
     case "fix":
-      return MODELS.precision;
+      return { provider: "lovable", model: "openai/gpt-5" };
   }
 }
 
@@ -96,6 +97,106 @@ Then output a single \`\`\`tsx code block with the complete app.
 Do NOT split across multiple code blocks.
 Do NOT add any code after the tsx block.`;
 
+// ── Anthropic streaming proxy ──────────────────────────────────────
+// Translates Anthropic SSE events into OpenAI-compatible SSE format
+async function streamAnthropic(
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  messages: Array<{ role: string; content: string }>,
+): Promise<Response> {
+  // Anthropic expects system as a top-level param, not in messages
+  const anthropicMessages = messages.filter((m) => m.role !== "system");
+
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 16000,
+      temperature: 0.7,
+      system: systemPrompt,
+      messages: anthropicMessages,
+      stream: true,
+    }),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    console.error(`Anthropic error ${resp.status}:`, errText);
+    throw new Error(`Anthropic API error: ${resp.status}`);
+  }
+
+  // Create a TransformStream that converts Anthropic SSE to OpenAI SSE
+  const { readable, writable } = new TransformStream();
+  const writer = writable.getWriter();
+  const encoder = new TextEncoder();
+
+  // Process Anthropic stream in the background
+  (async () => {
+    try {
+      const reader = resp.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let newlineIdx: number;
+        while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
+          const line = buffer.slice(0, newlineIdx).trim();
+          buffer = buffer.slice(newlineIdx + 1);
+
+          if (!line || line.startsWith(":")) continue;
+
+          if (line.startsWith("data: ")) {
+            const jsonStr = line.slice(6);
+            try {
+              const event = JSON.parse(jsonStr);
+
+              if (event.type === "content_block_delta" && event.delta?.text) {
+                // Re-emit as OpenAI-compatible SSE
+                const openAIChunk = {
+                  choices: [{ delta: { content: event.delta.text } }],
+                };
+                await writer.write(
+                  encoder.encode(`data: ${JSON.stringify(openAIChunk)}\n\n`),
+                );
+              } else if (event.type === "message_stop") {
+                await writer.write(encoder.encode("data: [DONE]\n\n"));
+              }
+            } catch {
+              // Skip unparseable lines
+            }
+          }
+        }
+      }
+
+      // Ensure [DONE] is sent
+      await writer.write(encoder.encode("data: [DONE]\n\n"));
+    } catch (e) {
+      console.error("Anthropic stream processing error:", e);
+    } finally {
+      await writer.close();
+    }
+  })();
+
+  return new Response(readable, {
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
+}
+
 // ── Main handler ───────────────────────────────────────────────────
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -115,7 +216,7 @@ serve(async (req: Request) => {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
+      { global: { headers: { Authorization: authHeader } } },
     );
 
     const token = authHeader.replace("Bearer ", "");
@@ -147,7 +248,7 @@ serve(async (req: Request) => {
     if (currentCredits < 1) {
       return new Response(
         JSON.stringify({ error: "no_credits", message: "Vous n'avez plus de crédits. Passez à Blink Pro pour continuer." }),
-        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -161,20 +262,40 @@ serve(async (req: Request) => {
     }
 
     // Route model
-    const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user");
+    const lastUserMsg = [...messages].reverse().find((m: { role: string }) => m.role === "user");
     const complexity = detectComplexity(lastUserMsg?.content ?? "");
-    const model = pickModel(complexity);
-    console.log(`[ai-chat] complexity=${complexity} model=${model} user=${userId}`);
+    const { provider, model } = pickModel(complexity);
+    console.log(`[ai-chat] complexity=${complexity} provider=${provider} model=${model} user=${userId}`);
 
-    // Build messages with context
-    const systemMessages: any[] = [{ role: "system", content: SYSTEM_PROMPT }];
+    // Build system content
+    let fullSystem = SYSTEM_PROMPT;
     if (projectContext) {
-      systemMessages.push({
-        role: "system",
-        content: `Current project code:\n\`\`\`tsx\n${projectContext.slice(0, 8000)}\n\`\`\`\nThe user wants to modify or extend this code. Preserve existing functionality unless asked to replace it.`,
-      });
+      fullSystem += `\n\nCurrent project code:\n\`\`\`tsx\n${projectContext.slice(0, 8000)}\n\`\`\`\nThe user wants to modify or extend this code. Preserve existing functionality unless asked to replace it.`;
     }
 
+    // Deduct credit before streaming
+    const newCredits = currentCredits - 1;
+    const newLifetime = (creditRow?.lifetime_used ?? 0) + 1;
+    await supabase
+      .from("users_credits")
+      .update({ credits: newCredits, lifetime_used: newLifetime })
+      .eq("user_id", userId);
+    console.log(`[ai-chat] Credit deducted: ${currentCredits} -> ${newCredits}`);
+
+    // ── Route to Anthropic ──
+    if (provider === "anthropic") {
+      const anthropicKey = Deno.env.get("ANTHROPIC_API_KEY");
+      if (!anthropicKey) {
+        return new Response(JSON.stringify({ error: "Anthropic API not configured" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return await streamAnthropic(anthropicKey, model, fullSystem, messages);
+    }
+
+    // ── Route to Lovable AI Gateway (Gemini / GPT) ──
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       return new Response(JSON.stringify({ error: "AI gateway not configured" }), {
@@ -183,7 +304,7 @@ serve(async (req: Request) => {
       });
     }
 
-    // Call AI Gateway with streaming
+    const systemMessages = [{ role: "system", content: fullSystem }];
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -206,13 +327,13 @@ serve(async (req: Request) => {
       if (aiResponse.status === 429) {
         return new Response(
           JSON.stringify({ error: "rate_limit", message: "Trop de requêtes. Réessayez dans quelques secondes." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
       if (aiResponse.status === 402) {
         return new Response(
           JSON.stringify({ error: "payment_required", message: "Crédits IA épuisés. Rechargez votre compte." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
@@ -222,17 +343,6 @@ serve(async (req: Request) => {
       });
     }
 
-    // Deduct credit
-    const newCredits = currentCredits - 1;
-    const newLifetime = (creditRow?.lifetime_used ?? 0) + 1;
-    await supabase
-      .from("users_credits")
-      .update({ credits: newCredits, lifetime_used: newLifetime })
-      .eq("user_id", userId);
-
-    console.log(`[ai-chat] Credit deducted: ${currentCredits} -> ${newCredits}`);
-
-    // Stream SSE response back
     return new Response(aiResponse.body, {
       headers: {
         ...corsHeaders,
@@ -245,7 +355,7 @@ serve(async (req: Request) => {
     console.error("ai-chat error:", e);
     return new Response(
       JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });
