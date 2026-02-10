@@ -9,7 +9,7 @@ import NotFound from "./pages/NotFound";
 import AuthPage from "./pages/Auth";
 import PricingPage from "./pages/Pricing";
 import PublishedDeploymentPage from "./pages/PublishedDeployment";
-
+import SettingsPage from "./pages/Settings";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -22,7 +22,9 @@ const App = () => (
           <Routes>
             <Route path="/auth" element={<AuthPage />} />
             <Route path="/pricing" element={<PricingPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="/p/:deploymentId" element={<PublishedDeploymentPage />} />
+            <Route path="/app" element={<Index />} />
             <Route path="/" element={<Index />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -12,6 +12,7 @@ import { AppState, AISuggestion } from '../types';
 import { FileTree } from './FileTree';
 import { CodeEditor } from './CodeEditor';
 import { useVoiceInput } from '../hooks/useVoiceInput';
+import { useNavigate } from 'react-router-dom';
 
 interface SidebarProps {
   state: AppState;
@@ -56,6 +57,7 @@ const ShimmerLine = ({ width = 'w-full', delay = 0 }: { width?: string; delay?: 
 
 export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
   ({ state, setState, onSend, onStop, onScreenshotRequest, onToggleVisualEdit, onShowHistory, onNewChat, onNewProject, onRenameProject, onBackToLanding }, ref) => {
+    const navigate = useNavigate();
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [showScrollBottom, setShowScrollBottom] = useState(false);
     const [inputHistory, setInputHistory] = useState<string[]>([]);
@@ -288,7 +290,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                   <div className="h-[1px] bg-[#333] my-2" />
 
                   <button
-                    onClick={() => { setShowProjectMenu(false); }}
+                    onClick={() => { setShowProjectMenu(false); navigate('/settings'); }}
                     className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group"
                   >
                     <div className="w-7 h-7 rounded-lg bg-neutral-500/10 flex items-center justify-center group-hover:bg-neutral-500/20 transition-colors">

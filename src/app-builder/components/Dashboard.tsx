@@ -200,7 +200,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenProject, onCreateNew
             <DropdownMenuContent align="end" className="w-48 bg-[#111] border-[#222] text-white">
               {userEmail && <p className="px-2 py-1.5 text-xs text-neutral-500 truncate">{userEmail}</p>}
               <DropdownMenuSeparator className="bg-[#222]" />
-              <DropdownMenuItem className="text-neutral-400 cursor-default focus:bg-transparent focus:text-neutral-400">
+              <DropdownMenuItem onClick={() => navigate('/settings')} className="focus:bg-[#1a1a1a]">
                 <Settings size={14} className="mr-2" /> Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-[#222]" />
