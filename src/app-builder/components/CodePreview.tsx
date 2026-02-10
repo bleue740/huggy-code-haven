@@ -15,6 +15,8 @@ const BABEL_CDN = "https://unpkg.com/@babel/standalone@7.26.10/babel.min.js";
 const REACT_CDN = "https://unpkg.com/react@18.3.1/umd/react.production.min.js";
 const REACT_DOM_CDN = "https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js";
 const TAILWIND_CDN = "https://cdn.tailwindcss.com";
+const RECHARTS_CDN = "https://unpkg.com/recharts@2.15.4/umd/Recharts.js";
+const LUCIDE_CDN = "https://unpkg.com/lucide-react@0.462.0/dist/umd/lucide-react.js";
 
 function buildIframeHtml(tsxCode: string): string {
   return `<!DOCTYPE html>
@@ -43,6 +45,12 @@ function buildIframeHtml(tsxCode: string): string {
   </script>
   <script src="${REACT_CDN}"></script>
   <script src="${REACT_DOM_CDN}"></script>
+  <script src="${RECHARTS_CDN}"></script>
+  <script src="${LUCIDE_CDN}"></script>
+  <script>
+    // Expose lucide-react as 'lucide' global for generated code compatibility
+    if (window.LucideReact) window.lucide = window.LucideReact;
+  </script>
   <script src="${BABEL_CDN}"></script>
   ${CONSOLE_CAPTURE_SCRIPT}
   <style>
