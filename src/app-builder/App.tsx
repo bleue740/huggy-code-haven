@@ -266,6 +266,12 @@ const App: React.FC = () => {
           history: [...prev.history, errorMessage],
         }));
 
+        if (code === 401) {
+          toast.info("Redirection vers la connexion…");
+          setTimeout(() => navigate("/auth", { state: { from: "/app" } }), 1000);
+          return;
+        }
+
         if (code === 402) {
           setState(prev => ({ ...prev, showUpgradeModal: true }));
         }
