@@ -1,116 +1,112 @@
 
-# Plan : Redirection post-login + Landing Page complete
+# Plan : Suggestions intelligentes + Communaute Showcase
 
-## Ce qui manque actuellement
+## 1. Suggestions pre-remplissent le textarea (au lieu de lancer)
 
-### 1. Redirection post-login cassee
-- La page Auth lit `location.state.from` et redirige vers cette valeur apres login (ligne 18, 30, 48)
-- Probleme : `from` vaut `"/app"` mais l'AppBuilder sur `/app` re-verifie l'auth et affiche le Dashboard -- ca fonctionne
-- Cependant, quand on clique "Get started" depuis la Landing sans etre connecte, `handleStartFromLanding` redirige vers `/auth` avec `state: { from: "/app" }` -- le prompt saisi est perdu
-- **Correction** : stocker le prompt dans `sessionStorage` avant la redirection, puis le recuperer au retour sur `/app` pour le soumettre automatiquement
+Actuellement, cliquer sur une suggestion appelle `onStart(item.text)` ce qui lance directement la generation. On va changer ce comportement :
 
-### 2. Landing Page incomplete
-La page se termine abruptement apres les cartes de suggestions. Il manque :
-- **Section Features** (`#features`) : actuellement c'est juste un `<div id="features" />` vide
-- **Section How it Works** : inexistante
-- **Section Pricing integree** : pas de preview des plans sur la landing
-- **Section Social Proof / Stats** : pas de compteur "X apps built"
-- **Footer** : inexistant
+- Cliquer sur une suggestion remplit le textarea avec un **prompt enrichi** (pas juste le titre court)
+- L'utilisateur peut le modifier avant d'envoyer
+- Le textarea scroll automatiquement en vue et recoit le focus
 
-### 3. Animations au scroll
-Aucune animation d'apparition progressive sur les sections
+Mapping des prompts enrichis :
+- "AI Landing Page Builder" --> "Build a modern AI-powered landing page with a hero section, feature grid, pricing cards, testimonials carousel, and a CTA with gradient effects. Use dark theme with blue accents."
+- "SaaS Dashboard for Analytics" --> "Create a SaaS analytics dashboard with sidebar navigation, KPI cards, line/bar charts, a data table with filters, and a dark glassmorphism design."
+- "Booking System for Doctors" --> "Build a doctor appointment booking system with a calendar view, time slot picker, patient form, booking confirmation, and appointment list. Clean medical UI."
+- "Project Management Tool" --> "Create a project management tool with kanban board, task cards with drag indicators, project sidebar, team avatars, and progress tracking. Modern dark UI."
 
----
+## 2. Bouton "Refresh suggestions" avec IA
 
-## Modifications prevues
+Sous la grille de suggestions, ajouter un bouton discret "More ideas" avec une icone RefreshCw.
 
-### Fichier 1 : `src/app-builder/components/LandingPage.tsx`
+### Fonctionnement
+- Au clic, appelle une **nouvelle edge function** `generate-suggestions` qui demande a l'IA 4 idees d'apps originales
+- Pendant le chargement : animation de rotation sur l'icone
+- Les nouvelles suggestions remplacent les actuelles avec une animation fade
+- Les suggestions sont retournees sous forme structuree (titre court + prompt complet) via tool calling
 
-**Ajouts complets apres les cartes de suggestions :**
+### Edge function `supabase/functions/generate-suggestions/index.ts`
+- Appelle Lovable AI Gateway avec `google/gemini-3-flash-preview`
+- Utilise le tool calling pour obtenir un JSON structure : `[{ icon: "Layout|Zap|Calendar|Briefcase", title: "...", prompt: "..." }]`
+- **Pas besoin d'auth** : cette fonction est publique (les suggestions sont pour tout le monde)
+- Rate limit cote client : max 1 appel toutes les 10 secondes (desactiver le bouton temporairement)
 
-#### Section Features (`#features`)
-Grille 3x2 avec 6 fonctionnalites :
-- **AI Code Generation** (icone Code) : "Describe what you want, get production-ready React code"
-- **Real-time Preview** (icone Monitor) : "See your app update live as AI writes code"
-- **One-click Deploy** (icone Rocket) : "Publish your app to the web instantly"
-- **Multi-file Projects** (icone FolderTree) : "Full project structure with multiple components"
-- **Security Scan** (icone Shield) : "Automated security analysis of your codebase"
-- **Smart Iterations** (icone RefreshCw) : "Refine and iterate with natural language"
+## 3. Section "Community Showcase"
 
-Design : cartes `bg-[#111]` avec bordures `border-white/5`, icones dans des cercles colores, hover avec `border-blue-500/30`
+Nouvelle section entre Pricing et le CTA final, montrant les meilleurs projets publies par des utilisateurs gratuits.
 
-#### Section How it Works
-3 etapes numerotees horizontalement (colonne sur mobile) :
-1. "Describe your idea" -- icone MessageSquare
-2. "AI builds it" -- icone Sparkles
-3. "Deploy instantly" -- icone Rocket
+### Base de donnees
+Nouvelle table `community_showcases` :
 
-Design : numeros dans des cercles bleus (`bg-blue-600`), ligne de connexion entre etapes (bordure pointillee), cartes `bg-[#111]`
-
-#### Section Pricing (apercu)
-3 plans en grille (Free / Pro / Team) reprenant les donnees de `/pricing` :
-- Free : $0/mo, 1 projet, publish basique, security scan
-- Pro : $29/mo, projets illimites, deploy history, domaines personnalises (bordure bleue highlight)
-- Team : $79/mo, roles, collaboration, audit avance
-
-CTA "Choose [plan]" redirige vers `/pricing`
-
-#### Section Stats / Social Proof
-Barre de stats entre le hero et les features :
-- "12,000+" apps built
-- "50+" templates
-- "99.9%" uptime
-
-Design : 3 colonnes centrees, chiffres en `text-4xl font-black`, labels en `text-neutral-500 text-sm`
-
-#### Footer
-- Logo Blink AI (petit)
-- Colonnes de liens : Product (Features, Pricing), Company (About, Contact), Legal (Terms, Privacy)
-- Copyright "2026 Blink AI. All rights reserved."
-- Bordure superieure `border-t border-white/5`
-
-#### Animations au scroll
-- Hook inline `useInView` avec `IntersectionObserver` pour ajouter la classe `animate-fade-in` quand une section entre dans le viewport
-- Chaque section majeure enveloppee dans un composant `<AnimatedSection>` qui gere l'observation
-
-### Fichier 2 : `src/app-builder/App.tsx`
-
-**Redirection post-login avec prompt preserve :**
-- Dans `handleStartFromLanding` (ligne 378) : avant de rediriger vers `/auth`, stocker le prompt dans `sessionStorage.setItem('blink_pending_prompt', prompt)`
-- Dans le `useEffect` initial (ligne 117) : apres detection d'un user connecte, verifier `sessionStorage.getItem('blink_pending_prompt')`. Si present, le supprimer et appeler `handleSendMessage` avec ce prompt apres le chargement du projet
-
-### Fichier 3 : `src/index.css`
-
-**Ajout d'une animation float pour les icones de features :**
-```css
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
-}
-.animate-float {
-  animation: float 3s ease-in-out infinite;
-}
+```sql
+CREATE TABLE public.community_showcases (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID REFERENCES public.projects(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  thumbnail_url TEXT,
+  deploy_url TEXT NOT NULL,
+  featured_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL DEFAULT (now() + interval '72 hours'),
+  score INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 ```
 
----
+- `featured_at` / `expires_at` : rotation automatique toutes les 72h
+- `score` : permet de trier les meilleurs en premier
+- RLS : lecture publique (tout le monde voit la vitrine), insertion reservee aux admins ou a une logique automatique
+
+### Affichage sur la landing page
+- Requete les showcases dont `expires_at > now()`, tries par score descendant, LIMIT 6
+- Grille 3x2 (2 colonnes sur mobile)
+- Chaque carte affiche :
+  - Titre du projet
+  - Description courte (2 lignes max)
+  - Bouton "Visit" qui ouvre le `deploy_url` dans un nouvel onglet
+  - Badge "Built with Blink" en overlay
+- Si aucun showcase n'existe : afficher un message "Be the first to showcase your app!" avec CTA
+
+### Pour le moment (pas de donnees)
+Comme il n'y a pas encore de projets dans la vitrine, on va :
+- Creer la table et les policies
+- Afficher la section avec des **donnees mock en dur** en fallback quand la table est vide
+- Les mock disparaitront automatiquement quand de vrais projets seront ajoutes
 
 ## Fichiers concernes
 
 | Fichier | Action |
 |---------|--------|
-| `src/app-builder/components/LandingPage.tsx` | Modifier -- ajouter Features, How it Works, Pricing, Stats, Footer, animations scroll |
-| `src/app-builder/App.tsx` | Modifier -- stocker/recuperer le prompt pending dans sessionStorage |
-| `src/index.css` | Modifier -- ajouter keyframe float |
+| `src/app-builder/components/LandingPage.tsx` | Modifier -- suggestions pre-remplissent le textarea, bouton refresh, section Community |
+| `supabase/functions/generate-suggestions/index.ts` | Creer -- edge function pour generer des suggestions IA |
+| Migration SQL | Creer table `community_showcases` + RLS policies |
+| `supabase/config.toml` | Pas de modification (auto-gere) |
 
-## Flux de la redirection post-login
+## Details techniques
+
+### LandingPage.tsx - Changements
+- Nouveau state `suggestions` (initialement les 4 par defaut) pour rendre la liste dynamique
+- Nouveau state `isRefreshing` pour l'animation du bouton
+- Fonction `handleSuggestionClick(prompt)` : met a jour `inputValue` avec le prompt enrichi + focus le textarea
+- Fonction `refreshSuggestions()` : appelle l'edge function, met a jour le state
+- Nouveau composant inline `CommunityShowcase` : fetch les showcases depuis la DB, fallback mock
+- Ref sur le textarea pour le focus programmatique
+
+### Edge function generate-suggestions
+- Pas d'auth requise (publique)
+- Tool calling avec schema : tableau de 4 objets `{ icon, title, prompt }`
+- Rate limit : reponse rapide grace a gemini-3-flash-preview
+- Gestion erreurs 429/402
+
+### Flux utilisateur
 
 ```text
-Landing Page --> "Get started" (non connecte)
-  --> sessionStorage.setItem('blink_pending_prompt', prompt)
-  --> navigate('/auth', { state: { from: '/app' } })
-  --> Login reussi
-  --> redirect vers /app
-  --> useEffect detecte user + sessionStorage prompt
-  --> soumet le prompt automatiquement
-  --> utilisateur voit son app se generer
+Landing Page :
+  1. User voit 4 suggestions
+  2. Clique sur "SaaS Dashboard" --> textarea se remplit avec le prompt detaille
+  3. User modifie ou envoie directement
+  4. Clique "More ideas" --> 4 nouvelles suggestions apparaissent
+  5. Scrolle vers Community --> voit les meilleurs projets
+  6. Clique "Visit" --> ouvre le site dans un nouvel onglet
 ```
