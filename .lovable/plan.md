@@ -1,73 +1,51 @@
 
 
-# Plan : Message d'accueil contextuel sur /auth + Refonte du Dashboard
+# Plan : Page Settings + Corrections de bugs (implementation)
 
-## 1. Message d'accueil contextuel sur la page Auth
+## 1. Creer `src/pages/Settings.tsx`
 
-Quand l'utilisateur arrive sur `/auth` depuis une redirection 401, la page affichera un bandeau d'information jaune/ambre au-dessus du formulaire avec le message **"Connectez-vous pour continuer"** au lieu du message par defaut.
+Page complete avec les sections suivantes, dans le meme theme dark (`bg-[#050505]`, cartes `bg-[#111]`, bordures `border-[#1a1a1a]`) :
 
-### Fichier modifie : `src/pages/Auth.tsx`
+- **Header** : logo Blink AI + bouton retour vers `/`
+- **Profile** : email utilisateur (lecture seule)
+- **Account** : bouton Sign Out (rouge, avec `supabase.auth.signOut()` puis redirect `/auth`), bouton Delete Account (supprime les projets de l'utilisateur puis deconnecte, avec modale de confirmation)
+- **Subscription** : plan actuel (Free), bouton "Upgrade" vers `/pricing`, affichage des credits
+- Layout responsive : `max-w-2xl mx-auto`, sections en cartes empilees
 
-- Detecter `location.state?.from` pour savoir si l'utilisateur vient d'une redirection
-- Si oui, afficher un bandeau ambre avec une icone info : "Connectez-vous pour continuer"
-- Changer le sous-titre en "Vous devez etre connecte pour acceder a cette fonctionnalite."
+## 2. Modifier `src/App.tsx`
 
----
+- Importer `Settings` depuis `src/pages/Settings.tsx`
+- Ajouter route `/app` pointant vers `Index` (pour que la redirection post-login fonctionne)
+- Ajouter route `/settings` pointant vers `Settings`
 
-## 2. Refonte du Dashboard style Lovable
+## 3. Modifier `src/app-builder/components/Dashboard.tsx`
 
-Le dashboard actuel est basique (grille de cartes). Le dashboard Lovable a ces caracteristiques :
+- Importer `useNavigate`
+- Rendre le `DropdownMenuItem` Settings cliquable : `onClick={() => navigate('/settings')}`
+- Retirer les classes `cursor-default` et `focus:bg-transparent` du bouton Settings
 
-- **Header** avec logo, navigation (Projects / Templates), avatar utilisateur avec menu deconnexion
-- **Barre de recherche** pour filtrer les projets
-- **Grille de projets** avec apercu visuel (placeholder colore), nom, date
-- **Actions sur chaque projet** : menu contextuel (Renommer, Supprimer, Dupliquer)
-- **Tri** par date de modification (plus recent en premier, deja fait)
-- **Bouton deconnexion** accessible depuis l'avatar
+## 4. Modifier `src/app-builder/components/Sidebar.tsx`
 
-### Fichier modifie : `src/app-builder/components/Dashboard.tsx`
-
-Refonte complete :
-
-**Header :**
-- Logo Blink AI a gauche
-- Onglets "Projects" (actif) et "Templates" (placeholder)
-- Zone droite : bouton "New Project" + avatar avec initiale email + dropdown (Settings placeholder, Sign out)
-
-**Zone de contenu :**
-- Titre "My Projects" avec compteur de projets
-- Barre de recherche avec icone Search pour filtrer par nom
-- Grille responsive de projets (3 colonnes desktop, 2 tablette, 1 mobile)
-
-**Carte projet amelioree :**
-- Apercu visuel : bloc colore avec gradient unique par projet (base sur l'id)
-- Nom du projet en gras
-- Date "il y a X minutes/heures"
-- Menu contextuel (trois points) avec : Renommer, Dupliquer, Supprimer
-- Renommer : inline editing du nom avec sauvegarde en base
-- Supprimer : confirmation modale avant suppression en base
-
-**Etat vide ameliore :**
-- Illustration plus grande et engageante
-- Texte d'onboarding clair
-- CTA "Create your first project"
-
-**Bouton deconnexion :**
-- `supabase.auth.signOut()` puis redirection vers `/auth`
-
-### Props ajoutees au Dashboard :
-- `userEmail: string` pour afficher l'initiale dans l'avatar
-
-### Fichier modifie : `src/app-builder/App.tsx`
-- Passer `userEmail` au composant Dashboard depuis la session utilisateur
-
----
+- Importer `useNavigate` de `react-router-dom`
+- Ligne 291 : remplacer `setShowProjectMenu(false)` par `setShowProjectMenu(false); navigate('/settings');`
 
 ## Fichiers concernes
 
 | Fichier | Action |
 |---------|--------|
-| `src/pages/Auth.tsx` | Modifier -- bandeau contextuel "Connectez-vous pour continuer" |
-| `src/app-builder/components/Dashboard.tsx` | Modifier -- refonte complete style Lovable |
-| `src/app-builder/App.tsx` | Modifier -- passer userEmail au Dashboard |
+| `src/pages/Settings.tsx` | Creer -- page Settings complete |
+| `src/App.tsx` | Modifier -- ajouter routes `/app` et `/settings` |
+| `src/app-builder/components/Dashboard.tsx` | Modifier -- bouton Settings cliquable |
+| `src/app-builder/components/Sidebar.tsx` | Modifier -- bouton Project Settings fonctionnel |
+
+## Flux de navigation
+
+```text
+Dashboard avatar dropdown --> Settings --> /settings
+Sidebar Project Settings --> /settings
+/settings Back --> / (dashboard)
+/settings Sign out --> /auth
+/settings Upgrade --> /pricing
+/settings Delete Account --> supprime projets, deconnecte, /auth
+```
 
