@@ -5,6 +5,7 @@ import { CodePreview } from './components/CodePreview';
 import { LandingPage } from './components/LandingPage';
 import { Dashboard } from './components/Dashboard';
 import { VersionHistory } from './components/VersionHistory';
+import { CollaborationPanel } from './components/CollaborationPanel';
 import { ConsolePanel } from './components/ConsolePanel';
 import { useConsoleCapture } from './hooks/useConsoleCapture';
 import { useCredits } from './hooks/useCredits';
@@ -121,6 +122,7 @@ const App: React.FC = () => {
 
   const [showFirecrawlModal, setShowFirecrawlModal] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [showCollabPanel, setShowCollabPanel] = useState(false);
 
   useEffect(() => {
     if (!creditsLoading) {
@@ -986,6 +988,7 @@ const App: React.FC = () => {
             onExportZip={handleExportZip}
             onToggleCodeView={() => setState(prev => ({ ...prev, isCodeView: !prev.isCodeView }))}
             onShowVersionHistory={handleShowVersionHistory}
+            onShowCollaboration={() => setShowCollabPanel(true)}
             isCodeView={state.isCodeView}
             isGenerating={state.isGenerating}
             projectName={state.projectName}
@@ -1139,6 +1142,13 @@ const App: React.FC = () => {
           onClose={() => setShowVersionHistory(false)}
           projectId={state.projectId}
           onRestore={handleRestoreSnapshot}
+        />
+
+        {/* Collaboration Panel */}
+        <CollaborationPanel
+          isOpen={showCollabPanel}
+          onClose={() => setShowCollabPanel(false)}
+          projectId={state.projectId}
         />
       </div>
     </div>
