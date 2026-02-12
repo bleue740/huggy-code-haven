@@ -31,6 +31,7 @@ interface SidebarProps {
   onConnectSupabase?: () => void;
   onEnableFirecrawl?: () => void;
   onDismissBackendHints?: () => void;
+  onApprovePlan?: (plan: string) => void;
 }
 
 const MAX_CHARS = 10000;
@@ -61,7 +62,7 @@ const ShimmerLine = ({ width = 'w-full', delay = 0 }: { width?: string; delay?: 
 );
 
 export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
-  ({ state, setState, onSend, onStop, onScreenshotRequest, onToggleVisualEdit, onShowHistory, onNewChat, onNewProject, onRenameProject, onBackToLanding, onConnectSupabase, onEnableFirecrawl, onDismissBackendHints }, ref) => {
+  ({ state, setState, onSend, onStop, onScreenshotRequest, onToggleVisualEdit, onShowHistory, onNewChat, onNewProject, onRenameProject, onBackToLanding, onConnectSupabase, onEnableFirecrawl, onDismissBackendHints, onApprovePlan }, ref) => {
     const navigate = useNavigate();
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [showScrollBottom, setShowScrollBottom] = useState(false);
@@ -399,7 +400,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                           <span className="text-[9px] text-neutral-600 font-mono">{formatTime(msg.timestamp)}</span>
                         </div>
                         {msg.role === 'assistant' ? (
-                          <ChatMessage message={msg} />
+                          <ChatMessage message={msg} onApprovePlan={onApprovePlan} />
                         ) : (
                           <div className="text-[13px] leading-relaxed text-neutral-400">{msg.content}</div>
                         )}

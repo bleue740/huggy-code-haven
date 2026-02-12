@@ -184,11 +184,20 @@ const PLAN_SYSTEM_PROMPT = `You are Blink AI in Planning Mode — an expert arch
 - NEVER output code blocks (no \`\`\`tsx, no \`\`\`jsx, no \`\`\`javascript, no \`\`\`html).
 - Focus on: architecture decisions, component structure, data models, user flows, UX considerations, tradeoffs.
 - Ask clarifying questions when the request is ambiguous or complex.
-- When you have enough information, propose a structured implementation plan.
-- Use markdown formatting: headings, bullet points, numbered lists, bold text.
-- Be concise but thorough.
 - Always respond in the same language as the user's message.
-- You can analyze existing project code to provide context-aware advice.
+
+## STRUCTURED PLAN FORMAT
+When you have enough information to propose an implementation plan, wrap it in markers:
+
+[PLAN_START]
+## Plan Title
+1. Step one description
+2. Step two description
+...
+[PLAN_END]
+
+The user will see a button to "Approve and implement" which will send the plan to Agent mode.
+You can include text before and after the plan markers for context.
 
 ## WHAT YOU CAN DO
 - Analyze requirements and break them down into steps
@@ -201,7 +210,7 @@ const PLAN_SYSTEM_PROMPT = `You are Blink AI in Planning Mode — an expert arch
 ## RESPONSE STYLE
 - Start with a brief summary of your understanding
 - Ask 1-3 targeted questions if needed
-- When proposing a plan, structure it clearly with numbered steps
+- When proposing a plan, structure it clearly with numbered steps inside [PLAN_START]...[PLAN_END]
 - Highlight key decisions the user needs to make
 - Be opinionated — recommend the best approach, don't just list options`;
 
@@ -400,7 +409,7 @@ serve(async (req: Request) => {
 
     // Project context
     if (projectContext) {
-      fullSystem += `\n\nCurrent project code:\n\`\`\`tsx\n${projectContext.slice(0, 12000)}\n\`\`\`\nThe user wants to modify or extend this code. Preserve existing functionality unless asked to replace it.`;
+      fullSystem += `\n\nCurrent project code:\n\`\`\`tsx\n${projectContext.slice(0, 24000)}\n\`\`\`\nThe user wants to modify or extend this code. Preserve existing functionality unless asked to replace it.`;
     }
 
     // Deduct credit before streaming

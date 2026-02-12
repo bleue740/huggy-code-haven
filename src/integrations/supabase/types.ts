@@ -14,6 +14,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      chat_messages: {
+        Row: {
+          chat_mode: string | null
+          code_applied: boolean | null
+          code_line_count: number | null
+          content: string
+          created_at: string
+          id: string
+          project_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          chat_mode?: string | null
+          code_applied?: boolean | null
+          code_line_count?: number | null
+          content: string
+          created_at?: string
+          id?: string
+          project_id: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          chat_mode?: string | null
+          code_applied?: boolean | null
+          code_line_count?: number | null
+          content?: string
+          created_at?: string
+          id?: string
+          project_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_showcases: {
         Row: {
           created_at: string
