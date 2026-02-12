@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Monitor, Tablet, Smartphone, Maximize2, Minimize2 } from "lucide-react";
 import { CONSOLE_CAPTURE_SCRIPT } from "../hooks/useConsoleCapture";
 import { GeneratingOverlay } from "./GeneratingOverlay";
+import { extractAllImports, generateDynamicLoaderScript } from "../utils/npmResolver";
 
 interface CodePreviewProps {
   code: string;
@@ -41,7 +42,7 @@ function buildMultiScriptTags(files?: Record<string, string>, fallbackCode?: str
   ).join('\n  ');
 }
 
-function buildIframeHtml(tsxCode: string, supabaseUrl?: string | null, supabaseAnonKey?: string | null, firecrawlEnabled?: boolean, files?: Record<string, string>): string {
+function buildIframeHtml(tsxCode: string, supabaseUrl?: string | null, supabaseAnonKey?: string | null, firecrawlEnabled?: boolean, files?: Record<string, string>, npmPackages?: string[]): string {
   const hasSupabase = !!supabaseUrl && !!supabaseAnonKey;
   const supabaseScript = hasSupabase
     ? `<script src="${SUPABASE_CDN}"></script>
@@ -89,6 +90,8 @@ function buildIframeHtml(tsxCode: string, supabaseUrl?: string | null, supabaseA
   </script>`
     : '';
 
+  const npmLoaderScript = generateDynamicLoaderScript(npmPackages || []);
+
   return `<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -132,6 +135,7 @@ function buildIframeHtml(tsxCode: string, supabaseUrl?: string | null, supabaseA
   </script>
   ${supabaseScript}
   ${firecrawlScript}
+  ${npmLoaderScript}
   <script src="${BABEL_CDN}"></script>
   ${CONSOLE_CAPTURE_SCRIPT}
   <style>
@@ -199,9 +203,12 @@ export const CodePreview: React.FC<CodePreviewProps> = ({ code, files, isGenerat
 
   const effectiveCode = code?.trim() || DEFAULT_CODE;
 
+  // Detect npm packages needed from user code
+  const npmPackages = useMemo(() => extractAllImports(files || {}), [files]);
+
   const iframeSrcDoc = useMemo(() => {
-    return buildIframeHtml(effectiveCode, supabaseUrl, supabaseAnonKey, firecrawlEnabled, files);
-  }, [effectiveCode, supabaseUrl, supabaseAnonKey, firecrawlEnabled, files]);
+    return buildIframeHtml(effectiveCode, supabaseUrl, supabaseAnonKey, firecrawlEnabled, files, npmPackages);
+  }, [effectiveCode, supabaseUrl, supabaseAnonKey, firecrawlEnabled, files, npmPackages]);
 
   const deviceConfig = {
     desktop: { width: "100%", height: "100%" },

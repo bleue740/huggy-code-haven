@@ -15,6 +15,7 @@ import {
   Link2,
   Download,
   History,
+  Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -25,6 +26,7 @@ interface TopNavProps {
   onExportZip?: () => void;
   onToggleCodeView?: () => void;
   onShowVersionHistory?: () => void;
+  onShowCollaboration?: () => void;
   isCodeView?: boolean;
   isGenerating?: boolean;
   projectName?: string;
@@ -37,6 +39,7 @@ export const TopNav: React.FC<TopNavProps> = ({
   onExportZip,
   onToggleCodeView,
   onShowVersionHistory,
+  onShowCollaboration,
   isCodeView,
   isGenerating,
   projectName = 'New Project',
@@ -93,6 +96,11 @@ export const TopNav: React.FC<TopNavProps> = ({
           onClick={onShowVersionHistory}
           icon={<History size={18} />}
           title="Version History"
+        />
+        <IconButton
+          onClick={onShowCollaboration}
+          icon={<Users size={18} />}
+          title="Collaboration"
         />
       </div>
 
