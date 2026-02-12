@@ -186,11 +186,10 @@ export function useAIChat() {
 }
 
 /**
- * Extract TSX code from AI response text.
+ * Extract TSX code from AI response text (legacy).
  * Looks for ```tsx ... ``` code blocks.
  */
 export function extractCodeFromResponse(text: string): string | null {
-  // Try tsx/jsx/react code blocks
   const patterns = [
     /```tsx\s*\n([\s\S]*?)```/,
     /```jsx\s*\n([\s\S]*?)```/,
@@ -207,4 +206,55 @@ export function extractCodeFromResponse(text: string): string | null {
   }
 
   return null;
+}
+
+/**
+ * Extract multi-file output from AI response using [FILE:name]...[/FILE:name] markers.
+ * Falls back to legacy extractCodeFromResponse if no markers found.
+ */
+export interface MultiFileResult {
+  files: Record<string, string>;
+  deletedFiles: string[];
+  explanation: string;
+  fileNames: string[];
+}
+
+export function extractMultiFileFromResponse(text: string): MultiFileResult {
+  const files: Record<string, string> = {};
+  const deletedFiles: string[] = [];
+  const fileNames: string[] = [];
+
+  // Extract [FILE:name]...[/FILE:name] blocks
+  const fileRegex = /\[FILE:([\w.\-/]+)\]\s*\n([\s\S]*?)\[\/FILE:\1\]/g;
+  let match: RegExpExecArray | null;
+  while ((match = fileRegex.exec(text)) !== null) {
+    const fileName = match[1];
+    const code = match[2].trim();
+    files[fileName] = code;
+    fileNames.push(fileName);
+  }
+
+  // Extract [FILE_DELETE:name] markers
+  const deleteRegex = /\[FILE_DELETE:([\w.\-/]+)\]/g;
+  while ((match = deleteRegex.exec(text)) !== null) {
+    deletedFiles.push(match[1]);
+  }
+
+  // If no multi-file markers found, try legacy extraction
+  if (fileNames.length === 0 && deletedFiles.length === 0) {
+    const legacyCode = extractCodeFromResponse(text);
+    if (legacyCode) {
+      files['App.tsx'] = legacyCode;
+      fileNames.push('App.tsx');
+    }
+  }
+
+  // Strip file markers and code blocks from explanation
+  let explanation = text
+    .replace(/\[FILE:[\w.\-/]+\]\s*\n[\s\S]*?\[\/FILE:[\w.\-/]+\]/g, '')
+    .replace(/\[FILE_DELETE:[\w.\-/]+\]/g, '')
+    .replace(/```[\w]*\s*\n[\s\S]*?```/g, '')
+    .trim();
+
+  return { files, deletedFiles, explanation, fileNames };
 }

@@ -7,8 +7,8 @@ import { Dashboard } from './components/Dashboard';
 import { ConsolePanel } from './components/ConsolePanel';
 import { useConsoleCapture } from './hooks/useConsoleCapture';
 import { useCredits } from './hooks/useCredits';
-import { useAIChat, extractCodeFromResponse } from './hooks/useAIChat';
-import { AppState, Message, AISuggestion, SecurityResult, BackendNeed } from './types';
+import { useAIChat, extractCodeFromResponse, extractMultiFileFromResponse } from './hooks/useAIChat';
+import { AppState, Message, AISuggestion, SecurityResult, BackendNeed, GenerationStep } from './types';
 import { analyzeCodeSecurity } from './utils/securityAnalyzer';
 import { exportProjectAsZip } from './utils/exportZip';
 import { X, CheckCircle2, Zap, Rocket, ShieldCheck, AlertTriangle, Info, Loader2, History } from 'lucide-react';
@@ -111,6 +111,7 @@ const App: React.FC = () => {
     firecrawlEnabled: false,
     backendHints: [],
     showSupabaseModal: false,
+    generationSteps: [],
   });
 
   const [showFirecrawlModal, setShowFirecrawlModal] = useState(false);
@@ -352,6 +353,13 @@ const App: React.FC = () => {
       aiStatusText: "Analyse de ta demande…",
       history: [...prev.history, userMessage],
       currentInput: customPrompt ? prev.currentInput : '',
+      generationSteps: [{
+        id: `step_thinking_${now}`,
+        type: 'thinking',
+        label: 'Analyse de la demande…',
+        status: 'active',
+        startedAt: now,
+      }],
     }));
 
     // Persist user message
@@ -373,6 +381,43 @@ const App: React.FC = () => {
       onDelta: (chunk) => {
         streamingTextRef.current += chunk;
         const currentText = streamingTextRef.current;
+
+        // Detect [FILE:X] markers for generation steps
+        const fileStartMatch = chunk.match(/\[FILE:([\w.\-/]+)\]/);
+        if (fileStartMatch) {
+          const fileName = fileStartMatch[1];
+          setState(prev => {
+            // Mark thinking as done, add editing step
+            const steps = prev.generationSteps?.map(s =>
+              s.status === 'active' && s.type === 'thinking' ? { ...s, status: 'done' as const, completedAt: Date.now() } : s
+            ) || [];
+            // Only add if not already editing this file
+            if (!steps.find(s => s.fileName === fileName && s.type === 'editing')) {
+              steps.push({
+                id: `step_edit_${fileName}_${Date.now()}`,
+                type: 'editing',
+                label: `Editing ${fileName}`,
+                fileName,
+                status: 'active',
+                startedAt: Date.now(),
+              });
+            }
+            return { ...prev, generationSteps: steps, aiStatusText: `Editing ${fileName}…` };
+          });
+        }
+
+        // Detect [/FILE:X] markers
+        const fileEndMatch = chunk.match(/\[\/FILE:([\w.\-/]+)\]/);
+        if (fileEndMatch) {
+          const fileName = fileEndMatch[1];
+          setState(prev => {
+            const steps = (prev.generationSteps || []).map(s =>
+              s.fileName === fileName && s.status === 'active' ? { ...s, status: 'done' as const, completedAt: Date.now() } : s
+            );
+            return { ...prev, generationSteps: steps };
+          });
+        }
+
         setState(prev => {
           const last = prev.history[prev.history.length - 1];
           if (last?.role === 'assistant' && last.id.startsWith('stream_')) {
@@ -393,42 +438,65 @@ const App: React.FC = () => {
         });
       },
       onDone: (fullText) => {
-        setRetryCount(0); // Reset retry count on successful completion
+        setRetryCount(0);
 
         if (currentMode === 'plan') {
-          // Plan mode: no code extraction, just render full markdown
           setState(prev => ({
             ...prev,
             isGenerating: false,
             aiStatusText: null,
+            generationSteps: [],
             history: prev.history.map((m) =>
               m.id.startsWith('stream_')
                 ? { ...m, content: fullText }
                 : m
             ),
           }));
-          // Persist messages
           persistMessage(state.projectId, 'assistant', fullText, false, 0, 'plan');
           refetchCredits();
           return;
         }
 
-        // Agent mode: extract code and apply
-        const extractedCode = extractCodeFromResponse(fullText);
-        const codeApplied = !!extractedCode;
-        const codeLineCount = extractedCode ? extractedCode.split('\n').length : 0;
+        // Agent mode: extract multi-file output
+        const result = extractMultiFileFromResponse(fullText);
+        const hasFiles = result.fileNames.length > 0;
+        const totalLines = Object.values(result.files).reduce((sum, code) => sum + code.split('\n').length, 0);
 
-        if (extractedCode) {
-          setState(prev => ({
-            ...prev,
-            files: { ...prev.files, 'App.tsx': extractedCode },
-            activeFile: 'App.tsx',
-          }));
-          toast.success('✨ Code généré et injecté dans la preview !');
+        if (hasFiles) {
+          setState(prev => {
+            const newFiles = { ...prev.files };
+            // Merge new/modified files
+            for (const [name, code] of Object.entries(result.files)) {
+              newFiles[name] = code;
+            }
+            // Delete requested files
+            for (const name of result.deletedFiles) {
+              if (name !== 'App.tsx') delete newFiles[name];
+            }
+            // Add final "applied" step
+            const steps = (prev.generationSteps || []).map(s =>
+              s.status === 'active' ? { ...s, status: 'done' as const, completedAt: Date.now() } : s
+            );
+            steps.push({
+              id: `step_applied_${Date.now()}`,
+              type: 'edited',
+              label: `${result.fileNames.length} fichier(s) appliqué(s)`,
+              status: 'done',
+              startedAt: Date.now(),
+              completedAt: Date.now(),
+            });
+            return {
+              ...prev,
+              files: newFiles,
+              activeFile: result.fileNames.includes('App.tsx') ? 'App.tsx' : result.fileNames[0] || prev.activeFile,
+              generationSteps: steps,
+            };
+          });
+          toast.success(`✨ ${result.fileNames.length} fichier(s) généré(s) !`);
         }
 
-        // Strip code blocks from the chat message, keep only explanation
-        const explanationOnly = fullText.replace(/```[\w]*\s*\n[\s\S]*?```/g, '').trim();
+        // Display only explanation in chat
+        const displayText = result.explanation || fullText;
 
         setState(prev => ({
           ...prev,
@@ -436,17 +504,19 @@ const App: React.FC = () => {
           aiStatusText: null,
           history: prev.history.map((m) =>
             m.id.startsWith('stream_')
-              ? { ...m, content: explanationOnly || fullText, codeApplied, codeLineCount }
+              ? { ...m, content: displayText, codeApplied: hasFiles, codeLineCount: totalLines }
               : m
           ),
         }));
 
-        // Persist messages
-        persistMessage(state.projectId, 'assistant', explanationOnly || fullText, codeApplied, codeLineCount, 'agent');
+        // Clear generation steps after a delay
+        setTimeout(() => {
+          setState(prev => ({ ...prev, generationSteps: [] }));
+        }, 3000);
 
-        // Refresh credits after generation
+        persistMessage(state.projectId, 'assistant', displayText, hasFiles, totalLines, 'agent');
         refetchCredits();
-        fetchSuggestions(extractedCode || undefined);
+        if (hasFiles) fetchSuggestions();
       },
       onError: (error, code) => {
         const errorMessage: Message = {

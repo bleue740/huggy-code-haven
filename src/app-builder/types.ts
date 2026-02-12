@@ -39,6 +39,16 @@ export interface AIEvent {
   timestamp: number;
 }
 
+export interface GenerationStep {
+  id: string;
+  type: 'thinking' | 'editing' | 'edited' | 'error';
+  label: string;
+  fileName?: string;
+  status: 'active' | 'done' | 'error';
+  startedAt: number;
+  completedAt?: number;
+}
+
 export type BackendNeed = 'database' | 'auth' | 'storage' | 'scraping';
 
 export interface AppState {
@@ -75,4 +85,5 @@ export interface AppState {
   backendHints?: BackendNeed[];
   showSupabaseModal?: boolean;
   chatMode?: 'plan' | 'agent';
+  generationSteps?: GenerationStep[];
 }
