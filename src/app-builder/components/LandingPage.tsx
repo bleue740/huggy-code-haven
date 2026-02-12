@@ -222,9 +222,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
           </Link>
           <button
             onClick={() => onStart("")}
-            className="bg-white text-black px-7 py-3 rounded-2xl text-[14px] font-[800] shadow-xl shadow-white/5 hover:bg-neutral-200 transition-all active:scale-95 flex items-center gap-2"
+            className="hidden sm:flex bg-white text-black px-5 py-2.5 rounded-2xl text-[13px] font-[800] shadow-xl shadow-white/5 hover:bg-neutral-200 transition-all active:scale-95 items-center gap-1.5 whitespace-nowrap"
           >
-            Get started for free <ChevronRight size={16} />
+            Get started <ChevronRight size={14} />
           </button>
           <button className="lg:hidden p-2 text-white" onClick={() => setIsMenuOpen(!isMenuOpen)}>
             {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
