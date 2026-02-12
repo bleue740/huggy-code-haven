@@ -632,7 +632,7 @@ const App: React.FC = () => {
       if (error) throw error;
 
       clearInterval(interval);
-      const deployUrl = `/published/${(deployment as any).id}`;
+      const deployUrl = `/p/${(deployment as any).id}`;
       setState(prev => ({
         ...prev,
         isDeploying: false,
@@ -713,16 +713,30 @@ const App: React.FC = () => {
     }));
   }, []);
 
-  const handleNewProject = useCallback(() => {
-    if (confirm("Créer un nouveau projet ? Les changements actuels seront perdus.")) {
+  const handleNewProject = useCallback(async () => {
+    if (!confirm("Créer un nouveau projet ? Les changements actuels seront perdus.")) return;
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    if (!userId) return;
+
+    const defaultSchema = { version: '3.0.0', app_name: 'New Project', components: [] };
+    const { data: inserted } = await supabase
+      .from('projects')
+      .insert({ user_id: userId, name: 'New Project', schema: defaultSchema, code: serializeFiles(DEFAULT_FILES) } as any)
+      .select('id')
+      .single();
+
+    if (inserted) {
       setState(prev => ({
         ...prev,
+        projectId: (inserted as any).id,
+        projectName: 'New Project',
         files: { ...DEFAULT_FILES },
         activeFile: 'App.tsx',
-        projectName: 'New Project',
-        history: [{ id: Date.now().toString(), role: 'assistant', content: "Projet réinitialisé. Comment puis-je vous aider ?", timestamp: Date.now() }],
+        history: [{ id: Date.now().toString(), role: 'assistant', content: "Nouveau projet créé. Comment puis-je vous aider ?", timestamp: Date.now() }],
         selectedWidgetId: undefined,
       }));
+      toast.success('Nouveau projet créé !');
     }
   }, []);
 
@@ -894,6 +908,7 @@ const App: React.FC = () => {
           />
           <CodePreview
             code={concatenatedCode}
+            files={state.files}
             isGenerating={state.isGenerating}
             generationStatus={state.aiStatusText ?? undefined}
             supabaseUrl={state.supabaseUrl}
@@ -925,7 +940,7 @@ const App: React.FC = () => {
                       <p className="text-neutral-500 text-sm mt-1">Vos données ne sont pas entraînées.</p>
                     </div>
                   </div>
-                  <button onClick={() => setState(prev => ({ ...prev, credits: prev.credits + 50, showUpgradeModal: false }))} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black text-lg hover:opacity-90 transition-all active:scale-95 flex items-center justify-center gap-2">
+                  <button onClick={() => { setState(prev => ({ ...prev, showUpgradeModal: false })); navigate('/pricing'); }} className="w-full py-5 bg-blue-600 text-white rounded-2xl font-black text-lg hover:opacity-90 transition-all active:scale-95 flex items-center justify-center gap-2">
                     Passer Pro - $29/mois <Rocket size={20} />
                   </button>
                 </div>

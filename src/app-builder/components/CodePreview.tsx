@@ -5,6 +5,7 @@ import { GeneratingOverlay } from "./GeneratingOverlay";
 
 interface CodePreviewProps {
   code: string;
+  files?: Record<string, string>;
   isGenerating: boolean;
   generationStatus?: string;
   supabaseUrl?: string | null;
@@ -21,8 +22,26 @@ const TAILWIND_CDN = "https://cdn.tailwindcss.com";
 const RECHARTS_CDN = "https://unpkg.com/recharts@2.15.4/umd/Recharts.js";
 const LUCIDE_CDN = "https://unpkg.com/lucide-react@0.462.0/dist/umd/lucide-react.js";
 const SUPABASE_CDN = "https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js";
+const FRAMER_MOTION_CDN = "https://unpkg.com/framer-motion@11.18.0/dist/framer-motion.js";
+const REACT_ROUTER_CDN = "https://unpkg.com/react-router-dom@6.30.1/dist/umd/react-router-dom.production.min.js";
+const DATE_FNS_CDN = "https://unpkg.com/date-fns@3.6.0/cdn.min.js";
 
-function buildIframeHtml(tsxCode: string, supabaseUrl?: string | null, supabaseAnonKey?: string | null, firecrawlEnabled?: boolean): string {
+// Build separate <script> tags per file: components first, App.tsx last
+function buildMultiScriptTags(files?: Record<string, string>, fallbackCode?: string): string {
+  if (!files || Object.keys(files).length <= 1) {
+    const code = files?.['App.tsx'] || fallbackCode || '';
+    return `<script type="text/babel" data-type="module">\n    ${code}\n  </script>`;
+  }
+  const entries = Object.entries(files);
+  const appEntry = entries.find(([n]) => n === 'App.tsx');
+  const others = entries.filter(([n]) => n !== 'App.tsx').sort(([a], [b]) => a.localeCompare(b));
+  const ordered = [...others, ...(appEntry ? [appEntry] : [])];
+  return ordered.map(([name, code]) =>
+    `<!-- ${name} -->\n  <script type="text/babel" data-type="module">\n    ${code}\n  </script>`
+  ).join('\n  ');
+}
+
+function buildIframeHtml(tsxCode: string, supabaseUrl?: string | null, supabaseAnonKey?: string | null, firecrawlEnabled?: boolean, files?: Record<string, string>): string {
   const hasSupabase = !!supabaseUrl && !!supabaseAnonKey;
   const supabaseScript = hasSupabase
     ? `<script src="${SUPABASE_CDN}"></script>
@@ -102,6 +121,15 @@ function buildIframeHtml(tsxCode: string, supabaseUrl?: string | null, supabaseA
     // Expose lucide-react as 'lucide' global for generated code compatibility
     if (window.LucideReact) window.lucide = window.LucideReact;
   </script>
+  <script src="${FRAMER_MOTION_CDN}"></script>
+  <script src="${DATE_FNS_CDN}"></script>
+  <script src="${REACT_ROUTER_CDN}"></script>
+  <script>
+    // Expose framer-motion globals
+    if (window.Motion) window.motion = window.Motion;
+    // Expose react-router-dom globals
+    if (window.ReactRouterDOM) window.ReactRouter = window.ReactRouterDOM;
+  </script>
   ${supabaseScript}
   ${firecrawlScript}
   <script src="${BABEL_CDN}"></script>
@@ -116,9 +144,7 @@ function buildIframeHtml(tsxCode: string, supabaseUrl?: string | null, supabaseA
 </head>
 <body>
   <div id="root"><div class="loading-container">Chargement…</div></div>
-  <script type="text/babel" data-type="module">
-    ${tsxCode}
-  </script>
+  ${buildMultiScriptTags(files, tsxCode)}
   <script>
     window.addEventListener('error', function(e) {
       var root = document.getElementById('root');
@@ -167,15 +193,15 @@ const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(React.createElement(App));
 `;
 
-export const CodePreview: React.FC<CodePreviewProps> = ({ code, isGenerating, generationStatus, supabaseUrl, supabaseAnonKey, firecrawlEnabled }) => {
+export const CodePreview: React.FC<CodePreviewProps> = ({ code, files, isGenerating, generationStatus, supabaseUrl, supabaseAnonKey, firecrawlEnabled }) => {
   const [deviceMode, setDeviceMode] = useState<DeviceMode>("desktop");
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const effectiveCode = code?.trim() || DEFAULT_CODE;
 
   const iframeSrcDoc = useMemo(() => {
-    return buildIframeHtml(effectiveCode, supabaseUrl, supabaseAnonKey, firecrawlEnabled);
-  }, [effectiveCode, supabaseUrl, supabaseAnonKey, firecrawlEnabled]);
+    return buildIframeHtml(effectiveCode, supabaseUrl, supabaseAnonKey, firecrawlEnabled, files);
+  }, [effectiveCode, supabaseUrl, supabaseAnonKey, firecrawlEnabled, files]);
 
   const deviceConfig = {
     desktop: { width: "100%", height: "100%" },
