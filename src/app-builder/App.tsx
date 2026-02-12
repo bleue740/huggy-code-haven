@@ -77,6 +77,9 @@ const App: React.FC = () => {
   const [retryCount, setRetryCount] = useState(0);
   const streamingTextRef = useRef('');
 
+  // Undo/Redo file history
+  const [fileHistory, setFileHistory] = useState<Record<string, string>[]>([{ ...DEFAULT_FILES }]);
+  const [fileHistoryIndex, setFileHistoryIndex] = useState(0);
   const { logs: consoleLogs, clearLogs: clearConsoleLogs } = useConsoleCapture();
   const { credits, isLoading: creditsLoading, refetch: refetchCredits } = useCredits();
   const { sendMessage: sendAIMessage, stopStreaming, isStreaming } = useAIChat();
@@ -493,6 +496,15 @@ const App: React.FC = () => {
             };
           });
           toast.success(`✨ ${result.fileNames.length} fichier(s) généré(s) !`);
+          // Push to undo history
+          setState(prev => {
+            setFileHistory(h => {
+              const trimmed = h.slice(0, fileHistoryIndex + 1);
+              return [...trimmed, { ...prev.files }].slice(-30); // keep max 30 snapshots
+            });
+            setFileHistoryIndex(i => i + 1);
+            return prev;
+          });
         }
 
         // Display only explanation in chat
@@ -556,6 +568,27 @@ const App: React.FC = () => {
       firecrawlEnabled: state.firecrawlEnabled,
     }, currentMode);
   }, [state.currentInput, state.isGenerating, state.history, state.files, state.chatMode, state.supabaseUrl, state.supabaseAnonKey, state.firecrawlEnabled, showLanding, sendAIMessage, refetchCredits, fetchSuggestions]);
+
+  const canUndo = fileHistoryIndex > 0;
+  const canRedo = fileHistoryIndex < fileHistory.length - 1;
+
+  const handleUndo = useCallback(() => {
+    if (fileHistoryIndex <= 0) return;
+    const newIndex = fileHistoryIndex - 1;
+    setFileHistoryIndex(newIndex);
+    const snapshot = fileHistory[newIndex];
+    setState(prev => ({ ...prev, files: { ...snapshot }, activeFile: 'App.tsx' }));
+    toast.info('↩️ Undo — état précédent restauré');
+  }, [fileHistoryIndex, fileHistory]);
+
+  const handleRedo = useCallback(() => {
+    if (fileHistoryIndex >= fileHistory.length - 1) return;
+    const newIndex = fileHistoryIndex + 1;
+    setFileHistoryIndex(newIndex);
+    const snapshot = fileHistory[newIndex];
+    setState(prev => ({ ...prev, files: { ...snapshot }, activeFile: 'App.tsx' }));
+    toast.info('↪️ Redo — état suivant restauré');
+  }, [fileHistoryIndex, fileHistory]);
 
   const handlePublish = useCallback(async () => {
     if (!state.projectId) {
@@ -843,6 +876,10 @@ const App: React.FC = () => {
           onEnableFirecrawl={() => setShowFirecrawlModal(true)}
           onDismissBackendHints={handleDismissBackendHints}
           onApprovePlan={handleApprovePlan}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          canUndo={canUndo}
+          canRedo={canRedo}
         />
         <div className="flex-1 flex flex-col min-w-0">
           <TopNav

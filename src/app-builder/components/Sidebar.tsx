@@ -33,6 +33,10 @@ interface SidebarProps {
   onEnableFirecrawl?: () => void;
   onDismissBackendHints?: () => void;
   onApprovePlan?: (plan: string) => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
 const MAX_CHARS = 10000;
@@ -63,7 +67,7 @@ const ShimmerLine = ({ width = 'w-full', delay = 0 }: { width?: string; delay?: 
 );
 
 export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
-  ({ state, setState, onSend, onStop, onScreenshotRequest, onToggleVisualEdit, onShowHistory, onNewChat, onNewProject, onRenameProject, onBackToLanding, onConnectSupabase, onEnableFirecrawl, onDismissBackendHints, onApprovePlan }, ref) => {
+  ({ state, setState, onSend, onStop, onScreenshotRequest, onToggleVisualEdit, onShowHistory, onNewChat, onNewProject, onRenameProject, onBackToLanding, onConnectSupabase, onEnableFirecrawl, onDismissBackendHints, onApprovePlan, onUndo, onRedo, canUndo, canRedo }, ref) => {
     const navigate = useNavigate();
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [showScrollBottom, setShowScrollBottom] = useState(false);
@@ -358,9 +362,21 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
               )}
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-[10px] uppercase font-bold tracking-widest text-neutral-600">Active Session</span>
-                <button onClick={() => setIsCodeView(true)} className="flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 font-bold transition-colors group">
-                  <Code2 size={12} className="group-hover:scale-110 transition-transform" /> View Code
-                </button>
+                <div className="flex items-center gap-1">
+                  {(canUndo || canRedo) && (
+                    <div className="flex items-center bg-black/40 rounded-lg px-1 py-0.5 mr-1">
+                      <button onClick={onUndo} disabled={!canUndo} className="p-1 text-neutral-500 hover:text-white disabled:opacity-20 transition-colors" title="Undo (fichiers)">
+                        <Undo2 size={11} />
+                      </button>
+                      <button onClick={onRedo} disabled={!canRedo} className="p-1 text-neutral-500 hover:text-white disabled:opacity-20 transition-colors" title="Redo (fichiers)">
+                        <Redo2 size={11} />
+                      </button>
+                    </div>
+                  )}
+                  <button onClick={() => setIsCodeView(true)} className="flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 font-bold transition-colors group">
+                    <Code2 size={12} className="group-hover:scale-110 transition-transform" /> View Code
+                  </button>
+                </div>
               </div>
 
               {!state.isGenerating && state.suggestions.length > 0 && (
