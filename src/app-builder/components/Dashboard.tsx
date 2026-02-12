@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { Plus, FolderOpen, Clock, Loader2, Sparkles, Search, MoreHorizontal, Pencil, Copy, Trash2, LogOut, Settings } from 'lucide-react';
+import { Loader2, Sparkles, Search, MoreHorizontal, Pencil, Copy, Trash2, LogOut, Settings, Send, Clock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -33,6 +33,7 @@ interface Project {
 interface DashboardProps {
   onOpenProject: (projectId: string) => void;
   onCreateNewProject: () => void;
+  onStartWithPrompt?: (prompt: string) => void;
   userEmail?: string;
 }
 
@@ -53,7 +54,7 @@ function getGradient(id: string): string {
   return GRADIENTS[Math.abs(hash) % GRADIENTS.length];
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ onOpenProject, onCreateNewProject, userEmail }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ onOpenProject, onCreateNewProject, onStartWithPrompt, userEmail }) => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,7 +62,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenProject, onCreateNew
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
+  const [promptValue, setPromptValue] = useState('');
+  const [isSending, setIsSending] = useState(false);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const initial = userEmail ? userEmail.charAt(0).toUpperCase() : '?';
 
@@ -165,32 +169,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenProject, onCreateNew
     setDeleteTarget(null);
   };
 
+  const handlePromptSubmit = () => {
+    if (!promptValue.trim() || isSending) return;
+    setIsSending(true);
+    onStartWithPrompt?.(promptValue.trim());
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handlePromptSubmit();
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-[#050505] text-white">
+    <div className="min-h-screen bg-[#0a0a0a] text-white">
       {/* Header */}
-      <header className="border-b border-[#1a1a1a] px-6 md:px-8 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-lg flex items-center justify-center">
-              <Sparkles size={16} className="text-white" />
-            </div>
-            <span className="text-lg font-bold tracking-tight">Blink AI</span>
+      <header className="px-6 md:px-8 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-lg flex items-center justify-center">
+            <Sparkles size={16} className="text-white" />
           </div>
-          <nav className="hidden sm:flex items-center gap-1">
-            <button className="px-3 py-1.5 text-sm font-medium text-white bg-[#1a1a1a] rounded-lg">Projects</button>
-            <button className="px-3 py-1.5 text-sm font-medium text-neutral-500 hover:text-neutral-300 rounded-lg transition-colors">Templates</button>
-          </nav>
+          <span className="text-lg font-bold tracking-tight">Blink AI</span>
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            onClick={onCreateNewProject}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition-colors active:scale-95"
-          >
-            <Plus size={16} />
-            <span className="hidden sm:inline">New Project</span>
-          </button>
-
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white hover:ring-2 hover:ring-blue-500/50 transition-all">
@@ -212,140 +215,143 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenProject, onCreateNew
         </div>
       </header>
 
-      {/* Content */}
-      <main className="max-w-5xl mx-auto px-6 md:px-8 py-10">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-2xl font-black tracking-tight">My Projects</h1>
-            <p className="text-sm text-neutral-500 mt-0.5">{projects.length} projet{projects.length !== 1 ? 's' : ''}</p>
-          </div>
-          {projects.length > 0 && (
-            <div className="relative w-full sm:w-64">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
-              <input
-                type="text"
-                placeholder="Rechercher…"
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-[#0a0a0a] border border-[#1a1a1a] rounded-xl text-sm text-white placeholder:text-neutral-600 outline-none focus:ring-2 focus:ring-blue-500/50"
-              />
-            </div>
-          )}
+      {/* Hero — Prompt-first */}
+      <main className="max-w-3xl mx-auto px-6 md:px-8 pt-16 pb-8">
+        <div className="text-center mb-10">
+          <h1 className="text-4xl md:text-5xl font-black tracking-tight mb-3">
+            What do you want to build?
+          </h1>
+          <p className="text-neutral-500 text-base md:text-lg max-w-lg mx-auto">
+            Describe your app and Blink AI will generate real React code for you.
+          </p>
         </div>
 
+        {/* Prompt Input Card */}
+        <div className="relative bg-[#111] border border-[#1f1f1f] rounded-2xl shadow-2xl shadow-blue-500/5 p-1">
+          <textarea
+            ref={textareaRef}
+            value={promptValue}
+            onChange={e => setPromptValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Describe the app you want to build…"
+            rows={3}
+            className="w-full bg-transparent text-white text-[15px] placeholder:text-neutral-600 resize-none outline-none px-4 py-3 rounded-xl"
+          />
+          <div className="flex items-center justify-end gap-2 px-3 pb-3">
+            <button
+              onClick={handlePromptSubmit}
+              disabled={!promptValue.trim() || isSending}
+              className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-colors active:scale-95"
+            >
+              {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+              <span>Create</span>
+            </button>
+          </div>
+        </div>
+      </main>
+
+      {/* Recent Projects */}
+      <section className="max-w-5xl mx-auto px-6 md:px-8 pb-16">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-3" />
-            <span className="text-sm text-neutral-500">Chargement des projets…</span>
+          <div className="flex flex-col items-center justify-center py-12">
+            <Loader2 className="w-6 h-6 text-neutral-600 animate-spin mb-2" />
+            <span className="text-sm text-neutral-600">Loading projects…</span>
           </div>
-        ) : projects.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="w-20 h-20 bg-[#111] rounded-3xl flex items-center justify-center mb-6 border border-[#222]">
-              <FolderOpen size={36} className="text-neutral-600" />
+        ) : projects.length > 0 ? (
+          <>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider">Recent Projects</h2>
+              {projects.length > 3 && (
+                <div className="relative w-52">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-600" />
+                  <input
+                    type="text"
+                    placeholder="Search…"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 bg-[#111] border border-[#1a1a1a] rounded-lg text-xs text-white placeholder:text-neutral-600 outline-none focus:ring-1 focus:ring-blue-500/50"
+                  />
+                </div>
+              )}
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">Aucun projet</h2>
-            <p className="text-sm text-neutral-500 mb-8 max-w-sm">
-              Créez votre premier projet et commencez à construire avec l'IA.
-            </p>
-            <button
-              onClick={onCreateNewProject}
-              className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl transition-colors active:scale-95"
-            >
-              <Plus size={16} />
-              Créer votre premier projet
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* New Project Card */}
-            <button
-              onClick={onCreateNewProject}
-              className="group border-2 border-dashed border-[#222] hover:border-blue-500/50 rounded-2xl flex flex-col items-center justify-center gap-3 transition-all hover:bg-blue-500/5 min-h-[200px]"
-            >
-              <div className="w-10 h-10 rounded-xl bg-[#1a1a1a] group-hover:bg-blue-500/10 flex items-center justify-center transition-colors">
-                <Plus size={20} className="text-neutral-500 group-hover:text-blue-400 transition-colors" />
-              </div>
-              <span className="text-sm font-bold text-neutral-500 group-hover:text-blue-400 transition-colors">Nouveau projet</span>
-            </button>
 
-            {/* Project Cards */}
-            {filteredProjects.map((project) => (
-              <div
-                key={project.id}
-                className="group bg-[#111] border border-[#1a1a1a] hover:border-[#333] rounded-2xl overflow-hidden transition-all hover:bg-[#151515] flex flex-col"
-              >
-                {/* Gradient Preview */}
-                <button
-                  onClick={() => onOpenProject(project.id)}
-                  className={`h-24 w-full bg-gradient-to-br ${getGradient(project.id)} opacity-60 group-hover:opacity-80 transition-opacity`}
-                />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {filteredProjects.map((project) => (
+                <div
+                  key={project.id}
+                  className="group bg-[#111] border border-[#1a1a1a] hover:border-[#2a2a2a] rounded-xl overflow-hidden transition-all hover:bg-[#141414] flex flex-col"
+                >
+                  <button
+                    onClick={() => onOpenProject(project.id)}
+                    className={`h-20 w-full bg-gradient-to-br ${getGradient(project.id)} opacity-50 group-hover:opacity-70 transition-opacity`}
+                  />
 
-                {/* Info */}
-                <div className="p-4 flex-1 flex flex-col justify-between">
-                  <div className="flex items-start justify-between gap-2">
-                    {renamingId === project.id ? (
-                      <input
-                        ref={renameInputRef}
-                        value={renameValue}
-                        onChange={e => setRenameValue(e.target.value)}
-                        onBlur={handleRenameSubmit}
-                        onKeyDown={e => { if (e.key === 'Enter') handleRenameSubmit(); if (e.key === 'Escape') setRenamingId(null); }}
-                        className="flex-1 bg-[#0a0a0a] border border-blue-500/50 rounded-lg px-2 py-1 text-sm font-bold text-white outline-none"
-                      />
-                    ) : (
-                      <button
-                        onClick={() => onOpenProject(project.id)}
-                        className="font-bold text-white truncate text-left flex-1 hover:text-blue-400 transition-colors"
-                      >
-                        {project.name}
-                      </button>
-                    )}
-
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-[#222] transition-all">
-                          <MoreHorizontal size={16} className="text-neutral-500" />
+                  <div className="p-3 flex-1 flex flex-col justify-between">
+                    <div className="flex items-start justify-between gap-2">
+                      {renamingId === project.id ? (
+                        <input
+                          ref={renameInputRef}
+                          value={renameValue}
+                          onChange={e => setRenameValue(e.target.value)}
+                          onBlur={handleRenameSubmit}
+                          onKeyDown={e => { if (e.key === 'Enter') handleRenameSubmit(); if (e.key === 'Escape') setRenamingId(null); }}
+                          className="flex-1 bg-[#0a0a0a] border border-blue-500/50 rounded-lg px-2 py-1 text-sm font-semibold text-white outline-none"
+                        />
+                      ) : (
+                        <button
+                          onClick={() => onOpenProject(project.id)}
+                          className="font-semibold text-sm text-white truncate text-left flex-1 hover:text-blue-400 transition-colors"
+                        >
+                          {project.name}
                         </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-40 bg-[#111] border-[#222] text-white">
-                        <DropdownMenuItem onClick={() => handleStartRename(project)} className="focus:bg-[#1a1a1a]">
-                          <Pencil size={14} className="mr-2" /> Renommer
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDuplicate(project)} className="focus:bg-[#1a1a1a]">
-                          <Copy size={14} className="mr-2" /> Dupliquer
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator className="bg-[#222]" />
-                        <DropdownMenuItem onClick={() => setDeleteTarget(project)} className="text-red-400 focus:text-red-300 focus:bg-red-500/10">
-                          <Trash2 size={14} className="mr-2" /> Supprimer
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+                      )}
 
-                  <div className="flex items-center gap-1.5 text-[11px] text-neutral-600 mt-3">
-                    <Clock size={12} />
-                    <span>{formatDistanceToNow(new Date(project.updated_at), { addSuffix: true, locale: fr })}</span>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-[#222] transition-all">
+                            <MoreHorizontal size={14} className="text-neutral-500" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40 bg-[#111] border-[#222] text-white">
+                          <DropdownMenuItem onClick={() => handleStartRename(project)} className="focus:bg-[#1a1a1a]">
+                            <Pencil size={14} className="mr-2" /> Rename
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleDuplicate(project)} className="focus:bg-[#1a1a1a]">
+                            <Copy size={14} className="mr-2" /> Duplicate
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator className="bg-[#222]" />
+                          <DropdownMenuItem onClick={() => setDeleteTarget(project)} className="text-red-400 focus:text-red-300 focus:bg-red-500/10">
+                            <Trash2 size={14} className="mr-2" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-[11px] text-neutral-600 mt-2">
+                      <Clock size={11} />
+                      <span>{formatDistanceToNow(new Date(project.updated_at), { addSuffix: true, locale: fr })}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </main>
+              ))}
+            </div>
+          </>
+        ) : null}
+      </section>
 
       {/* Delete Confirmation */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
         <AlertDialogContent className="bg-[#111] border-[#222] text-white">
           <AlertDialogHeader>
-            <AlertDialogTitle>Supprimer « {deleteTarget?.name} » ?</AlertDialogTitle>
+            <AlertDialogTitle>Delete "{deleteTarget?.name}"?</AlertDialogTitle>
             <AlertDialogDescription className="text-neutral-400">
-              Cette action est irréversible. Tout le code et les données du projet seront perdus.
+              This action cannot be undone. All code and project data will be lost.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="bg-[#1a1a1a] border-[#333] text-white hover:bg-[#222]">Annuler</AlertDialogCancel>
+            <AlertDialogCancel className="bg-[#1a1a1a] border-[#333] text-white hover:bg-[#222]">Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700 text-white">
-              Supprimer
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
