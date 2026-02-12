@@ -1,9 +1,11 @@
 import React from 'react';
 import { CheckCircle2, FileCode2 } from 'lucide-react';
 import { Message } from '../types';
+import { PlanMessage } from './PlanMessage';
 
 interface ChatMessageProps {
   message: Message;
+  onApprovePlan?: (plan: string) => void;
 }
 
 /** Strip fenced code blocks (```lang ... ```) from text */
@@ -92,15 +94,30 @@ function renderInline(text: string): React.ReactNode[] {
   return parts;
 }
 
-export const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
+export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onApprovePlan }) => {
   const displayText = stripCodeBlocks(message.content);
   const showCodeIndicator = message.codeApplied;
 
+  // Detect plan markers [PLAN_START]...[PLAN_END]
+  const planMatch = displayText.match(/\[PLAN_START\]([\s\S]*?)\[PLAN_END\]/);
+  const planContent = planMatch ? planMatch[1].trim() : null;
+  const textWithoutPlan = planContent
+    ? displayText.replace(/\[PLAN_START\][\s\S]*?\[PLAN_END\]/, '').trim()
+    : displayText;
+
   return (
     <div className="space-y-2">
-      {displayText && (
+      {textWithoutPlan && (
         <div className="text-[13px] leading-relaxed text-neutral-200">
-          {renderMarkdown(displayText)}
+          {renderMarkdown(textWithoutPlan)}
+        </div>
+      )}
+      {planContent && onApprovePlan && (
+        <PlanMessage planContent={planContent} onApprove={onApprovePlan} />
+      )}
+      {planContent && !onApprovePlan && (
+        <div className="text-[13px] leading-relaxed text-neutral-200">
+          {renderMarkdown(planContent)}
         </div>
       )}
       {showCodeIndicator && (

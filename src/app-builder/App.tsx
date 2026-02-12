@@ -74,6 +74,7 @@ const App: React.FC = () => {
   const [authChecked, setAuthChecked] = useState(false);
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string | undefined>();
+  const [retryCount, setRetryCount] = useState(0);
   const streamingTextRef = useRef('');
 
   const { logs: consoleLogs, clearLogs: clearConsoleLogs } = useConsoleCapture();
@@ -154,12 +155,39 @@ const App: React.FC = () => {
       if (existing && existing.length > 0) {
         const proj = existing[0] as any;
         const files = deserializeFiles(proj.code);
+
+        // Phase 3: Load persisted chat messages
+        let loadedHistory: Message[] = [{
+          id: '1', role: 'assistant',
+          content: "Je suis prêt. Décrivez-moi l'application que vous voulez construire — je vais générer du vrai code React multi-fichiers.",
+          timestamp: Date.now(),
+        }];
+        try {
+          const { data: msgs } = await supabase
+            .from('chat_messages')
+            .select('*')
+            .eq('project_id', proj.id)
+            .order('created_at', { ascending: true })
+            .limit(50);
+          if (msgs && msgs.length > 0) {
+            loadedHistory = (msgs as any[]).map((m: any) => ({
+              id: m.id,
+              role: m.role as 'user' | 'assistant',
+              content: m.content,
+              timestamp: new Date(m.created_at).getTime(),
+              codeApplied: m.code_applied,
+              codeLineCount: m.code_line_count,
+            }));
+          }
+        } catch { /* ignore */ }
+
         setState(prev => ({
           ...prev,
           projectId: proj.id,
           projectName: proj.name || 'New Project',
           files,
           activeFile: 'App.tsx',
+          history: loadedHistory,
           supabaseUrl: proj.supabase_url || null,
           supabaseAnonKey: proj.supabase_anon_key || null,
           firecrawlEnabled: proj.firecrawl_enabled || false,
@@ -219,13 +247,90 @@ const App: React.FC = () => {
     return () => { if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current); };
   }, [state.files, state.projectId, state.isDeploying]);
 
-  const fetchSuggestions = useCallback(async () => {
-    const mockSuggestions: AISuggestion[] = [
+  const fetchSuggestions = useCallback(async (code?: string) => {
+    try {
+      const codeToSend = code || buildConcatenatedCode(state.files);
+      const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-suggestions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY },
+        body: JSON.stringify({ code: codeToSend.slice(0, 4000) }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.suggestions && Array.isArray(data.suggestions)) {
+          const mapped = data.suggestions.slice(0, 4).map((s: any, i: number) => ({
+            id: `sug_${i}`,
+            label: s.title || s.label || 'Suggestion',
+            description: s.prompt || s.description || '',
+            prompt: s.prompt || s.description || s.title || '',
+            icon: (s.icon || 'layout').toLowerCase() as any,
+          }));
+          setState(prev => ({ ...prev, suggestions: mapped }));
+          return;
+        }
+      }
+    } catch { /* fallback to static */ }
+    // Fallback static suggestions
+    setState(prev => ({ ...prev, suggestions: [
       { id: "sug_1", label: "Ajouter une page pricing", description: "Crée une section Pricing avec 3 plans et CTA.", prompt: "Ajoute une section pricing moderne avec 3 plans et un CTA.", icon: "layout" },
       { id: "sug_2", label: "Dashboard analytics", description: "Ajoute une page dashboard avec tableaux + graphiques.", prompt: "Ajoute un dashboard analytics avec 2 charts et une table.", icon: "chart" },
       { id: "sug_3", label: "Formulaire onboarding", description: "Collecte le nom, entreprise, objectifs.", prompt: "Ajoute un formulaire onboarding (nom, entreprise, objectifs).", icon: "form" },
-    ];
-    setState(prev => ({ ...prev, suggestions: mockSuggestions }));
+    ]}));
+  }, [state.files]);
+
+  // Phase 3: Persist messages to database
+  const persistMessage = useCallback(async (projectId: string | undefined, role: string, content: string, codeApplied: boolean, codeLineCount: number, chatMode: string) => {
+    if (!projectId) return;
+    try {
+      const { data } = await supabase.auth.getUser();
+      if (!data.user?.id) return;
+      await supabase.from('chat_messages').insert({
+        project_id: projectId,
+        user_id: data.user.id,
+        role,
+        content: content.slice(0, 50000), // Limit size
+        code_applied: codeApplied,
+        code_line_count: codeLineCount,
+        chat_mode: chatMode,
+      } as any);
+    } catch { /* ignore persistence errors */ }
+  }, []);
+
+  // Phase 1: Listen for runtime errors from iframe
+  useEffect(() => {
+    const MAX_RETRIES = 3;
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'runtime_error' && !state.isGenerating) {
+        const errorMsg = event.data.error;
+        if (retryCount >= MAX_RETRIES) {
+          setState(prev => ({
+            ...prev,
+            history: [...prev.history, {
+              id: `err_max_${Date.now()}`,
+              role: 'assistant',
+              content: `⚠️ L'auto-correction a échoué après ${MAX_RETRIES} tentatives. Erreur : \`${errorMsg}\`\n\nEssayez de reformuler votre demande ou de simplifier le code.`,
+              timestamp: Date.now(),
+            }],
+          }));
+          setRetryCount(0);
+          return;
+        }
+        setRetryCount(prev => prev + 1);
+        // Auto-send error to AI for correction
+        const fixPrompt = `Le code que tu as généré produit cette erreur runtime:\n\`${errorMsg}\`\n\nCorrige le code pour éliminer cette erreur. Garde la même fonctionnalité.`;
+        handleSendMessage(fixPrompt);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [state.isGenerating, retryCount]);
+
+  // Phase 2: Handle plan approval
+  const handleApprovePlan = useCallback((planContent: string) => {
+    setState(prev => ({ ...prev, chatMode: 'agent' }));
+    const implementPrompt = `Implémente exactement ce plan :\n\n${planContent}`;
+    // Defer to next tick so chatMode state is updated
+    setTimeout(() => handleSendMessage(implementPrompt), 100);
   }, []);
 
   const handleStopGenerating = useCallback(() => {
@@ -249,18 +354,20 @@ const App: React.FC = () => {
       currentInput: customPrompt ? prev.currentInput : '',
     }));
 
+    // Persist user message
+    const currentMode = state.chatMode || 'agent';
+    persistMessage(state.projectId, 'user', input, false, 0, currentMode);
+
     streamingTextRef.current = '';
 
-    // Build conversation messages for AI
+    // Build conversation messages for AI — Phase 4: extended context (20 messages)
     const chatMessages = [...state.history, userMessage]
       .filter(m => m.role === 'user' || m.role === 'assistant')
-      .slice(-10)
+      .slice(-20)
       .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
     // Current project code as context
     const projectContext = buildConcatenatedCode(state.files);
-
-    const currentMode = state.chatMode || 'agent';
 
     await sendAIMessage(chatMessages, {
       onDelta: (chunk) => {
@@ -286,6 +393,8 @@ const App: React.FC = () => {
         });
       },
       onDone: (fullText) => {
+        setRetryCount(0); // Reset retry count on successful completion
+
         if (currentMode === 'plan') {
           // Plan mode: no code extraction, just render full markdown
           setState(prev => ({
@@ -298,6 +407,8 @@ const App: React.FC = () => {
                 : m
             ),
           }));
+          // Persist messages
+          persistMessage(state.projectId, 'assistant', fullText, false, 0, 'plan');
           refetchCredits();
           return;
         }
@@ -330,9 +441,12 @@ const App: React.FC = () => {
           ),
         }));
 
+        // Persist messages
+        persistMessage(state.projectId, 'assistant', explanationOnly || fullText, codeApplied, codeLineCount, 'agent');
+
         // Refresh credits after generation
         refetchCredits();
-        fetchSuggestions();
+        fetchSuggestions(extractedCode || undefined);
       },
       onError: (error, code) => {
         const errorMessage: Message = {
@@ -658,6 +772,7 @@ const App: React.FC = () => {
           onConnectSupabase={() => setState(prev => ({ ...prev, showSupabaseModal: true }))}
           onEnableFirecrawl={() => setShowFirecrawlModal(true)}
           onDismissBackendHints={handleDismissBackendHints}
+          onApprovePlan={handleApprovePlan}
         />
         <div className="flex-1 flex flex-col min-w-0">
           <TopNav

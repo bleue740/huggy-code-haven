@@ -122,12 +122,20 @@ function buildIframeHtml(tsxCode: string, supabaseUrl?: string | null, supabaseA
   <script>
     window.addEventListener('error', function(e) {
       var root = document.getElementById('root');
+      var errMsg = (e.message || 'Unknown error') + (e.filename ? '\\nFichier: ' + e.filename + ':' + e.lineno : '');
       if (root) {
-        root.innerHTML = '<div class="error-container"><strong>Erreur de rendu:</strong>\\n\\n' +
-          (e.message || 'Unknown error') +
-          (e.filename ? '\\n\\nFichier: ' + e.filename + ':' + e.lineno : '') +
-          '</div>';
+        root.innerHTML = '<div class="error-container"><strong>Erreur de rendu:</strong>\\n\\n' + errMsg + '</div>';
       }
+      // Phase 1: Send runtime error to parent for auto-correction
+      try {
+        window.parent.postMessage({ type: 'runtime_error', error: errMsg }, '*');
+      } catch(ex) {}
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      var errMsg = (e.reason && e.reason.message) ? e.reason.message : String(e.reason || 'Unhandled promise rejection');
+      try {
+        window.parent.postMessage({ type: 'runtime_error', error: errMsg }, '*');
+      } catch(ex) {}
     });
   </script>
 </body>

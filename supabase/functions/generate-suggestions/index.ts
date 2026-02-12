@@ -15,6 +15,17 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
+    // Accept optional code context from the request body
+    let codeContext = "";
+    try {
+      const body = await req.json();
+      if (body?.code) {
+        codeContext = `\n\nThe user's current app code (first 3000 chars):\n${body.code.slice(0, 3000)}\n\nGenerate suggestions that complement or extend this existing code.`;
+      }
+    } catch {
+      // No body or invalid JSON — use generic suggestions
+    }
+
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
@@ -29,12 +40,12 @@ serve(async (req) => {
             {
               role: "system",
               content:
-                "You are a creative app idea generator. Generate 4 unique, original web app ideas that a developer could build. Each idea should be practical and interesting. Use the provided tool to return structured results.",
+                "You are a creative app feature suggestion generator. Generate 4 unique, actionable feature suggestions that a developer could add to their React app. Each suggestion should be specific and implementable. Respond in the same language as any code comments you see (default to French)." + codeContext,
             },
             {
               role: "user",
               content:
-                "Generate 4 creative and original web application ideas. Make them diverse: mix B2B, B2C, productivity, social, e-commerce, etc. Each should be buildable as a React SaaS app.",
+                "Generate 4 creative and actionable feature suggestions for this app. Make them diverse: mix UI components, functionality, data visualization, and interactions. Each should be buildable as a React component.",
             },
           ],
           tools: [
@@ -42,7 +53,7 @@ serve(async (req) => {
               type: "function",
               function: {
                 name: "return_suggestions",
-                description: "Return 4 app idea suggestions with icon, title, and detailed prompt.",
+                description: "Return 4 feature suggestions with icon, title, and detailed prompt.",
                 parameters: {
                   type: "object",
                   properties: {
@@ -53,8 +64,8 @@ serve(async (req) => {
                         properties: {
                           icon: {
                             type: "string",
-                            enum: ["Layout", "Zap", "Calendar", "Briefcase", "Code", "Shield", "Monitor", "Rocket"],
-                            description: "Icon name from Lucide",
+                            enum: ["layout", "form", "chart", "button", "table"],
+                            description: "Icon category",
                           },
                           title: {
                             type: "string",
@@ -62,7 +73,7 @@ serve(async (req) => {
                           },
                           prompt: {
                             type: "string",
-                            description: "Detailed prompt (2-3 sentences) describing what to build with specific UI components and design direction",
+                            description: "Detailed prompt (2-3 sentences) describing what to build",
                           },
                         },
                         required: ["icon", "title", "prompt"],
@@ -86,12 +97,6 @@ serve(async (req) => {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded, please try again later." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Payment required." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       const text = await response.text();
