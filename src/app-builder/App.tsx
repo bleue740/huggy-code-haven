@@ -260,6 +260,8 @@ const App: React.FC = () => {
     // Current project code as context
     const projectContext = buildConcatenatedCode(state.files);
 
+    const currentMode = state.chatMode || 'agent';
+
     await sendAIMessage(chatMessages, {
       onDelta: (chunk) => {
         streamingTextRef.current += chunk;
@@ -284,7 +286,23 @@ const App: React.FC = () => {
         });
       },
       onDone: (fullText) => {
-        // Extract code from the AI response
+        if (currentMode === 'plan') {
+          // Plan mode: no code extraction, just render full markdown
+          setState(prev => ({
+            ...prev,
+            isGenerating: false,
+            aiStatusText: null,
+            history: prev.history.map((m) =>
+              m.id.startsWith('stream_')
+                ? { ...m, content: fullText }
+                : m
+            ),
+          }));
+          refetchCredits();
+          return;
+        }
+
+        // Agent mode: extract code and apply
         const extractedCode = extractCodeFromResponse(fullText);
         const codeApplied = !!extractedCode;
         const codeLineCount = extractedCode ? extractedCode.split('\n').length : 0;
@@ -352,8 +370,8 @@ const App: React.FC = () => {
       supabaseUrl: state.supabaseUrl,
       supabaseAnonKey: state.supabaseAnonKey,
       firecrawlEnabled: state.firecrawlEnabled,
-    });
-  }, [state.currentInput, state.isGenerating, state.history, state.files, state.supabaseUrl, state.supabaseAnonKey, state.firecrawlEnabled, showLanding, sendAIMessage, refetchCredits, fetchSuggestions]);
+    }, currentMode);
+  }, [state.currentInput, state.isGenerating, state.history, state.files, state.chatMode, state.supabaseUrl, state.supabaseAnonKey, state.firecrawlEnabled, showLanding, sendAIMessage, refetchCredits, fetchSuggestions]);
 
   const handlePublish = useCallback(async () => {
     if (!state.projectId) {

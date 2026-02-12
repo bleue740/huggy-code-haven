@@ -31,7 +31,8 @@ export function useAIChat() {
       messages: ChatMessage[],
       callbacks: StreamCallbacks,
       projectContext?: string,
-      backendConfig?: { supabaseUrl?: string | null; supabaseAnonKey?: string | null; firecrawlEnabled?: boolean }
+      backendConfig?: { supabaseUrl?: string | null; supabaseAnonKey?: string | null; firecrawlEnabled?: boolean },
+      mode?: 'plan' | 'agent'
     ) => {
       const controller = new AbortController();
       abortRef.current = controller;
@@ -60,6 +61,7 @@ export function useAIChat() {
             supabaseUrl: backendConfig?.supabaseUrl,
             supabaseAnonKey: backendConfig?.supabaseAnonKey,
             firecrawlEnabled: backendConfig?.firecrawlEnabled,
+            mode: mode || 'agent',
           }),
           signal: controller.signal,
         });
@@ -93,7 +95,7 @@ export function useAIChat() {
           return;
         }
 
-        callbacks.onStatusChange('Génération du code…');
+        callbacks.onStatusChange(mode === 'plan' ? 'Réflexion en cours…' : 'Génération du code…');
 
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();

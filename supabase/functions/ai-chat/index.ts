@@ -177,6 +177,34 @@ A Firecrawl proxy is available for web scraping and search. Use the global helpe
 - Always show loading states while fetching
 - Handle errors gracefully with try/catch`;
 
+const PLAN_SYSTEM_PROMPT = `You are Blink AI in Planning Mode — an expert architect and product strategist.
+
+## RULES
+- You are helping the user think, plan, and make decisions BEFORE any code is written.
+- NEVER output code blocks (no \`\`\`tsx, no \`\`\`jsx, no \`\`\`javascript, no \`\`\`html).
+- Focus on: architecture decisions, component structure, data models, user flows, UX considerations, tradeoffs.
+- Ask clarifying questions when the request is ambiguous or complex.
+- When you have enough information, propose a structured implementation plan.
+- Use markdown formatting: headings, bullet points, numbered lists, bold text.
+- Be concise but thorough.
+- Always respond in the same language as the user's message.
+- You can analyze existing project code to provide context-aware advice.
+
+## WHAT YOU CAN DO
+- Analyze requirements and break them down into steps
+- Compare different implementation approaches with pros/cons
+- Design database schemas, API structures, component hierarchies
+- Identify potential issues or edge cases before implementation
+- Review and critique existing code architecture
+- Help debug problems by reasoning through the logic
+
+## RESPONSE STYLE
+- Start with a brief summary of your understanding
+- Ask 1-3 targeted questions if needed
+- When proposing a plan, structure it clearly with numbered steps
+- Highlight key decisions the user needs to make
+- Be opinionated — recommend the best approach, don't just list options`;
+
 const FIRECRAWL_MOCK_PROMPT_ADDON = `
 
 ## WEB SCRAPING NEEDED (NOT CONNECTED YET)
@@ -335,7 +363,8 @@ serve(async (req: Request) => {
     }
 
     // Parse body
-    const { messages, projectContext, supabaseUrl, supabaseAnonKey, firecrawlEnabled } = await req.json();
+    const { messages, projectContext, supabaseUrl, supabaseAnonKey, firecrawlEnabled, mode } = await req.json();
+    const chatMode = mode === 'plan' ? 'plan' : 'agent';
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new Response(JSON.stringify({ error: "Messages array required" }), {
         status: 400,
@@ -345,13 +374,14 @@ serve(async (req: Request) => {
 
     // Detect backend needs from the latest user message
     const lastUserMsg = [...messages].reverse().find((m: { role: string }) => m.role === "user");
-    const backendNeeds = detectBackendNeeds(lastUserMsg?.content ?? "");
-    const complexity = detectComplexity(lastUserMsg?.content ?? "", backendNeeds);
-    const { provider, model } = pickModel(complexity);
-    console.log(`[ai-chat] complexity=${complexity} provider=${provider} model=${model} user=${userId} backendNeeds=${backendNeeds.join(",")}`);
+    const backendNeeds = chatMode === 'plan' ? [] : detectBackendNeeds(lastUserMsg?.content ?? "");
+    const complexity = chatMode === 'plan' ? 'simple' as Complexity : detectComplexity(lastUserMsg?.content ?? "", backendNeeds);
+    const planModel: ModelChoice = { provider: "lovable", model: "openai/gpt-5" };
+    const { provider, model } = chatMode === 'plan' ? planModel : pickModel(complexity);
+    console.log(`[ai-chat] mode=${chatMode} complexity=${complexity} provider=${provider} model=${model} user=${userId} backendNeeds=${backendNeeds.join(",")}`);
 
     // Build conditional system prompt
-    let fullSystem = BASE_SYSTEM_PROMPT;
+    let fullSystem = chatMode === 'plan' ? PLAN_SYSTEM_PROMPT : BASE_SYSTEM_PROMPT;
 
     // Supabase integration
     const hasSupabase = !!supabaseUrl && !!supabaseAnonKey;
