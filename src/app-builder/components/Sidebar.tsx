@@ -424,23 +424,37 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
               {state.isGenerating && (
                 <div className="group animate-in slide-in-from-bottom-2 duration-300">
                   <div className="flex items-start gap-3">
-                    <div className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/20">
+                    <div className={`shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-white shadow-lg ${
+                      (state.chatMode || 'agent') === 'plan'
+                        ? 'bg-gradient-to-br from-purple-500 to-purple-600 shadow-purple-500/20'
+                        : 'bg-gradient-to-br from-blue-500 to-blue-600 shadow-blue-500/20'
+                    }`}>
                       <Bot size={14} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] font-bold text-blue-400 uppercase tracking-tight">BLINK</span>
-                        <span className="text-[9px] text-blue-400 font-mono font-bold ml-auto">{elapsedSeconds}s</span>
+                        <span className={`text-[10px] font-bold uppercase tracking-tight ${
+                          (state.chatMode || 'agent') === 'plan' ? 'text-purple-400' : 'text-blue-400'
+                        }`}>
+                          {(state.chatMode || 'agent') === 'plan' ? 'BLINK · PLAN' : 'BLINK'}
+                        </span>
+                        <span className={`text-[9px] font-mono font-bold ml-auto ${
+                          (state.chatMode || 'agent') === 'plan' ? 'text-purple-400' : 'text-blue-400'
+                        }`}>{elapsedSeconds}s</span>
                       </div>
                       <div className="relative bg-gradient-to-br from-[#1a1a1a] to-[#151515] border border-[#333] rounded-xl p-4 shadow-xl overflow-hidden">
-                        <div className="absolute inset-0 opacity-20 pointer-events-none p-4 space-y-2">
-                          <ShimmerLine width="w-3/4" />
-                          <ShimmerLine width="w-1/2" delay={100} />
-                          <ShimmerLine width="w-2/3" delay={200} />
-                        </div>
+                        {(state.chatMode || 'agent') === 'agent' && (
+                          <div className="absolute inset-0 opacity-20 pointer-events-none p-4 space-y-2">
+                            <ShimmerLine width="w-3/4" />
+                            <ShimmerLine width="w-1/2" delay={100} />
+                            <ShimmerLine width="w-2/3" delay={200} />
+                          </div>
+                        )}
                         <div className="relative flex items-center gap-3 mb-2">
                           <TypingDots />
-                          <span className="text-[13px] text-neutral-200 font-medium">{state.aiStatusText || 'Thinking...'}</span>
+                          <span className="text-[13px] text-neutral-200 font-medium">
+                            {state.aiStatusText || ((state.chatMode || 'agent') === 'plan' ? 'Réflexion…' : 'Thinking...')}
+                          </span>
                         </div>
                         {onStop && (
                           <div className="relative flex justify-end mt-4">
@@ -578,8 +592,26 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
               </div>
 
               <div className="flex items-center gap-1">
-                <button onClick={() => setIsCodeView(false)} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${!isCodeView ? 'bg-[#262626] text-neutral-300' : 'bg-blue-600 text-white'}`}>
-                  <MessageSquare size={13} /> Chat
+                <button
+                  onClick={() => {
+                    const isPlan = (state.chatMode || 'agent') === 'plan';
+                    if (isCodeView) {
+                      // If in code view, switch to chat view + activate plan
+                      setIsCodeView(false);
+                      setState(prev => ({ ...prev, chatMode: 'plan' }));
+                    } else {
+                      // Toggle between plan and agent
+                      setState(prev => ({ ...prev, chatMode: isPlan ? 'agent' : 'plan' }));
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
+                    (state.chatMode || 'agent') === 'plan'
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
+                      : 'bg-[#262626] text-neutral-300 hover:bg-[#333]'
+                  }`}
+                  title={(state.chatMode || 'agent') === 'plan' ? 'Mode Plan actif — cliquez pour passer en Agent' : 'Passer en mode Plan (discussion sans code)'}
+                >
+                  <MessageSquare size={13} /> {(state.chatMode || 'agent') === 'plan' ? 'Plan' : 'Chat'}
                 </button>
                 {state.isGenerating ? (
                   <button type="button" onClick={onStop} disabled={!onStop} className="w-8 h-8 rounded-full flex items-center justify-center bg-[#262626] text-white hover:bg-[#333] transition-all">

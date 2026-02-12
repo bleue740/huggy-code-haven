@@ -74,4 +74,5 @@ export interface AppState {
   firecrawlEnabled?: boolean;
   backendHints?: BackendNeed[];
   showSupabaseModal?: boolean;
+  chatMode?: 'plan' | 'agent';
 }
