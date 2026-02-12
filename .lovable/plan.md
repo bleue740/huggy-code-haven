@@ -1,103 +1,100 @@
 
 
-# Fix: Chat Flow -- Hide Raw Code, Render Markdown, Show "Code Applied" Indicator
+# Repurpose "Chat" Button as Plan Mode Toggle
 
-## Problem
+## Overview
 
-Right now, when the AI responds, the **entire raw response** (including the full ```tsx code block) is dumped directly into the chat as plain text. This makes the chat unusable -- you see hundreds of lines of raw code instead of a clean explanation like on Lovable.
+The existing "Chat" button in the sidebar input area (bottom-right) will become the Plan/Agent mode switch:
 
-```text
-CURRENT (broken):
-┌─────────────────────────────────────────┐
-│ BLINK: Voici un dashboard...            │
-│ ```tsx                                  │
-│ const { useState } = React;             │
-│ function App() { ...                    │
-│ ... 200 lines of raw code ...           │
-│ ```                                     │
-└─────────────────────────────────────────┘
-
-EXPECTED (fixed):
-┌─────────────────────────────────────────┐
-│ BLINK: Voici un dashboard avec des      │
-│ charts et une table de donnees.         │
-│                                         │
-│ ┌─ Code applied to preview ──────────┐  │
-│ │ App.tsx updated (147 lines)        │  │
-│ └────────────────────────────────────┘  │
-└─────────────────────────────────────────┘
-```
-
-## Root Causes
-
-1. **No markdown rendering** (Sidebar.tsx line 400): `msg.content` is rendered as plain text with `whitespace-pre-wrap`
-2. **Raw code stays in chat history** (App.tsx lines 286-303): The full AI response with code blocks is stored in history and never cleaned up
-3. **No visual indicator** when code is applied to the preview
-
-## Solution
-
-### Step 1: Create a message renderer component
-
-Create `src/app-builder/components/ChatMessage.tsx` that:
-- Strips ```tsx/jsx/javascript code blocks from the displayed content
-- Shows a compact "Code applied to preview" card with line count when code was extracted
-- Renders the remaining text with basic markdown support (bold, italic, inline code, lists)
-- No new dependencies needed -- use a simple regex-based renderer
-
-### Step 2: Clean up chat history on completion
-
-Modify `App.tsx` `onDone` callback (lines 286-303):
-- After extracting code, replace the streaming message's content with the **explanation only** (text without code blocks)
-- Store a flag on the message indicating code was applied (add `codeApplied?: boolean` and `codeLineCount?: number` to the Message type)
-
-### Step 3: Update Message type
-
-Modify `src/app-builder/types.ts`:
-- Add `codeApplied?: boolean` and `codeLineCount?: number` to the `Message` interface
-
-### Step 4: Use ChatMessage in Sidebar
-
-Modify `src/app-builder/components/Sidebar.tsx` line 400:
-- Replace the raw `{msg.content}` div with the new `<ChatMessage>` component
-
-## Files to modify
-
-| File | Change |
-|------|--------|
-| `src/app-builder/types.ts` | Add `codeApplied` and `codeLineCount` to `Message` |
-| `src/app-builder/components/ChatMessage.tsx` | Create -- markdown renderer + code-applied indicator |
-| `src/app-builder/components/Sidebar.tsx` | Use `<ChatMessage>` instead of raw text |
-| `src/app-builder/App.tsx` | Strip code blocks from stored message on completion, set `codeApplied` flag |
-| `src/app-builder/hooks/useAIChat.ts` | Add helper `stripCodeBlocks()` export |
-
-## Technical Details
-
-### ChatMessage component logic
+- **Chat button active (highlighted)** = Plan Mode: AI discusses, analyzes, asks questions -- no code is generated or applied to the preview
+- **Chat button inactive (default)** = Agent Mode: AI generates code and applies it to the preview (current behavior)
 
 ```text
-1. Check if message has codeApplied flag
-2. Strip any remaining code blocks from content (safety)
-3. Render text with simple markdown:
-   - **bold** -> <strong>
-   - `inline code` -> <code>
-   - - list items -> <li>
-   - Line breaks -> <br>
-4. If codeApplied, show a compact card:
-   "Code applied to preview -- App.tsx (N lines)"
-   with a subtle green checkmark icon
+INPUT AREA (bottom bar):
+┌──────────────────────────────────────────────────────┐
+│  [+] [Visual] [Mic]              [Chat] [Send/Stop]  │
+│                                   ^^^^               │
+│                            Plan mode toggle           │
+│                            (blue = plan active)       │
+└──────────────────────────────────────────────────────┘
+
+Chat active (Plan mode):
+- AI responds with explanations, questions, structured plans
+- No code extraction, no preview update
+- Markdown-rendered conversation only
+
+Chat inactive (Agent mode - default):
+- AI generates code + explanation
+- Code extracted and applied to preview
+- "Code applied" indicator shown in chat
 ```
 
-### onDone cleanup in App.tsx
+## Changes
 
-```text
-1. Extract code (existing logic)
-2. Remove code block from fullText to get explanation-only text
-3. Count lines in extracted code
-4. Update the streaming message with:
-   - content = explanation text (no code block)
-   - codeApplied = true
-   - codeLineCount = line count
-```
+### 1. Types (`src/app-builder/types.ts`)
 
-This ensures the chat behaves like a real AI builder: clean explanations in chat, code silently applied to the preview.
+Add to `AppState`:
+- `chatMode: 'plan' | 'agent'` (default: `'agent'`)
+
+### 2. Sidebar (`src/app-builder/components/Sidebar.tsx`)
+
+Modify the "Chat" button (line 581-583):
+- Currently: toggles `isCodeView` to `false` (shows chat view)
+- New behavior: toggles `chatMode` between `'plan'` and `'agent'`
+- When `chatMode === 'plan'`: button is blue/highlighted, shows "Chat" label
+- When `chatMode === 'agent'`: button is default gray style
+- If user is in code view and clicks Chat, also switch to chat view (keep existing behavior)
+
+Update the generating indicator (lines 424-456):
+- In Plan mode: show "Thinking..." with a simpler indicator (no code shimmer)
+- In Agent mode: keep existing shimmer + "Generating code..." indicator
+
+### 3. Edge Function (`supabase/functions/ai-chat/index.ts`)
+
+Accept `mode: 'plan' | 'agent'` in the request body.
+
+When `mode === 'plan'`:
+- Use a Plan-specific system prompt that instructs the AI to:
+  - Analyze, reason, ask clarifying questions
+  - Propose structured approaches
+  - NEVER output code blocks (no ```tsx, no ```jsx)
+  - Focus on architecture, UX decisions, data models
+  - Respond in the same language as the user
+
+When `mode === 'agent'` (default, unchanged):
+- Keep existing code-generation system prompt
+
+### 4. useAIChat hook (`src/app-builder/hooks/useAIChat.ts`)
+
+Add `mode` parameter to `sendMessage()` -- pass it in the request body to the edge function.
+
+### 5. App.tsx (`src/app-builder/App.tsx`)
+
+Update `handleSendMessage`:
+- Pass `state.chatMode` (or `'agent'` by default) to `sendAIMessage`
+- In `onDone` callback:
+  - If `chatMode === 'plan'`: do NOT extract code, do NOT apply to preview. Just store the full text as the assistant message (with markdown rendering via ChatMessage).
+  - If `chatMode === 'agent'`: existing behavior (extract code, apply, show "code applied" indicator)
+
+### 6. ChatMessage (`src/app-builder/components/ChatMessage.tsx`)
+
+No changes needed -- it already strips code blocks and renders markdown. In Plan mode, there will be no code blocks to strip so it just renders the full markdown response.
+
+## Files Summary
+
+| File | Action | Description |
+|------|--------|-------------|
+| `src/app-builder/types.ts` | Modify | Add `chatMode` to AppState |
+| `src/app-builder/components/Sidebar.tsx` | Modify | Repurpose Chat button as mode toggle, adapt generating indicator |
+| `supabase/functions/ai-chat/index.ts` | Modify | Accept `mode` param, add Plan system prompt |
+| `src/app-builder/hooks/useAIChat.ts` | Modify | Pass `mode` to edge function |
+| `src/app-builder/App.tsx` | Modify | Conditional onDone logic based on chatMode |
+
+## Implementation Order
+
+1. `types.ts` -- add `chatMode` field
+2. `ai-chat/index.ts` -- Plan system prompt + mode routing
+3. `useAIChat.ts` -- pass mode param
+4. `App.tsx` -- conditional code extraction
+5. `Sidebar.tsx` -- repurpose Chat button + adapt UI
 
