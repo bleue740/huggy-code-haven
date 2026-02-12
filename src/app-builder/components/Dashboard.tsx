@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { Loader2, Sparkles, Search, MoreHorizontal, Pencil, Copy, Trash2, LogOut, Settings, Send, Clock } from 'lucide-react';
+import { Loader2, Sparkles, Search, MoreHorizontal, Pencil, Copy, Trash2, LogOut, Settings, Send, Clock, Layout } from 'lucide-react';
+import { TEMPLATES, type ProjectTemplate } from '../data/templates';
 import { supabase } from '@/integrations/supabase/client';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -34,6 +35,7 @@ interface DashboardProps {
   onOpenProject: (projectId: string) => void;
   onCreateNewProject: () => void;
   onStartWithPrompt?: (prompt: string) => void;
+  onStartFromTemplate?: (template: ProjectTemplate) => void;
   userEmail?: string;
 }
 
@@ -54,7 +56,7 @@ function getGradient(id: string): string {
   return GRADIENTS[Math.abs(hash) % GRADIENTS.length];
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ onOpenProject, onCreateNewProject, onStartWithPrompt, userEmail }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ onOpenProject, onCreateNewProject, onStartWithPrompt, onStartFromTemplate, userEmail }) => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -249,6 +251,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenProject, onCreateNew
           </div>
         </div>
       </main>
+
+      {/* Templates */}
+      <section className="max-w-5xl mx-auto px-6 md:px-8 pb-10">
+        <h2 className="text-sm font-semibold text-neutral-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+          <Layout size={14} />
+          Start from a template
+        </h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {TEMPLATES.map((tpl) => (
+            <button
+              key={tpl.id}
+              onClick={() => onStartFromTemplate?.(tpl)}
+              className="group bg-[#111] border border-[#1a1a1a] hover:border-blue-500/40 rounded-xl p-4 text-left transition-all hover:bg-[#141414]"
+            >
+              <span className="text-2xl block mb-2">{tpl.icon}</span>
+              <p className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors">{tpl.name}</p>
+              <p className="text-[11px] text-neutral-500 mt-1 line-clamp-2">{tpl.description}</p>
+            </button>
+          ))}
+        </div>
+      </section>
 
       {/* Recent Projects */}
       <section className="max-w-5xl mx-auto px-6 md:px-8 pb-16">

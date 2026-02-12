@@ -111,6 +111,7 @@ export type Database = {
       deployments: {
         Row: {
           created_at: string
+          custom_domain: string | null
           id: string
           project_id: string | null
           schema_snapshot: Json | null
@@ -120,6 +121,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          custom_domain?: string | null
           id?: string
           project_id?: string | null
           schema_snapshot?: Json | null
@@ -129,6 +131,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          custom_domain?: string | null
           id?: string
           project_id?: string | null
           schema_snapshot?: Json | null
@@ -141,6 +144,41 @@ export type Database = {
             foreignKeyName: "deployments_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_snapshots: {
+        Row: {
+          created_at: string
+          files_snapshot: Json
+          id: string
+          label: string
+          project_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          files_snapshot?: Json
+          id?: string
+          label?: string
+          project_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          files_snapshot?: Json
+          id?: string
+          label?: string
+          project_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_snapshots_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
           },
