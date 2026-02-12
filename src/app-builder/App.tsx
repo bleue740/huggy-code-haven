@@ -833,6 +833,37 @@ const App: React.FC = () => {
     setShowLanding(false);
   }, []);
 
+  const handleStartWithPrompt = useCallback(async (prompt: string) => {
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    if (!userId) return;
+
+    const defaultSchema = { version: '3.0.0', app_name: 'New Project', components: [] };
+    const { data: inserted } = await supabase
+      .from('projects')
+      .insert({ user_id: userId, name: 'New Project', schema: defaultSchema, code: serializeFiles(DEFAULT_FILES) } as any)
+      .select('id')
+      .single();
+
+    if (!inserted) return;
+
+    setState(prev => ({
+      ...prev,
+      projectId: (inserted as any).id,
+      projectName: 'New Project',
+      files: { ...DEFAULT_FILES },
+      activeFile: 'App.tsx',
+      history: [{ id: Date.now().toString(), role: 'assistant', content: "Nouveau projet créé. Génération en cours…", timestamp: Date.now() }],
+    }));
+    setShowDashboard(false);
+    setShowLanding(false);
+
+    // Defer sending so state settles
+    setTimeout(() => {
+      handleSendMessage(prompt);
+    }, 200);
+  }, [handleSendMessage]);
+
   const handleToggleVisualEdit = useCallback(() => {
     setState(prev => ({ ...prev, isVisualEditMode: !prev.isVisualEditMode }));
   }, []);
@@ -866,7 +897,7 @@ const App: React.FC = () => {
   if (showDashboard) {
     return (
       <div className="dark">
-        <Dashboard onOpenProject={handleOpenProject} onCreateNewProject={handleCreateNewFromDashboard} userEmail={userEmail} />
+        <Dashboard onOpenProject={handleOpenProject} onCreateNewProject={handleCreateNewFromDashboard} onStartWithPrompt={handleStartWithPrompt} userEmail={userEmail} />
       </div>
     );
   }
