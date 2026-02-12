@@ -8,6 +8,9 @@ const TAILWIND_CDN = "https://cdn.tailwindcss.com";
 const BABEL_CDN = "https://unpkg.com/@babel/standalone@7.26.10/babel.min.js";
 const RECHARTS_CDN = "https://unpkg.com/recharts@2.15.4/umd/Recharts.js";
 const LUCIDE_CDN = "https://unpkg.com/lucide-react@0.462.0/dist/umd/lucide-react.js";
+const FRAMER_MOTION_CDN = "https://unpkg.com/framer-motion@11.18.0/dist/framer-motion.js";
+const REACT_ROUTER_CDN = "https://unpkg.com/react-router-dom@6.30.1/dist/umd/react-router-dom.production.min.js";
+const DATE_FNS_CDN = "https://unpkg.com/date-fns@3.6.0/cdn.min.js";
 
 function buildPublishedHtml(code: string): string {
   return `<!DOCTYPE html>
@@ -40,6 +43,13 @@ function buildPublishedHtml(code: string): string {
   <script src="${RECHARTS_CDN}"><\/script>
   <script src="${LUCIDE_CDN}"><\/script>
   <script>if (window.LucideReact) window.lucide = window.LucideReact;<\/script>
+  <script src="${FRAMER_MOTION_CDN}"><\/script>
+  <script src="${DATE_FNS_CDN}"><\/script>
+  <script src="${REACT_ROUTER_CDN}"><\/script>
+  <script>
+    if (window.Motion) window.motion = window.Motion;
+    if (window.ReactRouterDOM) window.ReactRouter = window.ReactRouterDOM;
+  <\/script>
   <script src="${BABEL_CDN}"><\/script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }

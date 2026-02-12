@@ -117,6 +117,38 @@ Rules:
 - Each file must be complete and self-contained within its markers.
 - Before the file markers, write a brief explanation (2-3 sentences) of what you built/changed.
 
+## MULTI-FILE ARCHITECTURE (CRITICAL)
+Each file is loaded in a SEPARATE <script type="text/babel"> tag. Files are loaded in alphabetical order, with App.tsx loaded LAST.
+This means:
+- Component files (e.g. Header.tsx, Sidebar.tsx) are executed BEFORE App.tsx
+- Each component must declare itself as a GLOBAL function (no export/import):
+  \`function Header() { return <div>...</div>; }\`
+- App.tsx can reference any component defined in other files since they're already in scope
+- DO NOT use import/export statements between files
+- DO NOT re-declare the same component in multiple files
+
+Example multi-file project:
+[FILE:Button.tsx]
+function Button({ children, onClick, variant = "primary" }) {
+  const styles = variant === "primary" ? "bg-blue-600 text-white" : "bg-white/5 text-white border border-white/10";
+  return <button onClick={onClick} className={\`px-4 py-2 rounded-xl font-bold \${styles}\`}>{children}</button>;
+}
+[/FILE:Button.tsx]
+
+[FILE:App.tsx]
+const { useState } = React;
+function App() {
+  const [count, setCount] = useState(0);
+  return (
+    <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center">
+      <Button onClick={() => setCount(c => c + 1)}>Clicked {count} times</Button>
+    </div>
+  );
+}
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(React.createElement(App));
+[/FILE:App.tsx]
+
 ## CODE RULES
 1. The code is rendered in a browser with React 18, ReactDOM, Tailwind CSS, and Lucide React already loaded as globals (\`React\`, \`ReactDOM\`, \`lucide\`).
 2. DO NOT use import/export statements. Use destructuring from globals:
@@ -125,7 +157,7 @@ Rules:
    \`const root = ReactDOM.createRoot(document.getElementById('root'));\`
    \`root.render(React.createElement(App));\`
 4. For icons, use: \`const { IconName } = lucide;\` (e.g., \`const { Search, Menu, X, ChevronDown } = lucide;\`)
-5. Other files (components) should just define functions/components. App.tsx will reference them since all files are concatenated.
+5. Other files (components) should just define global functions. App.tsx will reference them since they're loaded first.
 
 ## DESIGN SYSTEM
 - Dark mode by default: bg-[#050505], text-white/text-neutral-200
@@ -157,8 +189,15 @@ Rules:
 ## LIBRARIES AVAILABLE (via CDN globals)
 - React 18 (React, ReactDOM)
 - Tailwind CSS (all utility classes)
-- Lucide React icons (as \`lucide\` global)
+- Lucide React icons (as \`lucide\` global — e.g. \`const { Search, Menu } = lucide;\`)
 - Recharts (as \`Recharts\` global) for charts: LineChart, BarChart, PieChart, AreaChart, etc.
+  Usage: \`const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } = Recharts;\`
+- Framer Motion (as \`motion\` global) for animations:
+  Usage: \`const { motion: m, AnimatePresence } = motion;\` then \`<m.div animate={{opacity:1}} />\`
+- React Router DOM (as \`ReactRouter\` global) for multi-page navigation:
+  Usage: \`const { BrowserRouter, Routes, Route, Link, useNavigate } = ReactRouter;\`
+- date-fns (as \`dateFns\` global) for date manipulation:
+  Usage: \`const formatted = dateFns.format(new Date(), 'PPP');\`
 
 ## RESPONSE FORMAT
 Before the [FILE:...] markers, write a brief explanation (2-3 sentences max) of what you built and key features.
@@ -438,14 +477,22 @@ serve(async (req: Request) => {
       fullSystem += `\n\nCurrent project code:\n\`\`\`tsx\n${projectContext.slice(0, 24000)}\n\`\`\`\nThe user wants to modify or extend this code. Preserve existing functionality unless asked to replace it.`;
     }
 
-    // Deduct credit before streaming
+    // Deduct credit before streaming — use service role client to bypass RLS
     const newCredits = currentCredits - 1;
     const newLifetime = (creditRow?.lifetime_used ?? 0) + 1;
-    await supabase
+    const adminClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const { error: deductError } = await adminClient
       .from("users_credits")
       .update({ credits: newCredits, lifetime_used: newLifetime })
       .eq("user_id", userId);
-    console.log(`[ai-chat] Credit deducted: ${currentCredits} -> ${newCredits}`);
+    if (deductError) {
+      console.error("[ai-chat] Credit deduction FAILED:", deductError);
+    } else {
+      console.log(`[ai-chat] Credit deducted: ${currentCredits} -> ${newCredits}`);
+    }
 
     // Prepare the response with backend hints header
     const responseHeaders: Record<string, string> = {
