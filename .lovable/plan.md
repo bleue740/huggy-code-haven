@@ -1,145 +1,107 @@
 
 
-# Audit complet de Blink AI — Bugs, incohérences et améliorations
+# Correction complete de Blink AI — Bugs, credits, Stripe et coherence
 
-## Problèmes critiques découverts
+## Problemes identifies
 
-### 1. Le système de crédits est cassé (BUG CRITIQUE)
+### 1. Boutons Pricing inactifs (CRITIQUE)
+Les boutons "Passer Pro", "Choisir Business", "Nous contacter" dans `Pricing.tsx` n'ont aucun `onClick`. L'utilisateur clique et rien ne se passe. Aucune integration Stripe n'existe.
 
-La table `users_credits` n'a **aucune politique RLS UPDATE**. Or, dans `ai-chat/index.ts` (ligne 444), le code tente de déduire un crédit via :
+### 2. Page Settings : plan hardcode "Free"
+La page Settings affiche toujours "Free" sans verifier le plan reel de l'utilisateur. Il n'y a pas de table `subscriptions` en base.
 
-```text
-supabase.from("users_credits").update({ credits: newCredits }).eq("user_id", userId)
-```
+### 3. PublishedDeployment : pas de multi-script
+`PublishedDeployment.tsx` concatene encore tous les fichiers dans un seul `<script>`, contrairement a `CodePreview.tsx` qui utilise deja `buildMultiScriptTags`. Les apps publiees cassent si elles utilisent le multi-fichiers.
 
-Mais le client Supabase est initialisé avec le token utilisateur (pas le service role). Sans politique UPDATE, cette requête **échoue silencieusement** : les crédits ne sont jamais déduits. Les utilisateurs ont des crédits infinis.
+### 4. Credits : fonctionnels mais pas de moyen d'en acheter
+La deduction fonctionne (service role key), mais quand les credits tombent a 0, l'utilisateur n'a aucun moyen d'en acheter. Le modal upgrade redirige vers `/pricing` qui ne fait rien.
 
-**Correction** : Ajouter une politique RLS UPDATE sur `users_credits` OU utiliser le `SUPABASE_SERVICE_ROLE_KEY` pour la déduction côté Edge Function.
+### 5. Landing page : stats fictives
+"12,000+ Apps built", "50+ Templates", "99.9% Uptime" sont hardcodes et faux.
 
-### 2. Le bouton "Passer Pro" est factice
-
-Dans `App.tsx` ligne 928, le bouton Upgrade fait juste :
-```text
-setState(prev => ({ ...prev, credits: prev.credits + 50, showUpgradeModal: false }))
-```
-Aucune intégration Stripe. L'utilisateur reçoit 50 crédits gratuits en cliquant. Les boutons de la page Pricing (`Pricing.tsx`) ne font **rien du tout** (pas d'onClick).
-
-### 3. L'URL de déploiement est incohérente
-
-- Le code de publication génère : `/published/${deployment.id}`
-- Mais la route dans `App.tsx` est : `/p/:deploymentId`
-- Résultat : les liens de déploiement mènent à une page 404.
-
-### 4. Ce n'est pas un vrai "full-stack app builder"
-
-Les apps générées tournent dans un **iframe sandbox** avec React/Tailwind chargés par CDN. Cela signifie :
-- Pas de `npm install` ni de packages tiers
-- Pas de React Router dans les apps générées
-- Tous les fichiers sont **concaténés en un seul script** — les imports entre fichiers ne fonctionnent pas réellement
-- Le "multi-fichiers" est cosmétique : tout finit dans un seul `<script type="text/babel">`
-- Pas de vrai backend dans les apps générées (sauf si Supabase externe est connecté)
-
-C'est plus proche d'un CodePen/JSFiddle amélioré que d'un vrai builder comme Lovable.
-
-### 5. `handleNewProject` ne crée pas de nouveau projet en DB
-
-La fonction (ligne 716) réinitialise juste le state local sans créer un nouveau projet dans la base de données. Le projet précédent est écrasé.
+### 6. Pas de table subscriptions
+Il n'existe aucune table pour tracker les abonnements Stripe. La page Settings ne peut pas afficher le vrai plan.
 
 ---
 
-## Plan de correction (par priorité)
+## Plan de correction
 
-### Phase 1 — Corriger les bugs critiques
+### Etape 1 — Creer la table `subscriptions` + Stripe Edge Functions
 
-**A. Réparer la déduction des crédits**
+**Migration SQL** : Creer une table `subscriptions` avec colonnes :
+- `id`, `user_id`, `stripe_customer_id`, `stripe_subscription_id`, `plan` (enum: free/pro/business), `status` (active/canceled/past_due), `current_period_end`, `created_at`, `updated_at`
+- RLS : utilisateurs ne voient que leur propre abonnement
+- Politique SELECT et UPDATE pour authenticated
 
-Fichier : `supabase/functions/ai-chat/index.ts`
+**Edge Function `create-checkout`** :
+- Recoit `planId` (pro/business) et `userId`
+- Cree un customer Stripe si inexistant
+- Cree une session Stripe Checkout avec les prix correspondants
+- Retourne l'URL de redirection
 
-Utiliser le `SUPABASE_SERVICE_ROLE_KEY` pour créer un client admin dédié à la déduction des crédits, séparé du client utilisateur utilisé pour l'auth.
+**Edge Function `stripe-webhook`** :
+- Ecoute `checkout.session.completed` et `customer.subscription.updated/deleted`
+- Met a jour la table `subscriptions`
+- Ajoute les credits correspondants dans `users_credits` (2000 pour Pro, 10000 pour Business)
 
-Fichier : Migration SQL
+### Etape 2 — Connecter Pricing.tsx a Stripe
 
-Ajouter une politique RLS UPDATE restreinte sur `users_credits` en backup (au cas où on revient au client user plus tard).
+Modifier `Pricing.tsx` :
+- Ajouter un `onClick` sur chaque bouton de plan payant
+- Appeler `create-checkout` avec le plan selectionne
+- Rediriger vers Stripe Checkout
+- Bouton "Enterprise" ouvre un mailto ou formulaire de contact
 
-**B. Corriger l'URL de déploiement**
+### Etape 3 — Corriger Settings.tsx
 
-Fichier : `src/app-builder/App.tsx`
+Modifier `Settings.tsx` :
+- Fetch la subscription reelle depuis la table `subscriptions`
+- Afficher le vrai plan (Free/Pro/Business) avec sa date de renouvellement
+- Ajouter un bouton "Manage Subscription" qui redirige vers le portail Stripe (via une edge function `create-portal`)
 
-Changer `const deployUrl = \`/published/\${(deployment as any).id}\`` en `const deployUrl = \`/p/\${(deployment as any).id}\`` pour correspondre à la route définie dans `App.tsx` principal.
+### Etape 4 — Corriger PublishedDeployment.tsx
 
-**C. Corriger handleNewProject**
+Modifier `PublishedDeployment.tsx` :
+- Utiliser `buildMultiScriptTags` (comme dans `CodePreview.tsx`) au lieu de concatener dans un seul `<script>`
+- S'assurer que les apps deployees en multi-fichiers fonctionnent correctement
 
-Fichier : `src/app-builder/App.tsx`
+### Etape 5 — Corriger les stats de la landing page
 
-`handleNewProject` doit réellement créer un nouveau projet en base (comme `handleCreateNewFromDashboard`), pas juste reset le state.
+Modifier `LandingPage.tsx` :
+- Remplacer les stats hardcodees par des compteurs reels via des requetes Supabase (nombre de projets, nombre de deployments)
+- Ou les retirer si les chiffres sont trop bas
 
-### Phase 2 — Système de crédits réel avec Stripe
+### Etape 6 — Corriger le modal Upgrade dans App.tsx
 
-**Objectif** : Les boutons Pricing et Upgrade déclenchent un vrai paiement.
-
-- Activer l'intégration Stripe sur le projet
-- Créer une Edge Function `create-checkout` qui génère une session Stripe Checkout
-- Créer une Edge Function `stripe-webhook` pour écouter les événements `checkout.session.completed` et créditer le compte
-- Modifier `Pricing.tsx` pour que les boutons redirigent vers Stripe Checkout
-- Modifier le modal Upgrade pour rediriger vers Stripe au lieu d'ajouter des crédits fake
-
-### Phase 3 — Améliorer la qualité du code généré
-
-**A. Meilleure gestion multi-fichiers dans l'iframe**
-
-Fichier : `src/app-builder/components/CodePreview.tsx`
-
-Au lieu de concaténer tous les fichiers dans un seul `<script>`, injecter chaque fichier dans un `<script>` séparé avec un ordre de dépendance (composants d'abord, App.tsx en dernier). Cela permet aux composants de se référencer correctement.
-
-**B. Ajouter un system prompt plus robuste**
-
-Fichier : `supabase/functions/ai-chat/index.ts`
-
-- Instruire l'IA à déclarer les composants comme des fonctions globales (pas d'imports)
-- Préciser l'ordre d'exécution : les fichiers hors App.tsx sont chargés en premier
-- Ajouter des exemples concrets de multi-fichiers qui fonctionnent
-
-### Phase 4 — Technologies complémentaires
-
-React est le bon choix pour le runtime des apps générées. Cependant, on peut enrichir les librairies CDN disponibles :
-
-**A. Ajouter des librairies globales supplémentaires**
-
-Fichier : `src/app-builder/components/CodePreview.tsx` et `PublishedDeployment.tsx`
-
-Ajouter via CDN :
-- `date-fns` (manipulation de dates)
-- `framer-motion` (animations avancées)  
-- `@tanstack/react-table` (tableaux avancés)
-- `react-hook-form` + `zod` (validation de formulaires)
-
-Et mettre à jour le system prompt pour informer l'IA de ces nouvelles librairies.
-
-**B. Support de React Router dans les apps générées**
-
-Fichier : `CodePreview.tsx`
-
-Ajouter React Router DOM via CDN. L'IA pourra alors générer des apps multi-pages avec navigation, ce qui rapproche Blink d'un vrai app builder.
+Le modal upgrade redirige deja vers `/pricing`, mais il faut s'assurer que quand l'utilisateur revient apres paiement, ses credits et son plan sont actualises automatiquement (via `refetchCredits` et un nouveau hook `useSubscription`).
 
 ---
 
-## Résumé des fichiers à modifier
+## Fichiers a modifier/creer
 
-| Fichier | Phase | Action |
-|---------|-------|--------|
-| `supabase/functions/ai-chat/index.ts` | 1A, 3B | Modifier — service role pour crédits, améliorer prompt |
-| Migration SQL | 1A | Créer — politique UPDATE sur users_credits |
-| `src/app-builder/App.tsx` | 1B, 1C | Modifier — URL deploy, handleNewProject |
-| `src/pages/Pricing.tsx` | 2 | Modifier — intégration Stripe |
-| `supabase/functions/create-checkout/index.ts` | 2 | Créer — session Stripe |
-| `supabase/functions/stripe-webhook/index.ts` | 2 | Créer — webhook Stripe |
-| `src/app-builder/components/CodePreview.tsx` | 3A, 4A, 4B | Modifier — multi-script, CDN libs |
-| `src/pages/PublishedDeployment.tsx` | 4A | Modifier — mêmes CDN libs |
+| Fichier | Action |
+|---------|--------|
+| Migration SQL (subscriptions) | Creer |
+| `supabase/functions/create-checkout/index.ts` | Creer |
+| `supabase/functions/stripe-webhook/index.ts` | Creer |
+| `supabase/functions/create-portal/index.ts` | Creer |
+| `src/pages/Pricing.tsx` | Modifier |
+| `src/pages/Settings.tsx` | Modifier |
+| `src/pages/PublishedDeployment.tsx` | Modifier |
+| `src/app-builder/components/LandingPage.tsx` | Modifier |
+| `src/app-builder/App.tsx` | Modifier (modal upgrade) |
 
-## Ordre d'implémentation
+## Pre-requis
 
-1. Phase 1 (bugs critiques) — les crédits ne sont pas déduits, les déploiements 404, newProject casse les données
-2. Phase 2 (Stripe) — monétisation réelle
-3. Phase 3 (qualité code) — meilleur multi-fichiers
-4. Phase 4 (technologies) — enrichir l'écosystème des apps générées
+L'integration Stripe doit etre activee sur le projet (cle secrete Stripe necessaire).
+
+## Ordre d'implementation
+
+1. Activer Stripe sur le projet
+2. Migration SQL (table subscriptions)
+3. Edge Functions Stripe (create-checkout, stripe-webhook, create-portal)
+4. Pricing.tsx + Settings.tsx (UI connectee)
+5. PublishedDeployment.tsx (fix multi-fichiers)
+6. LandingPage.tsx (stats reelles)
+7. App.tsx (modal upgrade)
 
