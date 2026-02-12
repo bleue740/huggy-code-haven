@@ -1,180 +1,145 @@
 
 
-# Multi-fichiers intelligent + UX d'edition type Lovable + Agent conversationnel
+# Audit complet de Blink AI — Bugs, incohérences et améliorations
 
-## Diagnostic des 4 problemes identifies
+## Problèmes critiques découverts
 
-### 1. Mono-fichier : tout ecrase dans App.tsx
-Actuellement (ligne 424 de App.tsx), le code extrait va toujours dans `files['App.tsx']`. L'IA ne peut ni creer ni modifier d'autres fichiers. Le file tree existe mais n'est pas connecte au flux IA.
+### 1. Le système de crédits est cassé (BUG CRITIQUE)
 
-### 2. Pas d'indicateurs "Thinking / Editing / Edited"
-Le Sidebar affiche juste un shimmer generique avec "Thinking..." ou un status texte. Aucune visibilite sur les fichiers en cours de modification, les etapes, ou un "Edited X files" final comme Lovable.
+La table `users_credits` n'a **aucune politique RLS UPDATE**. Or, dans `ai-chat/index.ts` (ligne 444), le code tente de déduire un crédit via :
 
-### 3. Agent mode = toujours du code, jamais de discussion
-En mode Agent, l'IA est forcee de generer un bloc ```tsx. Impossible de poser une question ou discuter sans que l'IA essaye de coder. Il manque la detection intelligente : "est-ce que l'utilisateur veut du code ou une reponse ?"
+```text
+supabase.from("users_credits").update({ credits: newCredits }).eq("user_id", userId)
+```
 
-### 4. Code dans le flux de conversation
-Le code brut est genere dans le stream SSE, melange avec l'explication. Il est ensuite strip du chat (bien), mais la reponse textuelle est souvent trop courte car l'IA passe 90% de sa reponse a ecrire du code.
+Mais le client Supabase est initialisé avec le token utilisateur (pas le service role). Sans politique UPDATE, cette requête **échoue silencieusement** : les crédits ne sont jamais déduits. Les utilisateurs ont des crédits infinis.
+
+**Correction** : Ajouter une politique RLS UPDATE sur `users_credits` OU utiliser le `SUPABASE_SERVICE_ROLE_KEY` pour la déduction côté Edge Function.
+
+### 2. Le bouton "Passer Pro" est factice
+
+Dans `App.tsx` ligne 928, le bouton Upgrade fait juste :
+```text
+setState(prev => ({ ...prev, credits: prev.credits + 50, showUpgradeModal: false }))
+```
+Aucune intégration Stripe. L'utilisateur reçoit 50 crédits gratuits en cliquant. Les boutons de la page Pricing (`Pricing.tsx`) ne font **rien du tout** (pas d'onClick).
+
+### 3. L'URL de déploiement est incohérente
+
+- Le code de publication génère : `/published/${deployment.id}`
+- Mais la route dans `App.tsx` est : `/p/:deploymentId`
+- Résultat : les liens de déploiement mènent à une page 404.
+
+### 4. Ce n'est pas un vrai "full-stack app builder"
+
+Les apps générées tournent dans un **iframe sandbox** avec React/Tailwind chargés par CDN. Cela signifie :
+- Pas de `npm install` ni de packages tiers
+- Pas de React Router dans les apps générées
+- Tous les fichiers sont **concaténés en un seul script** — les imports entre fichiers ne fonctionnent pas réellement
+- Le "multi-fichiers" est cosmétique : tout finit dans un seul `<script type="text/babel">`
+- Pas de vrai backend dans les apps générées (sauf si Supabase externe est connecté)
+
+C'est plus proche d'un CodePen/JSFiddle amélioré que d'un vrai builder comme Lovable.
+
+### 5. `handleNewProject` ne crée pas de nouveau projet en DB
+
+La fonction (ligne 716) réinitialise juste le state local sans créer un nouveau projet dans la base de données. Le projet précédent est écrasé.
 
 ---
 
-## Plan d'implementation
+## Plan de correction (par priorité)
 
-### Phase A — Protocole multi-fichiers dans le prompt IA
+### Phase 1 — Corriger les bugs critiques
 
-**Objectif** : L'IA peut creer/modifier/supprimer plusieurs fichiers en une seule reponse.
+**A. Réparer la déduction des crédits**
 
-**Fichier** : `supabase/functions/ai-chat/index.ts`
+Fichier : `supabase/functions/ai-chat/index.ts`
 
-Modifier le `BASE_SYSTEM_PROMPT` pour instruire l'IA a utiliser un format structure :
+Utiliser le `SUPABASE_SERVICE_ROLE_KEY` pour créer un client admin dédié à la déduction des crédits, séparé du client utilisateur utilisé pour l'auth.
 
-```text
-## MULTI-FILE OUTPUT FORMAT
-When generating code, wrap EACH file in markers:
+Fichier : Migration SQL
 
-[FILE:App.tsx]
-// code here
-[/FILE:App.tsx]
+Ajouter une politique RLS UPDATE restreinte sur `users_credits` en backup (au cas où on revient au client user plus tard).
 
-[FILE:Header.tsx]
-// code here  
-[/FILE:Header.tsx]
+**B. Corriger l'URL de déploiement**
 
-[FILE_DELETE:OldComponent.tsx]
+Fichier : `src/app-builder/App.tsx`
 
-You can create new files, modify existing ones, or delete files.
-Always include App.tsx as the main entry point.
-```
+Changer `const deployUrl = \`/published/\${(deployment as any).id}\`` en `const deployUrl = \`/p/\${(deployment as any).id}\`` pour correspondre à la route définie dans `App.tsx` principal.
 
-**Fichier** : `src/app-builder/hooks/useAIChat.ts`
+**C. Corriger handleNewProject**
 
-Nouvelle fonction `extractMultiFileFromResponse()` qui :
-- Parse les marqueurs `[FILE:name]...[/FILE:name]` 
-- Parse les marqueurs `[FILE_DELETE:name]`
-- Retourne `{ files: Record<string, string>, deletedFiles: string[], explanation: string }`
-- Fallback sur l'ancien extracteur si pas de marqueurs (retrocompatibilite)
+Fichier : `src/app-builder/App.tsx`
 
-**Fichier** : `src/app-builder/App.tsx`
+`handleNewProject` doit réellement créer un nouveau projet en base (comme `handleCreateNewFromDashboard`), pas juste reset le state.
 
-Dans `onDone` (Agent mode) :
-- Utiliser `extractMultiFileFromResponse` au lieu de `extractCodeFromResponse`
-- Merger les fichiers retournes dans `state.files` (pas ecraser, merger)
-- Supprimer les fichiers marques `FILE_DELETE`
-- Stocker la liste des fichiers modifies pour les indicateurs UI
+### Phase 2 — Système de crédits réel avec Stripe
 
-### Phase B — Indicateurs "Thinking / Editing file / Edited" 
+**Objectif** : Les boutons Pricing et Upgrade déclenchent un vrai paiement.
 
-**Objectif** : Reproduire l'experience Lovable avec des etapes visibles pendant la generation.
+- Activer l'intégration Stripe sur le projet
+- Créer une Edge Function `create-checkout` qui génère une session Stripe Checkout
+- Créer une Edge Function `stripe-webhook` pour écouter les événements `checkout.session.completed` et créditer le compte
+- Modifier `Pricing.tsx` pour que les boutons redirigent vers Stripe Checkout
+- Modifier le modal Upgrade pour rediriger vers Stripe au lieu d'ajouter des crédits fake
 
-**Fichier** : `src/app-builder/types.ts`
+### Phase 3 — Améliorer la qualité du code généré
 
-Ajouter a `AppState` :
-```text
-generationSteps: GenerationStep[]
-```
+**A. Meilleure gestion multi-fichiers dans l'iframe**
 
-Nouveau type :
-```text
-GenerationStep {
-  id: string
-  type: 'thinking' | 'editing' | 'edited' | 'error'
-  label: string        // ex: "Analyzing request..."
-  fileName?: string    // ex: "Header.tsx"
-  status: 'active' | 'done' | 'error'
-  startedAt: number
-  completedAt?: number
-}
-```
+Fichier : `src/app-builder/components/CodePreview.tsx`
 
-**Fichier** : `src/app-builder/components/GenerationSteps.tsx` (NOUVEAU)
+Au lieu de concaténer tous les fichiers dans un seul `<script>`, injecter chaque fichier dans un `<script>` séparé avec un ordre de dépendance (composants d'abord, App.tsx en dernier). Cela permet aux composants de se référencer correctement.
 
-Composant qui affiche les etapes en temps reel :
-- Icone spinner animee pour l'etape active
-- Check vert pour les etapes terminees
-- Nom du fichier en cours d'edition
-- Timer ecoulé par etape
-- Style : cards compactes avec bordure gauche coloree (bleu = thinking, orange = editing, vert = done)
+**B. Ajouter un system prompt plus robuste**
 
-Exemple visuel :
-```text
-[spinner] Analyzing your request...              2s
-[check]   Editing App.tsx                         1s  
-[check]   Creating Header.tsx                     1s
-[check]   Creating Footer.tsx                     0s
-[spinner] Applying changes to preview...          -
-```
+Fichier : `supabase/functions/ai-chat/index.ts`
 
-**Fichier** : `src/app-builder/App.tsx`
+- Instruire l'IA à déclarer les composants comme des fonctions globales (pas d'imports)
+- Préciser l'ordre d'exécution : les fichiers hors App.tsx sont chargés en premier
+- Ajouter des exemples concrets de multi-fichiers qui fonctionnent
 
-Pendant le streaming :
-1. Au debut : ajouter step "Thinking" (type='thinking', status='active')
-2. Quand on detecte `[FILE:X.tsx]` dans le stream : step "Editing X.tsx" 
-3. Quand on detecte `[/FILE:X.tsx]` : marquer le step comme done
-4. A la fin : step "Applied N files" (type='edited')
+### Phase 4 — Technologies complémentaires
 
-**Fichier** : `src/app-builder/components/Sidebar.tsx`
+React est le bon choix pour le runtime des apps générées. Cependant, on peut enrichir les librairies CDN disponibles :
 
-Remplacer le bloc shimmer generique (lignes 425-471) par le composant `<GenerationSteps>` pendant `state.isGenerating`.
+**A. Ajouter des librairies globales supplémentaires**
 
-### Phase C — Agent intelligent : code OU discussion
+Fichier : `src/app-builder/components/CodePreview.tsx` et `PublishedDeployment.tsx`
 
-**Objectif** : En mode Agent, l'IA decide si elle doit coder ou simplement repondre.
+Ajouter via CDN :
+- `date-fns` (manipulation de dates)
+- `framer-motion` (animations avancées)  
+- `@tanstack/react-table` (tableaux avancés)
+- `react-hook-form` + `zod` (validation de formulaires)
 
-**Fichier** : `supabase/functions/ai-chat/index.ts`
+Et mettre à jour le system prompt pour informer l'IA de ces nouvelles librairies.
 
-Ajouter au `BASE_SYSTEM_PROMPT` :
+**B. Support de React Router dans les apps générées**
 
-```text
-## RESPONSE DECISION
-Before responding, decide:
-- If the user asks to BUILD, CREATE, MODIFY, ADD, FIX something → generate code with [FILE:...] markers
-- If the user asks a QUESTION, wants EXPLANATION, says "hello", etc. → respond in natural language WITHOUT any [FILE:...] markers
+Fichier : `CodePreview.tsx`
 
-You can have a conversation in Agent mode. Not every message needs code.
-```
-
-**Fichier** : `src/app-builder/App.tsx`
-
-Dans `onDone` (Agent mode) :
-- Si `extractMultiFileFromResponse` ne trouve aucun fichier → traiter comme une reponse textuelle (pas de code applied, pas d'injection preview)
-- Cela permet la discussion libre en mode Agent
-
-### Phase D — Separation code/explication dans le stream
-
-**Objectif** : L'explication est riche et le code est invisible dans le chat.
-
-Avec le nouveau format `[FILE:...]`, le code n'est plus dans des blocs ```tsx mais entre des marqueurs. La fonction de nettoyage strip les marqueurs `[FILE:...]...[/FILE:...]` et `[FILE_DELETE:...]` du texte affiche. 
-
-**Fichier** : `src/app-builder/components/ChatMessage.tsx`
-
-Mettre a jour `stripCodeBlocks` pour aussi supprimer les blocs `[FILE:...]...[/FILE:...]` :
-```text
-stripCodeBlocks(text):
-  1. Remove ```lang...``` blocks (existant)
-  2. Remove [FILE:name]...[/FILE:name] blocks (nouveau)
-  3. Remove [FILE_DELETE:name] lines (nouveau)
-```
-
-Le resultat : le chat ne montre QUE l'explication textuelle + l'indicateur "Code applique — N fichiers modifies".
+Ajouter React Router DOM via CDN. L'IA pourra alors générer des apps multi-pages avec navigation, ce qui rapproche Blink d'un vrai app builder.
 
 ---
 
-## Resume des fichiers
+## Résumé des fichiers à modifier
 
-| Fichier | Action | Phase |
-|---------|--------|-------|
-| `supabase/functions/ai-chat/index.ts` | Modifier | A, C |
-| `src/app-builder/hooks/useAIChat.ts` | Modifier | A |
-| `src/app-builder/App.tsx` | Modifier | A, B, C |
-| `src/app-builder/types.ts` | Modifier | B |
-| `src/app-builder/components/GenerationSteps.tsx` | Creer | B |
-| `src/app-builder/components/Sidebar.tsx` | Modifier | B |
-| `src/app-builder/components/ChatMessage.tsx` | Modifier | D |
+| Fichier | Phase | Action |
+|---------|-------|--------|
+| `supabase/functions/ai-chat/index.ts` | 1A, 3B | Modifier — service role pour crédits, améliorer prompt |
+| Migration SQL | 1A | Créer — politique UPDATE sur users_credits |
+| `src/app-builder/App.tsx` | 1B, 1C | Modifier — URL deploy, handleNewProject |
+| `src/pages/Pricing.tsx` | 2 | Modifier — intégration Stripe |
+| `supabase/functions/create-checkout/index.ts` | 2 | Créer — session Stripe |
+| `supabase/functions/stripe-webhook/index.ts` | 2 | Créer — webhook Stripe |
+| `src/app-builder/components/CodePreview.tsx` | 3A, 4A, 4B | Modifier — multi-script, CDN libs |
+| `src/pages/PublishedDeployment.tsx` | 4A | Modifier — mêmes CDN libs |
 
-## Ordre d'implementation
+## Ordre d'implémentation
 
-1. Phase A (multi-fichiers) — fondation critique
-2. Phase D (nettoyage chat) — depend de A
-3. Phase B (indicateurs UI) — depend de A
-4. Phase C (agent conversationnel) — independant, rapide
+1. Phase 1 (bugs critiques) — les crédits ne sont pas déduits, les déploiements 404, newProject casse les données
+2. Phase 2 (Stripe) — monétisation réelle
+3. Phase 3 (qualité code) — meilleur multi-fichiers
+4. Phase 4 (technologies) — enrichir l'écosystème des apps générées
 
