@@ -12,7 +12,22 @@ const FRAMER_MOTION_CDN = "https://unpkg.com/framer-motion@11.18.0/dist/framer-m
 const REACT_ROUTER_CDN = "https://unpkg.com/react-router-dom@6.30.1/dist/umd/react-router-dom.production.min.js";
 const DATE_FNS_CDN = "https://unpkg.com/date-fns@3.6.0/cdn.min.js";
 
-function buildPublishedHtml(code: string): string {
+// Same multi-script builder as CodePreview
+function buildMultiScriptTags(files?: Record<string, string>, fallbackCode?: string): string {
+  if (!files || Object.keys(files).length <= 1) {
+    const code = files?.['App.tsx'] || fallbackCode || '';
+    return `<script type="text/babel" data-type="module">\n    ${code}\n  </script>`;
+  }
+  const entries = Object.entries(files);
+  const appEntry = entries.find(([n]) => n === 'App.tsx');
+  const others = entries.filter(([n]) => n !== 'App.tsx').sort(([a], [b]) => a.localeCompare(b));
+  const ordered = [...others, ...(appEntry ? [appEntry] : [])];
+  return ordered.map(([name, code]) =>
+    `<!-- ${name} -->\n  <script type="text/babel" data-type="module">\n    ${code}\n  </script>`
+  ).join('\n  ');
+}
+
+function buildPublishedHtml(files: Record<string, string> | null, fallbackCode: string): string {
   return `<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
@@ -60,9 +75,7 @@ function buildPublishedHtml(code: string): string {
 </head>
 <body>
   <div id="root"></div>
-  <script type="text/babel" data-type="module">
-    ${code}
-  <\/script>
+  ${buildMultiScriptTags(files, fallbackCode)}
   <script>
     window.addEventListener('error', function(e) {
       var root = document.getElementById('root');
@@ -75,37 +88,33 @@ function buildPublishedHtml(code: string): string {
 </html>`;
 }
 
-function extractCode(snapshot: any): string | null {
-  if (!snapshot) return null;
+function extractFilesAndCode(snapshot: any): { files: Record<string, string> | null; code: string } {
+  if (!snapshot) return { files: null, code: '' };
+
   // New format: { code, files }
-  if (typeof snapshot === 'object' && snapshot.files) {
-    const files = snapshot.files as Record<string, string>;
-    const entries = Object.entries(files);
-    const app = entries.find(([n]) => n === 'App.tsx');
-    const others = entries.filter(([n]) => n !== 'App.tsx').sort(([a], [b]) => a.localeCompare(b));
-    return [...others.map(([, c]) => c), app?.[1] ?? ''].join('\n\n');
+  if (typeof snapshot === 'object' && snapshot.files && typeof snapshot.files === 'object') {
+    return { files: snapshot.files as Record<string, string>, code: '' };
   }
-  // Old format: raw code string
+
+  // Old format: raw code string in snapshot.code
   if (typeof snapshot === 'object' && typeof snapshot.code === 'string') {
     try {
       const parsed = JSON.parse(snapshot.code);
       if (parsed?.__multifile && typeof parsed.files === 'object') {
-        const entries = Object.entries(parsed.files as Record<string, string>);
-        const app = entries.find(([n]) => n === 'App.tsx');
-        const others = entries.filter(([n]) => n !== 'App.tsx').sort(([a], [b]) => a.localeCompare(b));
-        return [...others.map(([, c]) => c), app?.[1] ?? ''].join('\n\n');
+        return { files: parsed.files as Record<string, string>, code: '' };
       }
-      return snapshot.code;
     } catch {
-      return snapshot.code;
+      // not JSON, use as raw code
     }
+    return { files: null, code: snapshot.code };
   }
-  return null;
+
+  return { files: null, code: '' };
 }
 
 export default function PublishedDeploymentPage() {
   const { deploymentId } = useParams();
-  const [code, setCode] = useState<string | null>(null);
+  const [filesData, setFilesData] = useState<{ files: Record<string, string> | null; code: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -123,10 +132,10 @@ export default function PublishedDeploymentPage() {
           .maybeSingle();
         if (error) throw error;
         if (!data) throw new Error("Deployment not found");
-        
-        const extractedCode = extractCode((data as any).schema_snapshot);
-        if (!extractedCode) throw new Error("No code found in deployment");
-        if (mounted) setCode(extractedCode);
+
+        const extracted = extractFilesAndCode((data as any).schema_snapshot);
+        if (!extracted.files && !extracted.code) throw new Error("No code found in deployment");
+        if (mounted) setFilesData(extracted);
       } catch (e: any) {
         if (mounted) setError(e?.message ?? "Not found");
       } finally {
@@ -137,9 +146,9 @@ export default function PublishedDeploymentPage() {
   }, [deploymentId]);
 
   const iframeSrcDoc = useMemo(() => {
-    if (!code) return null;
-    return buildPublishedHtml(code);
-  }, [code]);
+    if (!filesData) return null;
+    return buildPublishedHtml(filesData.files, filesData.code);
+  }, [filesData]);
 
   if (isLoading) {
     return (

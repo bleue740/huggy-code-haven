@@ -1,16 +1,20 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, Zap } from "lucide-react";
+import { ArrowLeft, Check, Zap, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const PLANS = [
   {
+    id: "free",
     name: "Free",
     description: "Pour découvrir et expérimenter",
     monthlyPrice: 0,
     yearlyPrice: 0,
-    cta: "Commencer gratuitement",
-    ctaStyle: "border border-[#222] text-white hover:bg-white/5",
+    cta: "Plan actuel",
+    ctaStyle: "border border-[#222] text-neutral-500 cursor-default",
     highlight: false,
+    disabled: true,
     features: [
       "1 projet actif",
       "100 crédits / mois",
@@ -20,6 +24,7 @@ const PLANS = [
     ],
   },
   {
+    id: "pro",
     name: "Pro",
     badge: "Populaire",
     description: "Pour les créateurs sérieux",
@@ -28,6 +33,7 @@ const PLANS = [
     cta: "Passer Pro",
     ctaStyle: "bg-blue-600 text-white hover:bg-blue-700",
     highlight: true,
+    disabled: false,
     featuresIntro: "Tout le Free, plus :",
     features: [
       "Projets illimités",
@@ -40,6 +46,7 @@ const PLANS = [
     ],
   },
   {
+    id: "business",
     name: "Business",
     description: "Pour les équipes en croissance",
     monthlyPrice: 79,
@@ -47,6 +54,7 @@ const PLANS = [
     cta: "Choisir Business",
     ctaStyle: "border border-[#222] text-white hover:bg-white/5",
     highlight: false,
+    disabled: false,
     featuresIntro: "Tout le Pro, plus :",
     features: [
       "10 000 crédits / mois",
@@ -59,6 +67,7 @@ const PLANS = [
     ],
   },
   {
+    id: "enterprise",
     name: "Enterprise",
     description: "Solutions sur mesure",
     monthlyPrice: null,
@@ -66,6 +75,7 @@ const PLANS = [
     cta: "Nous contacter",
     ctaStyle: "border border-[#222] text-white hover:bg-white/5",
     highlight: false,
+    disabled: false,
     featuresIntro: "Tout le Business, plus :",
     features: [
       "Crédits illimités",
@@ -81,6 +91,34 @@ const PLANS = [
 export default function PricingPage() {
   const navigate = useNavigate();
   const [isYearly, setIsYearly] = useState(true);
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+
+  const handleSelectPlan = async (planId: string) => {
+    if (planId === "free") return;
+
+    if (planId === "enterprise") {
+      window.location.href = "mailto:contact@blink.ai?subject=Blink Enterprise";
+      return;
+    }
+
+    // Stripe not yet integrated — save intent and notify
+    setLoadingPlan(planId);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigate("/auth");
+        return;
+      }
+      toast.info("Le paiement Stripe sera bientôt disponible. Votre intérêt a été noté !", {
+        description: `Plan sélectionné : ${planId === "pro" ? "Pro" : "Business"}`,
+        duration: 5000,
+      });
+    } catch {
+      toast.error("Une erreur est survenue");
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-[#050505] text-white">
@@ -137,6 +175,7 @@ export default function PricingPage() {
       <section className="max-w-6xl mx-auto px-6 pb-24 grid md:grid-cols-2 lg:grid-cols-4 gap-5">
         {PLANS.map((plan) => {
           const price = isYearly ? plan.yearlyPrice : plan.monthlyPrice;
+          const isLoading = loadingPlan === plan.id;
 
           return (
             <div
@@ -175,8 +214,11 @@ export default function PricingPage() {
               </div>
 
               <button
-                className={`mt-6 w-full py-2.5 rounded-xl font-bold text-sm transition-colors ${plan.ctaStyle}`}
+                onClick={() => handleSelectPlan(plan.id)}
+                disabled={plan.disabled || isLoading}
+                className={`mt-6 w-full py-2.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 ${plan.ctaStyle} ${plan.disabled ? 'opacity-50' : ''}`}
               >
+                {isLoading && <Loader2 size={14} className="animate-spin" />}
                 {plan.cta}
               </button>
 

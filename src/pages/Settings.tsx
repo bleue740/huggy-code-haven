@@ -14,10 +14,17 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+interface SubscriptionInfo {
+  plan: string;
+  status: string;
+  current_period_end: string | null;
+}
+
 const Settings: React.FC = () => {
   const navigate = useNavigate();
   const [userEmail, setUserEmail] = useState<string>('');
   const [credits, setCredits] = useState<number | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -30,12 +37,25 @@ const Settings: React.FC = () => {
       }
       setUserEmail(user.email ?? '');
 
-      const { data } = await supabase
+      // Fetch credits
+      const { data: creditsData } = await supabase
         .from('users_credits')
         .select('credits')
         .eq('user_id', user.id)
         .single();
-      if (data) setCredits(data.credits);
+      if (creditsData) setCredits(creditsData.credits);
+
+      // Fetch subscription
+      const { data: subData } = await supabase
+        .from('subscriptions')
+        .select('plan, status, current_period_end')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (subData) {
+        setSubscription(subData as SubscriptionInfo);
+      } else {
+        setSubscription({ plan: 'free', status: 'active', current_period_end: null });
+      }
     })();
   }, [navigate]);
 
@@ -61,6 +81,18 @@ const Settings: React.FC = () => {
       setShowDeleteDialog(false);
     }
   };
+
+  const planLabel = subscription?.plan
+    ? subscription.plan.charAt(0).toUpperCase() + subscription.plan.slice(1)
+    : 'Free';
+
+  const statusLabel = subscription?.status === 'active' ? 'Active' :
+    subscription?.status === 'canceled' ? 'Annulé' :
+    subscription?.status === 'past_due' ? 'Paiement en retard' : 'Active';
+
+  const statusColor = subscription?.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' :
+    subscription?.status === 'canceled' ? 'bg-red-500/20 text-red-400' :
+    'bg-neutral-800 text-neutral-400';
 
   return (
     <div className="min-h-screen bg-[#050505] text-white">
@@ -106,18 +138,23 @@ const Settings: React.FC = () => {
             <div>
               <p className="text-sm text-neutral-300">Current Plan</p>
               <p className="text-lg font-bold text-white flex items-center gap-2 mt-0.5">
-                Free
-                <span className="text-[10px] font-bold uppercase tracking-wider bg-neutral-800 text-neutral-400 px-2 py-0.5 rounded-full">
-                  Active
+                {planLabel}
+                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${statusColor}`}>
+                  {statusLabel}
                 </span>
               </p>
+              {subscription?.current_period_end && subscription.plan !== 'free' && (
+                <p className="text-xs text-neutral-500 mt-1">
+                  Renouvellement : {new Date(subscription.current_period_end).toLocaleDateString('fr-FR')}
+                </p>
+              )}
             </div>
             <button
               onClick={() => navigate('/pricing')}
               className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white text-sm font-bold rounded-xl transition-all active:scale-95"
             >
               <Crown size={14} />
-              Upgrade
+              {subscription?.plan === 'free' ? 'Upgrade' : 'Gérer'}
             </button>
           </div>
           {credits !== null && (
