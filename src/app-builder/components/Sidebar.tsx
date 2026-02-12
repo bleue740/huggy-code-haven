@@ -13,6 +13,7 @@ import { BackendConnectCard } from './BackendConnectCard';
 import { ChatMessage } from './ChatMessage';
 import { FileTree } from './FileTree';
 import { CodeEditor } from './CodeEditor';
+import { GenerationSteps } from './GenerationSteps';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { useNavigate } from 'react-router-dom';
 
@@ -433,7 +434,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                       <Bot size={14} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-2">
                         <span className={`text-[10px] font-bold uppercase tracking-tight ${
                           (state.chatMode || 'agent') === 'plan' ? 'text-purple-400' : 'text-blue-400'
                         }`}>
@@ -443,28 +444,28 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                           (state.chatMode || 'agent') === 'plan' ? 'text-purple-400' : 'text-blue-400'
                         }`}>{elapsedSeconds}s</span>
                       </div>
-                      <div className="relative bg-gradient-to-br from-[#1a1a1a] to-[#151515] border border-[#333] rounded-xl p-4 shadow-xl overflow-hidden">
-                        {(state.chatMode || 'agent') === 'agent' && (
-                          <div className="absolute inset-0 opacity-20 pointer-events-none p-4 space-y-2">
-                            <ShimmerLine width="w-3/4" />
-                            <ShimmerLine width="w-1/2" delay={100} />
-                            <ShimmerLine width="w-2/3" delay={200} />
+
+                      {/* Generation Steps */}
+                      {(state.generationSteps?.length ?? 0) > 0 ? (
+                        <GenerationSteps steps={state.generationSteps || []} elapsedSeconds={elapsedSeconds} />
+                      ) : (
+                        <div className="relative bg-gradient-to-br from-[#1a1a1a] to-[#151515] border border-[#333] rounded-xl p-4 shadow-xl overflow-hidden">
+                          <div className="relative flex items-center gap-3">
+                            <TypingDots />
+                            <span className="text-[13px] text-neutral-200 font-medium">
+                              {state.aiStatusText || ((state.chatMode || 'agent') === 'plan' ? 'Réflexion…' : 'Thinking...')}
+                            </span>
                           </div>
-                        )}
-                        <div className="relative flex items-center gap-3 mb-2">
-                          <TypingDots />
-                          <span className="text-[13px] text-neutral-200 font-medium">
-                            {state.aiStatusText || ((state.chatMode || 'agent') === 'plan' ? 'Réflexion…' : 'Thinking...')}
-                          </span>
                         </div>
-                        {onStop && (
-                          <div className="relative flex justify-end mt-4">
-                            <button onClick={onStop} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-semibold bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-all hover:scale-[1.02]">
-                              <Square size={12} /> Stop
-                            </button>
-                          </div>
-                        )}
-                      </div>
+                      )}
+
+                      {onStop && (
+                        <div className="flex justify-end mt-3">
+                          <button onClick={onStop} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-semibold bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-all hover:scale-[1.02]">
+                            <Square size={12} /> Stop
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

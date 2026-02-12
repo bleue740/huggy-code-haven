@@ -8,9 +8,13 @@ interface ChatMessageProps {
   onApprovePlan?: (plan: string) => void;
 }
 
-/** Strip fenced code blocks (```lang ... ```) from text */
+/** Strip fenced code blocks and [FILE:...] markers from text */
 function stripCodeBlocks(text: string): string {
-  return text.replace(/```[\w]*\s*\n[\s\S]*?```/g, '').trim();
+  return text
+    .replace(/```[\w]*\s*\n[\s\S]*?```/g, '')
+    .replace(/\[FILE:[\w.\-/]+\]\s*\n[\s\S]*?\[\/FILE:[\w.\-/]+\]/g, '')
+    .replace(/\[FILE_DELETE:[\w.\-/]+\]/g, '')
+    .trim();
 }
 
 /** Very lightweight markdown-ish renderer — no dependencies */
