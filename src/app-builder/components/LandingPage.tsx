@@ -156,11 +156,28 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
     { name: 'Team', price: '$79', perks: ['Roles & permissions', 'Collaboration', 'Advanced audit'], highlight: false },
   ];
 
-  const stats = [
-    { value: '12,000+', label: 'Apps built' },
-    { value: '50+', label: 'Templates' },
-    { value: '99.9%', label: 'Uptime' },
-  ];
+  const [dynamicStats, setDynamicStats] = useState([
+    { value: '—', label: 'Apps built' },
+    { value: '—', label: 'Deployments' },
+    { value: '100%', label: 'Open source' },
+  ]);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const [{ count: projectCount }, { count: deployCount }] = await Promise.all([
+          supabase.from('projects').select('id', { count: 'exact', head: true }),
+          supabase.from('deployments').select('id', { count: 'exact', head: true }),
+        ]);
+        setDynamicStats([
+          { value: `${projectCount ?? 0}+`, label: 'Apps built' },
+          { value: `${deployCount ?? 0}+`, label: 'Deployments' },
+          { value: '100%', label: 'Open source' },
+        ]);
+      } catch { /* keep defaults */ }
+    };
+    fetchStats();
+  }, []);
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -310,7 +327,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
       <AnimatedSection>
         <section className="max-w-5xl mx-auto px-6 py-16">
           <div className="grid grid-cols-3 gap-8 text-center">
-            {stats.map((s, i) => (
+            {dynamicStats.map((s, i) => (
               <div key={i}>
                 <div className="text-4xl md:text-5xl font-black text-white">{s.value}</div>
                 <div className="text-neutral-500 text-sm font-semibold mt-2 uppercase tracking-wider">{s.label}</div>
