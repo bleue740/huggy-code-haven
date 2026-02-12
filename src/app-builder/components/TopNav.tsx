@@ -14,6 +14,7 @@ import {
   Github,
   Link2,
   Download,
+  History,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -23,6 +24,7 @@ interface TopNavProps {
   onRunSecurity?: () => void;
   onExportZip?: () => void;
   onToggleCodeView?: () => void;
+  onShowVersionHistory?: () => void;
   isCodeView?: boolean;
   isGenerating?: boolean;
   projectName?: string;
@@ -34,6 +36,7 @@ export const TopNav: React.FC<TopNavProps> = ({
   onRunSecurity,
   onExportZip,
   onToggleCodeView,
+  onShowVersionHistory,
   isCodeView,
   isGenerating,
   projectName = 'New Project',
@@ -85,6 +88,11 @@ export const TopNav: React.FC<TopNavProps> = ({
           onClick={() => toast.info('Theme Panel coming soon!')}
           icon={<Palette size={18} />}
           title="Theme Engine"
+        />
+        <IconButton
+          onClick={onShowVersionHistory}
+          icon={<History size={18} />}
+          title="Version History"
         />
       </div>
 

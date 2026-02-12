@@ -4,6 +4,7 @@ import { TopNav } from './components/TopNav';
 import { CodePreview } from './components/CodePreview';
 import { LandingPage } from './components/LandingPage';
 import { Dashboard } from './components/Dashboard';
+import { VersionHistory } from './components/VersionHistory';
 import { ConsolePanel } from './components/ConsolePanel';
 import { useConsoleCapture } from './hooks/useConsoleCapture';
 import { useCredits } from './hooks/useCredits';
@@ -12,6 +13,7 @@ import { AppState, Message, AISuggestion, SecurityResult, BackendNeed, Generatio
 import { analyzeCodeSecurity } from './utils/securityAnalyzer';
 import { exportProjectAsZip } from './utils/exportZip';
 import { X, CheckCircle2, Zap, Rocket, ShieldCheck, AlertTriangle, Info, Loader2, History } from 'lucide-react';
+import type { ProjectTemplate } from './data/templates';
 import { SupabaseConnectModal } from './components/SupabaseConnectModal';
 import { FirecrawlConnectCard } from './components/FirecrawlConnectCard';
 import { useNavigate } from "react-router-dom";
@@ -118,6 +120,7 @@ const App: React.FC = () => {
   });
 
   const [showFirecrawlModal, setShowFirecrawlModal] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
 
   useEffect(() => {
     if (!creditsLoading) {
@@ -496,6 +499,20 @@ const App: React.FC = () => {
             };
           });
           toast.success(`✨ ${result.fileNames.length} fichier(s) généré(s) !`);
+          // Save snapshot to database
+          (async () => {
+            try {
+              const { data: userData } = await supabase.auth.getUser();
+              if (userData.user?.id && state.projectId) {
+                await supabase.from('project_snapshots' as any).insert({
+                  project_id: state.projectId,
+                  user_id: userData.user.id,
+                  label: `AI Gen: ${result.fileNames.join(', ')}`,
+                  files_snapshot: state.files,
+                } as any);
+              }
+            } catch { /* ignore */ }
+          })();
           // Push to undo history
           setState(prev => {
             setFileHistory(h => {
@@ -876,6 +893,41 @@ const App: React.FC = () => {
     setState(prev => ({ ...prev, showHistoryModal: true }));
   }, []);
 
+  const handleShowVersionHistory = useCallback(() => {
+    setShowVersionHistory(true);
+  }, []);
+
+  const handleRestoreSnapshot = useCallback((files: Record<string, string>) => {
+    setState(prev => ({ ...prev, files, activeFile: 'App.tsx' }));
+    setFileHistory(h => [...h, files].slice(-30));
+    setFileHistoryIndex(i => i + 1);
+  }, []);
+
+  const handleStartFromTemplate = useCallback(async (template: ProjectTemplate) => {
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    if (!userId) return;
+
+    const { data: inserted } = await supabase
+      .from('projects')
+      .insert({ user_id: userId, name: template.name, schema: { version: '3.0.0', app_name: template.name, components: [] }, code: serializeFiles(template.files) } as any)
+      .select('id')
+      .single();
+
+    if (inserted) {
+      setState(prev => ({
+        ...prev,
+        projectId: (inserted as any).id,
+        projectName: template.name,
+        files: { ...template.files },
+        activeFile: 'App.tsx',
+        history: [{ id: Date.now().toString(), role: 'assistant', content: `Template "${template.name}" chargé ! Personnalisez-le via le chat.`, timestamp: Date.now() }],
+      }));
+    }
+    setShowDashboard(false);
+    setShowLanding(false);
+  }, []);
+
   if (!authChecked) {
     return (
       <div className="dark">
@@ -897,7 +949,7 @@ const App: React.FC = () => {
   if (showDashboard) {
     return (
       <div className="dark">
-        <Dashboard onOpenProject={handleOpenProject} onCreateNewProject={handleCreateNewFromDashboard} onStartWithPrompt={handleStartWithPrompt} userEmail={userEmail} />
+        <Dashboard onOpenProject={handleOpenProject} onCreateNewProject={handleCreateNewFromDashboard} onStartWithPrompt={handleStartWithPrompt} onStartFromTemplate={handleStartFromTemplate} userEmail={userEmail} />
       </div>
     );
   }
@@ -933,6 +985,7 @@ const App: React.FC = () => {
             onRunSecurity={handleRunSecurity}
             onExportZip={handleExportZip}
             onToggleCodeView={() => setState(prev => ({ ...prev, isCodeView: !prev.isCodeView }))}
+            onShowVersionHistory={handleShowVersionHistory}
             isCodeView={state.isCodeView}
             isGenerating={state.isGenerating}
             projectName={state.projectName}
@@ -1078,6 +1131,14 @@ const App: React.FC = () => {
           isOpen={showFirecrawlModal}
           onClose={() => setShowFirecrawlModal(false)}
           onEnable={handleEnableFirecrawl}
+        />
+
+        {/* Version History */}
+        <VersionHistory
+          isOpen={showVersionHistory}
+          onClose={() => setShowVersionHistory(false)}
+          projectId={state.projectId}
+          onRestore={handleRestoreSnapshot}
         />
       </div>
     </div>
