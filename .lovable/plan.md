@@ -1,100 +1,113 @@
 
 
-# Repurpose "Chat" Button as Plan Mode Toggle
+# Améliorations pour un vrai AI App Builder
 
-## Overview
+## Diagnostic actuel
 
-The existing "Chat" button in the sidebar input area (bottom-right) will become the Plan/Agent mode switch:
+Le flux de chat fonctionne mais reste basique comparé a un vrai AI app builder. Les principales lacunes :
 
-- **Chat button active (highlighted)** = Plan Mode: AI discusses, analyzes, asks questions -- no code is generated or applied to the preview
-- **Chat button inactive (default)** = Agent Mode: AI generates code and applies it to the preview (current behavior)
+- Le code est toujours ecrase en bloc dans `App.tsx` au lieu d'etre modifie chirurgicalement
+- L'IA perd le contexte apres 10 messages
+- Le mode Plan ne propose pas d'action "Approuver et implementer"
+- Les erreurs de preview ne remontent pas a l'IA
+- Les conversations ne sont pas persistees
+- Les suggestions sont statiques
+
+## Plan d'amelioration (par priorite)
+
+### Phase 1 — Feedback loop (critique)
+
+**Objectif** : L'IA doit savoir si son code a fonctionne ou plante.
+
+Fichiers concernes :
+- `src/app-builder/components/CodePreview.tsx` : capturer les erreurs de l'iframe via `window.onerror` et `postMessage`
+- `src/app-builder/App.tsx` : recevoir les erreurs et les renvoyer automatiquement a l'IA pour auto-correction
+
+Comportement :
+1. L'iframe envoie un `postMessage({ type: 'runtime_error', error: '...' })` quand le code plante
+2. App.tsx capture ce message et ajoute automatiquement un message systeme dans le chat
+3. L'IA recoit l'erreur comme contexte et genere un correctif
+4. Boucle jusqu'a ce que ca fonctionne (max 3 tentatives)
+
+### Phase 2 — Mode Plan actionnable
+
+**Objectif** : Quand le mode Plan genere un plan structure, l'utilisateur peut l'approuver pour lancer l'implementation.
+
+Fichiers concernes :
+- `src/app-builder/components/ChatMessage.tsx` : detecter les blocs `[PLAN_START]...[PLAN_END]` dans les reponses plan
+- Nouveau : `src/app-builder/components/PlanMessage.tsx` : composant dedie avec bouton "Approuver le plan"
+- `src/app-builder/App.tsx` : handler `handleApprovePlan` qui switch en mode Agent et envoie le plan comme contexte
+- `supabase/functions/ai-chat/index.ts` : le PLAN_SYSTEM_PROMPT doit instruire l'IA d'utiliser les marqueurs `[PLAN_START]...[PLAN_END]`
+
+Comportement :
+1. En mode Plan, l'IA genere un plan structure avec les marqueurs
+2. Le composant PlanMessage le rend en carte avec bordure violette
+3. Bouton "Approuver et implementer" en bas
+4. Au clic : switch en Agent, le plan est envoye comme premier message systeme
+5. L'IA en Agent implemente exactement le plan
+
+### Phase 3 — Persistance des conversations
+
+**Objectif** : Ne pas perdre l'historique au rechargement.
+
+Approche :
+- Table `chat_messages` dans la base (via migration)
 
 ```text
-INPUT AREA (bottom bar):
-┌──────────────────────────────────────────────────────┐
-│  [+] [Visual] [Mic]              [Chat] [Send/Stop]  │
-│                                   ^^^^               │
-│                            Plan mode toggle           │
-│                            (blue = plan active)       │
-└──────────────────────────────────────────────────────┘
-
-Chat active (Plan mode):
-- AI responds with explanations, questions, structured plans
-- No code extraction, no preview update
-- Markdown-rendered conversation only
-
-Chat inactive (Agent mode - default):
-- AI generates code + explanation
-- Code extracted and applied to preview
-- "Code applied" indicator shown in chat
+chat_messages
+├── id (uuid, PK)
+├── project_id (uuid, FK -> projects)
+├── user_id (uuid)
+├── role (text: 'user' | 'assistant')
+├── content (text)
+├── code_applied (boolean)
+├── code_line_count (integer)
+├── chat_mode (text: 'plan' | 'agent')
+├── created_at (timestamptz)
 ```
 
-## Changes
+- RLS : users ne voient que leurs propres messages
+- `src/app-builder/App.tsx` : charger les messages au demarrage, sauvegarder a chaque nouveau message
 
-### 1. Types (`src/app-builder/types.ts`)
+### Phase 4 — Contexte etendu
 
-Add to `AppState`:
-- `chatMode: 'plan' | 'agent'` (default: `'agent'`)
+**Objectif** : L'IA garde le contexte du projet complet.
 
-### 2. Sidebar (`src/app-builder/components/Sidebar.tsx`)
+Fichiers concernes :
+- `src/app-builder/App.tsx` : au lieu de `slice(-10)`, envoyer tous les messages (avec un max token budget)
+- `supabase/functions/ai-chat/index.ts` : augmenter `max_tokens` et ajouter un mecanisme de resume des anciens messages quand le contexte depasse la limite
 
-Modify the "Chat" button (line 581-583):
-- Currently: toggles `isCodeView` to `false` (shows chat view)
-- New behavior: toggles `chatMode` between `'plan'` and `'agent'`
-- When `chatMode === 'plan'`: button is blue/highlighted, shows "Chat" label
-- When `chatMode === 'agent'`: button is default gray style
-- If user is in code view and clicks Chat, also switch to chat view (keep existing behavior)
+Approche :
+1. Envoyer les 20 derniers messages complets
+2. Pour les messages plus anciens, envoyer un resume genere automatiquement
+3. Toujours inclure le code complet actuel comme contexte
 
-Update the generating indicator (lines 424-456):
-- In Plan mode: show "Thinking..." with a simpler indicator (no code shimmer)
-- In Agent mode: keep existing shimmer + "Generating code..." indicator
+### Phase 5 — Suggestions dynamiques
 
-### 3. Edge Function (`supabase/functions/ai-chat/index.ts`)
+**Objectif** : Les suggestions sont generees par l'IA en fonction du code actuel.
 
-Accept `mode: 'plan' | 'agent'` in the request body.
+Fichiers concernes :
+- `supabase/functions/generate-suggestions/index.ts` : existe deja, a connecter avec le vrai code projet
+- `src/app-builder/App.tsx` : appeler cette function apres chaque generation avec le code actuel
 
-When `mode === 'plan'`:
-- Use a Plan-specific system prompt that instructs the AI to:
-  - Analyze, reason, ask clarifying questions
-  - Propose structured approaches
-  - NEVER output code blocks (no ```tsx, no ```jsx)
-  - Focus on architecture, UX decisions, data models
-  - Respond in the same language as the user
+## Resume des fichiers
 
-When `mode === 'agent'` (default, unchanged):
-- Keep existing code-generation system prompt
+| Fichier | Phase | Action |
+|---------|-------|--------|
+| `src/app-builder/components/CodePreview.tsx` | 1 | Modifier — capturer erreurs iframe |
+| `src/app-builder/App.tsx` | 1-5 | Modifier — feedback loop, plan approval, persistance, contexte |
+| `src/app-builder/components/PlanMessage.tsx` | 2 | Creer — composant plan avec approve |
+| `src/app-builder/components/ChatMessage.tsx` | 2 | Modifier — detecter plan markers |
+| `supabase/functions/ai-chat/index.ts` | 2,4 | Modifier — plan markers, contexte etendu |
+| Migration SQL | 3 | Creer — table chat_messages + RLS |
+| `src/app-builder/components/Sidebar.tsx` | 2 | Modifier — utiliser PlanMessage |
+| `supabase/functions/generate-suggestions/index.ts` | 5 | Modifier — suggestions basees sur le code |
 
-### 4. useAIChat hook (`src/app-builder/hooks/useAIChat.ts`)
+## Ordre d'implementation
 
-Add `mode` parameter to `sendMessage()` -- pass it in the request body to the edge function.
-
-### 5. App.tsx (`src/app-builder/App.tsx`)
-
-Update `handleSendMessage`:
-- Pass `state.chatMode` (or `'agent'` by default) to `sendAIMessage`
-- In `onDone` callback:
-  - If `chatMode === 'plan'`: do NOT extract code, do NOT apply to preview. Just store the full text as the assistant message (with markdown rendering via ChatMessage).
-  - If `chatMode === 'agent'`: existing behavior (extract code, apply, show "code applied" indicator)
-
-### 6. ChatMessage (`src/app-builder/components/ChatMessage.tsx`)
-
-No changes needed -- it already strips code blocks and renders markdown. In Plan mode, there will be no code blocks to strip so it just renders the full markdown response.
-
-## Files Summary
-
-| File | Action | Description |
-|------|--------|-------------|
-| `src/app-builder/types.ts` | Modify | Add `chatMode` to AppState |
-| `src/app-builder/components/Sidebar.tsx` | Modify | Repurpose Chat button as mode toggle, adapt generating indicator |
-| `supabase/functions/ai-chat/index.ts` | Modify | Accept `mode` param, add Plan system prompt |
-| `src/app-builder/hooks/useAIChat.ts` | Modify | Pass `mode` to edge function |
-| `src/app-builder/App.tsx` | Modify | Conditional onDone logic based on chatMode |
-
-## Implementation Order
-
-1. `types.ts` -- add `chatMode` field
-2. `ai-chat/index.ts` -- Plan system prompt + mode routing
-3. `useAIChat.ts` -- pass mode param
-4. `App.tsx` -- conditional code extraction
-5. `Sidebar.tsx` -- repurpose Chat button + adapt UI
+1. Phase 1 (feedback loop) — impact immediat sur la qualite du code genere
+2. Phase 2 (plan actionnable) — complete le flux Plan/Agent
+3. Phase 3 (persistance) — experience utilisateur durable
+4. Phase 4 (contexte etendu) — meilleure comprehension de l'IA
+5. Phase 5 (suggestions) — polish final
 
