@@ -1,84 +1,104 @@
 
 
-# Refonte du Dashboard Blink AI — Style Lovable.dev
+# Plan d'amelioration — Combler les manques critiques de Blink AI
 
-## Analyse de l'existant
+## Etat actuel vs Objectif
 
-Le dashboard actuel (`Dashboard.tsx`) affiche :
-- Un header avec logo, nav "Projects/Templates", bouton "New Project", avatar
-- Une grille de cartes projet avec gradient colore + nom + date
-- Un etat vide avec icone dossier + bouton "Creer"
+Blink AI dispose deja d'un moteur de generation IA multi-fichiers, d'un systeme de credits, de persistence en base, et d'un deploiement fonctionnel. Voici les manques identifies et ce qui est realisable dans l'architecture actuelle.
 
-## Differences avec Lovable.dev
+---
 
-Le dashboard de Lovable.dev a une approche radicalement differente :
+## Priorite 1 — Stripe (Critique)
 
-1. **Prompt-first** : Quand l'utilisateur arrive sur le dashboard, il voit un grand champ de saisie central "Ask Lovable to create a web app that..." — le prompt est l'action principale, pas un bouton "New Project"
-2. **Fond blanc/clair** avec un design epure et lumineux (pas fond noir)
-3. **Cartes projet** : affichage en liste/grille plus compact avec un apercu du projet
-4. **Pas de header complexe** : navigation minimale, focus sur le contenu
-5. **Pas de page vide triste** : meme sans projet, le prompt central invite a creer
+**Probleme** : Les boutons Pricing affichent un toast "bientot disponible". Impossible d'acheter des credits ou de s'abonner.
 
-## Plan de modification
+**Solution** :
+1. Activer l'integration Stripe sur le projet (outil Lovable natif)
+2. Creer une edge function `create-checkout` qui genere une session Stripe Checkout pour Pro ($29/mois) ou Business ($79/mois)
+3. Creer une edge function `stripe-webhook` qui ecoute `checkout.session.completed` et `customer.subscription.updated/deleted`, met a jour la table `subscriptions` et ajoute les credits
+4. Creer une edge function `create-portal` pour le portail de gestion Stripe
+5. Connecter les boutons de `Pricing.tsx` a `create-checkout`
+6. Afficher le vrai plan dans `Settings.tsx` via la table `subscriptions`
 
-### 1. Refonte complete de `Dashboard.tsx`
+**Fichiers** : 3 edge functions + `Pricing.tsx` + `Settings.tsx`
 
-Transformer le dashboard en layout inspire de Lovable :
+---
 
-**Header simplifie** :
-- Logo Blink AI a gauche
-- Avatar + menu utilisateur a droite
-- Pas de nav "Projects/Templates" en tabs (simplifier)
+## Priorite 2 — Templates pre-construits
 
-**Zone centrale hero (etat sans projets OU au-dessus des projets)** :
-- Grand titre "Build something with Blink AI" 
-- Sous-titre descriptif
-- Grand champ de saisie (textarea) avec placeholder "Describe the app you want to build..."
-- Boutons d'action (Plan, Send) dans le champ
-- Ce champ cree un nouveau projet ET envoie le prompt directement
+**Probleme** : L'utilisateur part toujours de zero. Pas de point de depart inspire.
 
-**Grille de projets en dessous** :
-- Titre "Recent Projects"
-- Cartes plus compactes et elegantes
-- Garder les actions contextuelles (renommer, dupliquer, supprimer)
-- Ajouter un badge avec la date relative
+**Solution** :
+1. Creer un fichier `src/app-builder/data/templates.ts` contenant 5-6 templates statiques (Landing SaaS, Dashboard Analytics, Portfolio, E-commerce vitrine, Blog, Todo App)
+2. Chaque template = un objet `{ id, name, description, icon, files: Record<string, string> }`
+3. Ajouter une section "Start from a template" sous le champ de prompt dans `Dashboard.tsx` avec des cartes cliquables
+4. Au clic : creer un projet avec les fichiers du template pre-remplis, puis ouvrir l'editeur
 
-### 2. Nouveau flow de creation
+**Fichiers** : `templates.ts` (nouveau) + `Dashboard.tsx`
 
-Quand l'utilisateur tape un prompt dans le champ central du dashboard :
-- Creer automatiquement un nouveau projet en DB
-- Ouvrir l'editeur avec le prompt pre-rempli
-- Lancer la generation immediatement
+---
 
-Cela remplace le flow actuel : clic "New Project" → projet vide → taper le prompt dans le chat.
+## Priorite 3 — Version History (Git simplifie)
 
-### 3. Ajustements de style
+**Probleme** : Pas de versioning. L'undo/redo en memoire est perdu au rechargement.
 
-- Fond plus sombre mais moderne (`bg-[#0a0a0a]` au lieu de `#050505`)
-- Cartes avec bordures subtiles et hover effects doux
-- Typographie plus large pour le hero
-- Champ de saisie central avec un style "floating card" (ombre, bordure arrondie, fond legèrement plus clair)
+**Solution** :
+1. Creer une table `project_snapshots` (id, project_id, user_id, label, files_snapshot jsonb, created_at) avec RLS
+2. Sauvegarder automatiquement un snapshot apres chaque generation IA reussie (max 20 par projet)
+3. Ajouter un panneau "Version History" accessible depuis le TopNav (icone History), affichant la liste des snapshots avec date et label
+4. Permettre de restaurer un snapshot en un clic
 
-## Fichiers concernes
+**Fichiers** : Migration SQL + `TopNav.tsx` + nouveau composant `VersionHistory.tsx` + modifications dans `App.tsx`
+
+---
+
+## Priorite 4 — Custom domains sur les deploiements
+
+**Probleme** : Les apps deployees n'ont qu'une URL `/p/{id}`.
+
+**Solution** :
+1. Ajouter une colonne `custom_domain` a la table `deployments`
+2. Ajouter un champ de saisie de domaine dans le flow de publication (`App.tsx`)
+3. Afficher le domaine personnalise dans les details du deploiement
+4. Note : le DNS reel necessite une infra externe (Cloudflare Workers ou proxy), mais on peut preparer l'interface et la persistance
+
+**Fichiers** : Migration SQL + `App.tsx` (section publish)
+
+---
+
+## Ce qui n'est PAS faisable dans l'architecture actuelle
+
+| Manque | Raison |
+|--------|--------|
+| Vrai build system (Vite/Webpack) | Necessite un serveur de build backend. L'approche Babel CDN est la seule option dans un iframe client-side. |
+| npm packages arbitraires | Meme raison — on ne peut ajouter que des CDN. On peut elargir la liste des CDN supportes. |
+| Collaboration temps reel | Necessite un serveur CRDT/OT (comme Yjs). Possible avec Supabase Realtime pour le chat, mais pas pour l'edition collaborative du code. |
+
+Ces 3 points sont des limitations architecturales fondamentales qui necessiteraient un pivot technique majeur (backend de build, WebContainers, etc.).
+
+---
+
+## Ordre d'implementation recommande
+
+1. **Stripe** — Debloquer la monetisation (prerequis business)
+2. **Templates** — Ameliorer l'onboarding (rapide a implementer)
+3. **Version History** — Rassurer les utilisateurs (securite des donnees)
+4. **Custom domains** — Interface preparee pour le futur
+
+## Resume des fichiers
 
 | Fichier | Action |
 |---------|--------|
-| `src/app-builder/components/Dashboard.tsx` | Refonte complete — layout hero + prompt + grille projets |
-| `src/app-builder/App.tsx` | Ajouter handler `handleStartFromDashboard` qui cree un projet + envoie le prompt |
-
-## Details techniques
-
-**Dashboard.tsx** :
-- Ajouter une nouvelle prop `onStartWithPrompt: (prompt: string) => void`
-- Le textarea central appelle `onStartWithPrompt` quand l'utilisateur envoie
-- La grille de projets reste en dessous avec le meme fonctionnement (open, rename, duplicate, delete)
-- Responsif : le champ central prend toute la largeur sur mobile
-
-**App.tsx** :
-- Creer `handleStartFromDashboard` qui :
-  1. Cree un projet en DB
-  2. Set le state avec le nouveau projet
-  3. Ferme le dashboard
-  4. Envoie le prompt via `handleSendMessage`
-- Passer cette fonction comme prop au Dashboard
+| Edge function `create-checkout` | Creer |
+| Edge function `stripe-webhook` | Creer |
+| Edge function `create-portal` | Creer |
+| `src/pages/Pricing.tsx` | Modifier (connecter Stripe) |
+| `src/pages/Settings.tsx` | Modifier (plan reel + portail) |
+| `src/app-builder/data/templates.ts` | Creer |
+| `src/app-builder/components/Dashboard.tsx` | Modifier (templates) |
+| Migration SQL `project_snapshots` | Creer |
+| `src/app-builder/components/VersionHistory.tsx` | Creer |
+| `src/app-builder/components/TopNav.tsx` | Modifier (bouton history) |
+| `src/app-builder/App.tsx` | Modifier (snapshots + history) |
+| Migration SQL `deployments.custom_domain` | Creer |
 
