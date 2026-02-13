@@ -3,7 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { TopNav } from './components/TopNav';
 import { CodePreview } from './components/CodePreview';
 import { LandingPage } from './components/LandingPage';
-import { Dashboard } from './components/Dashboard';
+
 import { VersionHistory } from './components/VersionHistory';
 import { CollaborationPanel } from './components/CollaborationPanel';
 import { ConsolePanel } from './components/ConsolePanel';
@@ -73,7 +73,7 @@ function deserializeFiles(raw: string | null | undefined): Record<string, string
 const App: React.FC = () => {
   const navigate = useNavigate();
   const [showLanding, setShowLanding] = useState(false);
-  const [showDashboard, setShowDashboard] = useState(false);
+  const [showDashboard, setShowDashboard] = useState(false); // kept as internal flag only
   const [authChecked, setAuthChecked] = useState(false);
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string | undefined>();
@@ -156,7 +156,7 @@ const App: React.FC = () => {
 
       if (!mounted) return;
       if (error) {
-        setShowDashboard(true);
+        // No projects yet — create one and go to editor
         setAuthChecked(true);
         return;
       }
@@ -201,9 +201,7 @@ const App: React.FC = () => {
           supabaseAnonKey: proj.supabase_anon_key || null,
           firecrawlEnabled: proj.firecrawl_enabled || false,
         }));
-        setShowDashboard(true);
         setAuthChecked(true);
-
         // Check for pending prompt from pre-login landing page
         const pendingPrompt = sessionStorage.getItem('blink_pending_prompt');
         if (pendingPrompt) {
@@ -232,7 +230,6 @@ const App: React.FC = () => {
         .single();
       if (!mounted) return;
       setState(prev => ({ ...prev, projectId: (inserted as any)?.id }));
-      setShowDashboard(true);
       setAuthChecked(true);
     })();
     return () => { mounted = false; };
@@ -948,13 +945,7 @@ const App: React.FC = () => {
     );
   }
 
-  if (showDashboard) {
-    return (
-      <div className="dark">
-        <Dashboard onOpenProject={handleOpenProject} onCreateNewProject={handleCreateNewFromDashboard} onStartWithPrompt={handleStartWithPrompt} onStartFromTemplate={handleStartFromTemplate} userEmail={userEmail} />
-      </div>
-    );
-  }
+  // Dashboard removed — authenticated users go straight to editor
 
   return (
     <div className="dark">
