@@ -135,19 +135,21 @@ const App: React.FC = () => {
   const filesRef = useRef(state.files);
   useEffect(() => { filesRef.current = state.files; }, [state.files]);
 
+  // Auth disabled — go straight to editor, try to load project if logged in
   useEffect(() => {
     let mounted = true;
     (async () => {
       const { data } = await supabase.auth.getUser();
       const userId = data.user?.id;
       setUserEmail(data.user?.email ?? undefined);
+
       if (!userId) {
-        setShowLanding(true);
+        // No auth — just open editor with defaults
         setAuthChecked(true);
         return;
       }
 
-      const { data: existing, error } = await supabase
+      const { data: existing } = await supabase
         .from("projects")
         .select("id, name, schema, code, updated_at, supabase_url, supabase_anon_key, firecrawl_enabled")
         .eq("user_id", userId)
@@ -155,17 +157,11 @@ const App: React.FC = () => {
         .limit(1);
 
       if (!mounted) return;
-      if (error) {
-        // No projects yet — create one and go to editor
-        setAuthChecked(true);
-        return;
-      }
 
       if (existing && existing.length > 0) {
         const proj = existing[0] as any;
         const files = deserializeFiles(proj.code);
 
-        // Phase 3: Load persisted chat messages
         let loadedHistory: Message[] = [{
           id: '1', role: 'assistant',
           content: "Je suis prêt. Décrivez-moi l'application que vous voulez construire — je vais générer du vrai code React multi-fichiers.",
@@ -201,35 +197,8 @@ const App: React.FC = () => {
           supabaseAnonKey: proj.supabase_anon_key || null,
           firecrawlEnabled: proj.firecrawl_enabled || false,
         }));
-        setAuthChecked(true);
-        // Check for pending prompt from pre-login landing page
-        const pendingPrompt = sessionStorage.getItem('blink_pending_prompt');
-        if (pendingPrompt) {
-          sessionStorage.removeItem('blink_pending_prompt');
-          // Defer to next tick so state is settled
-          setTimeout(() => {
-            setShowDashboard(false);
-            setShowLanding(false);
-          }, 100);
-          setTimeout(() => {
-            const input = pendingPrompt.trim();
-            if (input) {
-              // Trigger the message send via a custom event workaround
-              setState(prev => ({ ...prev, currentInput: input }));
-            }
-          }, 200);
-        }
-        return;
       }
 
-      const defaultSchema = { version: "3.0.0", app_name: "New Project", components: [] };
-      const { data: inserted } = await supabase
-        .from("projects")
-        .insert({ user_id: userId, name: "New Project", schema: defaultSchema, code: serializeFiles(DEFAULT_FILES) } as any)
-        .select("id")
-        .single();
-      if (!mounted) return;
-      setState(prev => ({ ...prev, projectId: (inserted as any)?.id }));
       setAuthChecked(true);
     })();
     return () => { mounted = false; };
@@ -937,13 +906,7 @@ const App: React.FC = () => {
     );
   }
 
-  if (showLanding) {
-    return (
-      <div className="dark">
-        <LandingPage onStart={handleStartFromLanding} isAuthenticated={!!userEmail} />
-      </div>
-    );
-  }
+  // Landing page and auth disabled
 
   // Dashboard removed — authenticated users go straight to editor
 
