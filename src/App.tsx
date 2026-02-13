@@ -13,9 +13,6 @@ import SettingsPage from "./pages/Settings";
 const queryClient = new QueryClient();
 
 function HomeRedirect() {
-  const { session, isLoading } = useSession();
-  if (isLoading) return null;
-  if (session) return <Navigate to="/app" replace />;
   return <Index />;
 }
 
