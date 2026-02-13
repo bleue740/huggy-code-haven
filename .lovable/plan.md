@@ -1,104 +1,149 @@
 
 
-# Plan d'amelioration — Combler les manques critiques de Blink AI
+# Plan: Orchestrateur Agent Renforcé + Architecture Backend
 
-## Etat actuel vs Objectif
+## Contexte
 
-Blink AI dispose deja d'un moteur de generation IA multi-fichiers, d'un systeme de credits, de persistence en base, et d'un deploiement fonctionnel. Voici les manques identifies et ce qui est realisable dans l'architecture actuelle.
+Le projet a deja un orchestrateur (`ai-orchestrator` edge function) avec 4 agents (Planner, Generator, Validator, Fixer). Le plan vise a renforcer les prompts contractuels, ameliorer le flux pipeline, et clarifier l'option backend Node.js.
 
----
+## Partie 1 : Backend Node.js Separe — Realite
 
-## Priorite 1 — Stripe (Critique)
+Un vrai serveur Node.js (avec Vite, Docker, Git) ne peut pas etre cree depuis Lovable. Cependant, voici ce qui est faisable :
 
-**Probleme** : Les boutons Pricing affichent un toast "bientot disponible". Impossible d'acheter des credits ou de s'abonner.
+- Documenter l'architecture cible dans un fichier `ARCHITECTURE.md` pour qu'un developpeur puisse implementer le backend separement
+- Preparer le frontend pour accepter une URL backend configurable (variable d'environnement `VITE_BACKEND_URL`)
+- Structurer l'orchestrateur edge function pour qu'il soit facilement portable vers un serveur Node.js Express
 
-**Solution** :
-1. Activer l'integration Stripe sur le projet (outil Lovable natif)
-2. Creer une edge function `create-checkout` qui genere une session Stripe Checkout pour Pro ($29/mois) ou Business ($79/mois)
-3. Creer une edge function `stripe-webhook` qui ecoute `checkout.session.completed` et `customer.subscription.updated/deleted`, met a jour la table `subscriptions` et ajoute les credits
-4. Creer une edge function `create-portal` pour le portail de gestion Stripe
-5. Connecter les boutons de `Pricing.tsx` a `create-checkout`
-6. Afficher le vrai plan dans `Settings.tsx` via la table `subscriptions`
+## Partie 2 : Renforcement de l'Orchestrateur (Edge Function)
 
-**Fichiers** : 3 edge functions + `Pricing.tsx` + `Settings.tsx`
+### 2.1 — Prompts Contractuels Plus Stricts
 
----
+Chaque agent recevra un prompt reecrit avec :
+- Des contraintes NON-NEGOCIABLES en majuscules
+- Des exemples de sortie JSON valides et invalides
+- Des regles de rejet explicites (quand l'agent doit refuser d'agir)
+- Un schema JSON strict documente dans chaque prompt
 
-## Priorite 2 — Templates pre-construits
+### 2.2 — Planner Agent Ameliore
 
-**Probleme** : L'utilisateur part toujours de zero. Pas de point de depart inspire.
+- Ajout de detection d'intent plus precise (CRUD, UI, refactor, fix, question)
+- Ajout de `dependencies_needed` dans la sortie pour anticiper les imports
+- Meilleure gestion des requetes ambigues avec `clarification_needed: true`
 
-**Solution** :
-1. Creer un fichier `src/app-builder/data/templates.ts` contenant 5-6 templates statiques (Landing SaaS, Dashboard Analytics, Portfolio, E-commerce vitrine, Blog, Todo App)
-2. Chaque template = un objet `{ id, name, description, icon, files: Record<string, string> }`
-3. Ajouter une section "Start from a template" sous le champ de prompt dans `Dashboard.tsx` avec des cartes cliquables
-4. Au clic : creer un projet avec les fichiers du template pre-remplis, puis ouvrir l'editeur
+### 2.3 — Generator Agent Ameliore
 
-**Fichiers** : `templates.ts` (nouveau) + `Dashboard.tsx`
+- Injection du contexte projet complet (features, decisions, constraints)
+- Ajout d'une regle de coherence : le generator doit verifier que les composants references existent dans le filesystem
+- Limite de taille par fichier pour eviter les reponses tronquees
 
----
+### 2.4 — Validator Agent Ameliore
 
-## Priorite 3 — Version History (Git simplifie)
+- Ajout de verifications : composants references mais non definis, fonctions globales manquantes
+- Score de confiance (0-100) dans la sortie
+- Categories d'erreurs plus granulaires
 
-**Probleme** : Pas de versioning. L'undo/redo en memoire est perdu au rechargement.
+### 2.5 — Fixer Agent avec Retry
 
-**Solution** :
-1. Creer une table `project_snapshots` (id, project_id, user_id, label, files_snapshot jsonb, created_at) avec RLS
-2. Sauvegarder automatiquement un snapshot apres chaque generation IA reussie (max 20 par projet)
-3. Ajouter un panneau "Version History" accessible depuis le TopNav (icone History), affichant la liste des snapshots avec date et label
-4. Permettre de restaurer un snapshot en un clic
+- Maximum 2 passes de fix (actuellement 1 seule)
+- Si les erreurs persistent apres 2 passes, renvoyer les erreurs au client avec un message explicatif
+- Le fixer recoit aussi le plan original pour comprendre l'intention
 
-**Fichiers** : Migration SQL + `TopNav.tsx` + nouveau composant `VersionHistory.tsx` + modifications dans `App.tsx`
+### 2.6 — Model Routing Ameliore
 
----
+- Utiliser `openai/gpt-5` pour le Generator sur les taches complexes
+- Utiliser `google/gemini-3-flash-preview` pour Planner/Validator/Fixer (rapide et suffisant)
+- Ajouter detection de complexite basee sur le nombre de fichiers impactes dans le plan
 
-## Priorite 4 — Custom domains sur les deploiements
+## Partie 3 : Frontend — URL Backend Configurable
 
-**Probleme** : Les apps deployees n'ont qu'une URL `/p/{id}`.
+- Ajouter `VITE_BACKEND_URL` comme variable optionnelle
+- Si definie, le `useOrchestrator` pointe vers cette URL au lieu de l'edge function
+- Permet de basculer vers un vrai backend Node.js plus tard sans modifier le frontend
 
-**Solution** :
-1. Ajouter une colonne `custom_domain` a la table `deployments`
-2. Ajouter un champ de saisie de domaine dans le flow de publication (`App.tsx`)
-3. Afficher le domaine personnalise dans les details du deploiement
-4. Note : le DNS reel necessite une infra externe (Cloudflare Workers ou proxy), mais on peut preparer l'interface et la persistance
+## Partie 4 : Documentation Architecture
 
-**Fichiers** : Migration SQL + `App.tsx` (section publish)
-
----
-
-## Ce qui n'est PAS faisable dans l'architecture actuelle
-
-| Manque | Raison |
-|--------|--------|
-| Vrai build system (Vite/Webpack) | Necessite un serveur de build backend. L'approche Babel CDN est la seule option dans un iframe client-side. |
-| npm packages arbitraires | Meme raison — on ne peut ajouter que des CDN. On peut elargir la liste des CDN supportes. |
-| Collaboration temps reel | Necessite un serveur CRDT/OT (comme Yjs). Possible avec Supabase Realtime pour le chat, mais pas pour l'edition collaborative du code. |
-
-Ces 3 points sont des limitations architecturales fondamentales qui necessiteraient un pivot technique majeur (backend de build, WebContainers, etc.).
+- Creer `ARCHITECTURE.md` avec le schema complet du backend Node.js cible (Docker, Vite sandbox, Git, deploiement)
+- Inclure les endpoints API attendus pour que le backend soit compatible avec le frontend existant
 
 ---
 
-## Ordre d'implementation recommande
+## Fichiers a Modifier/Creer
 
-1. **Stripe** — Debloquer la monetisation (prerequis business)
-2. **Templates** — Ameliorer l'onboarding (rapide a implementer)
-3. **Version History** — Rassurer les utilisateurs (securite des donnees)
-4. **Custom domains** — Interface preparee pour le futur
+| Fichier | Action | Description |
+|---|---|---|
+| `supabase/functions/ai-orchestrator/index.ts` | Modifier | Prompts renforces, retry fixer, model routing, project context injection |
+| `src/app-builder/hooks/useOrchestrator.ts` | Modifier | Support URL backend configurable |
+| `ARCHITECTURE.md` | Creer | Documentation architecture backend Node.js cible |
 
-## Resume des fichiers
+## Details Techniques
 
-| Fichier | Action |
-|---------|--------|
-| Edge function `create-checkout` | Creer |
-| Edge function `stripe-webhook` | Creer |
-| Edge function `create-portal` | Creer |
-| `src/pages/Pricing.tsx` | Modifier (connecter Stripe) |
-| `src/pages/Settings.tsx` | Modifier (plan reel + portail) |
-| `src/app-builder/data/templates.ts` | Creer |
-| `src/app-builder/components/Dashboard.tsx` | Modifier (templates) |
-| Migration SQL `project_snapshots` | Creer |
-| `src/app-builder/components/VersionHistory.tsx` | Creer |
-| `src/app-builder/components/TopNav.tsx` | Modifier (bouton history) |
-| `src/app-builder/App.tsx` | Modifier (snapshots + history) |
-| Migration SQL `deployments.custom_domain` | Creer |
+### Nouveau flux pipeline (orchestrateur)
+
+```text
+Request
+  |
+  v
+[Auth + Credits Check]
+  |
+  v
+[PLANNER] -- gemini-3-flash
+  |         intent, steps, risk_level, dependencies_needed
+  |         Si conversational -> reponse directe
+  |         Si clarification_needed -> demander precision
+  v
+[GENERATOR] -- gpt-5 (complexe) ou gemini-3-flash (simple)
+  |           files[] avec contenu complet
+  |           Recoit: plan + filesystem + project context
+  v
+[VALIDATOR] -- gemini-3-flash
+  |           errors[], warnings[], confidence_score
+  |           Si confidence >= 80 et 0 erreurs -> skip fixer
+  v
+[FIXER] -- meme modele que generator (max 2 passes)
+  |         Revalide apres chaque passe
+  v
+[RESULT] -> SSE stream au client
+```
+
+### Schema de sortie Planner (ameliore)
+
+```text
+{
+  "intent": "string",
+  "risk_level": "low|medium|high",
+  "conversational": boolean,
+  "clarification_needed": boolean,
+  "clarification_question": "string|null",
+  "reply": "string|null",
+  "dependencies_needed": ["string"],
+  "steps": [
+    {
+      "id": number,
+      "action": "create|modify|delete",
+      "target": "string",
+      "path": "string|null",
+      "description": "string",
+      "priority": "critical|normal|optional"
+    }
+  ]
+}
+```
+
+### Schema de sortie Validator (ameliore)
+
+```text
+{
+  "valid": boolean,
+  "confidence_score": 0-100,
+  "errors": [
+    {
+      "type": "syntax|runtime|security|import|reference",
+      "file": "string",
+      "message": "string",
+      "severity": "critical|major|minor"
+    }
+  ],
+  "warnings": [...]
+}
+```
 
