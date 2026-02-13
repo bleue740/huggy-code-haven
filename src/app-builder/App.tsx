@@ -10,6 +10,10 @@ import { ConsolePanel } from './components/ConsolePanel';
 import { useConsoleCapture } from './hooks/useConsoleCapture';
 import { useCredits } from './hooks/useCredits';
 import { useAIChat, extractCodeFromResponse, extractMultiFileFromResponse } from './hooks/useAIChat';
+import { useOrchestrator } from './hooks/useOrchestrator';
+import { VirtualFS } from './engine/VirtualFS';
+import { ProjectContext } from './engine/ProjectContext';
+import { getPhaseLabel, isConversationActive } from './engine/ConversationStateMachine';
 import { AppState, Message, AISuggestion, SecurityResult, BackendNeed, GenerationStep } from './types';
 import { analyzeCodeSecurity } from './utils/securityAnalyzer';
 import { exportProjectAsZip } from './utils/exportZip';
@@ -86,6 +90,11 @@ const App: React.FC = () => {
   const { logs: consoleLogs, clearLogs: clearConsoleLogs } = useConsoleCapture();
   const { credits, isLoading: creditsLoading, refetch: refetchCredits } = useCredits();
   const { sendMessage: sendAIMessage, stopStreaming, isStreaming } = useAIChat();
+  const { send: sendOrchestrator, stop: stopOrchestrator, convState, isActive: isOrchestratorActive } = useOrchestrator();
+
+  // Engine instances
+  const vfsRef = useRef<VirtualFS>(new VirtualFS(DEFAULT_FILES));
+  const ctxRef = useRef<ProjectContext>(new ProjectContext());
 
   const [state, setState] = useState<AppState>({
     credits: 0,
@@ -130,10 +139,10 @@ const App: React.FC = () => {
     }
   }, [credits, creditsLoading]);
 
-  const concatenatedCode = useMemo(() => buildConcatenatedCode(state.files), [state.files]);
+  const concatenatedCode = useMemo(() => vfsRef.current.buildPreviewCode(), [state.files]);
   const saveTimerRef = useRef<number | null>(null);
   const filesRef = useRef(state.files);
-  useEffect(() => { filesRef.current = state.files; }, [state.files]);
+  useEffect(() => { filesRef.current = state.files; vfsRef.current = new VirtualFS(state.files); }, [state.files]);
 
   // Auth disabled — go straight to editor, try to load project if logged in
   useEffect(() => {
@@ -310,8 +319,9 @@ const App: React.FC = () => {
 
   const handleStopGenerating = useCallback(() => {
     stopStreaming();
+    stopOrchestrator();
     setState(prev => ({ ...prev, isGenerating: false, aiStatusText: null }));
-  }, [stopStreaming]);
+  }, [stopStreaming, stopOrchestrator]);
 
   const handleSendMessage = useCallback(async (customPrompt?: string) => {
     const input = (customPrompt ?? state.currentInput).trim();
@@ -324,13 +334,13 @@ const App: React.FC = () => {
     setState(prev => ({
       ...prev,
       isGenerating: true,
-      aiStatusText: "Analyse de ta demande…",
+      aiStatusText: "🧠 Planification…",
       history: [...prev.history, userMessage],
       currentInput: customPrompt ? prev.currentInput : '',
       generationSteps: [{
-        id: `step_thinking_${now}`,
+        id: `step_planning_${now}`,
         type: 'thinking',
-        label: 'Analyse de la demande…',
+        label: 'Planification de l\'architecture…',
         status: 'active',
         startedAt: now,
       }],
@@ -340,219 +350,165 @@ const App: React.FC = () => {
     const currentMode = state.chatMode || 'agent';
     persistMessage(state.projectId, 'user', input, false, 0, currentMode);
 
-    streamingTextRef.current = '';
-
-    // Build conversation messages for AI — Phase 4: extended context (20 messages)
+    // Build conversation messages
     const chatMessages = [...state.history, userMessage]
       .filter(m => m.role === 'user' || m.role === 'assistant')
       .slice(-20)
       .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
-    // Current project code as context
-    const projectContext = buildConcatenatedCode(state.files);
-
-    await sendAIMessage(chatMessages, {
-      onDelta: (chunk) => {
-        streamingTextRef.current += chunk;
-        const currentText = streamingTextRef.current;
-
-        // Detect [FILE:X] markers for generation steps
-        const fileStartMatch = chunk.match(/\[FILE:([\w.\-/]+)\]/);
-        if (fileStartMatch) {
-          const fileName = fileStartMatch[1];
+    // Use legacy streaming for plan mode, orchestrator for agent mode
+    if (currentMode === 'plan') {
+      streamingTextRef.current = '';
+      const projectContext = vfsRef.current.buildPreviewCode();
+      await sendAIMessage(chatMessages, {
+        onDelta: (chunk) => {
+          streamingTextRef.current += chunk;
+          const currentText = streamingTextRef.current;
           setState(prev => {
-            // Mark thinking as done, add editing step
-            const steps = prev.generationSteps?.map(s =>
-              s.status === 'active' && s.type === 'thinking' ? { ...s, status: 'done' as const, completedAt: Date.now() } : s
-            ) || [];
-            // Only add if not already editing this file
-            if (!steps.find(s => s.fileName === fileName && s.type === 'editing')) {
-              steps.push({
-                id: `step_edit_${fileName}_${Date.now()}`,
-                type: 'editing',
-                label: `Editing ${fileName}`,
-                fileName,
-                status: 'active',
-                startedAt: Date.now(),
-              });
+            const last = prev.history[prev.history.length - 1];
+            if (last?.role === 'assistant' && last.id.startsWith('stream_')) {
+              return { ...prev, history: prev.history.map((m, i) => i === prev.history.length - 1 ? { ...m, content: currentText } : m) };
             }
-            return { ...prev, generationSteps: steps, aiStatusText: `Editing ${fileName}…` };
+            return { ...prev, history: [...prev.history, { id: `stream_${Date.now()}`, role: 'assistant', content: currentText, timestamp: Date.now() }] };
           });
-        }
-
-        // Detect [/FILE:X] markers
-        const fileEndMatch = chunk.match(/\[\/FILE:([\w.\-/]+)\]/);
-        if (fileEndMatch) {
-          const fileName = fileEndMatch[1];
-          setState(prev => {
-            const steps = (prev.generationSteps || []).map(s =>
-              s.fileName === fileName && s.status === 'active' ? { ...s, status: 'done' as const, completedAt: Date.now() } : s
-            );
-            return { ...prev, generationSteps: steps };
-          });
-        }
-
-        setState(prev => {
-          const last = prev.history[prev.history.length - 1];
-          if (last?.role === 'assistant' && last.id.startsWith('stream_')) {
-            return {
-              ...prev,
-              history: prev.history.map((m, i) =>
-                i === prev.history.length - 1 ? { ...m, content: currentText } : m
-              ),
-            };
-          }
-          return {
-            ...prev,
-            history: [
-              ...prev.history,
-              { id: `stream_${Date.now()}`, role: 'assistant', content: currentText, timestamp: Date.now() },
-            ],
-          };
-        });
-      },
-      onDone: (fullText) => {
-        setRetryCount(0);
-
-        if (currentMode === 'plan') {
+        },
+        onDone: (fullText) => {
           setState(prev => ({
-            ...prev,
-            isGenerating: false,
-            aiStatusText: null,
-            generationSteps: [],
-            history: prev.history.map((m) =>
-              m.id.startsWith('stream_')
-                ? { ...m, content: fullText }
-                : m
-            ),
+            ...prev, isGenerating: false, aiStatusText: null, generationSteps: [],
+            history: prev.history.map(m => m.id.startsWith('stream_') ? { ...m, content: fullText } : m),
           }));
           persistMessage(state.projectId, 'assistant', fullText, false, 0, 'plan');
           refetchCredits();
-          return;
-        }
+        },
+        onError: (error, code) => {
+          setState(prev => ({
+            ...prev, isGenerating: false, aiStatusText: null,
+            history: [...prev.history, { id: `err_${Date.now()}`, role: 'assistant', content: `⚠️ ${error}`, timestamp: Date.now() }],
+          }));
+          if (code === 402) setState(prev => ({ ...prev, showUpgradeModal: true }));
+          toast.error(error);
+        },
+        onStatusChange: (status) => setState(prev => ({ ...prev, aiStatusText: status })),
+      }, projectContext, {
+        supabaseUrl: state.supabaseUrl, supabaseAnonKey: state.supabaseAnonKey, firecrawlEnabled: state.firecrawlEnabled,
+      }, 'plan');
+      return;
+    }
 
-        // Agent mode: extract multi-file output
-        const result = extractMultiFileFromResponse(fullText);
-        const hasFiles = result.fileNames.length > 0;
-        const totalLines = Object.values(result.files).reduce((sum, code) => sum + code.split('\n').length, 0);
-
-        if (hasFiles) {
-          setState(prev => {
-            const newFiles = { ...prev.files };
-            // Merge new/modified files
-            for (const [name, code] of Object.entries(result.files)) {
-              newFiles[name] = code;
-            }
-            // Delete requested files
-            for (const name of result.deletedFiles) {
-              if (name !== 'App.tsx') delete newFiles[name];
-            }
-            // Add final "applied" step
-            const steps = (prev.generationSteps || []).map(s =>
-              s.status === 'active' ? { ...s, status: 'done' as const, completedAt: Date.now() } : s
-            );
-            steps.push({
-              id: `step_applied_${Date.now()}`,
-              type: 'edited',
-              label: `${result.fileNames.length} fichier(s) appliqué(s)`,
-              status: 'done',
+    // ── AGENT MODE: Use Orchestrator Pipeline ──
+    await sendOrchestrator(chatMessages, vfsRef.current, ctxRef.current, {
+      onPlanReady: (intent, steps) => {
+        setState(prev => {
+          const genSteps: GenerationStep[] = [
+            { id: `step_plan_done_${Date.now()}`, type: 'thinking', label: `Plan: ${intent}`, status: 'done', startedAt: now, completedAt: Date.now() },
+            ...steps.map((s, i) => ({
+              id: `step_gen_${i}_${Date.now()}`,
+              type: 'editing' as const,
+              label: `${s.action} ${s.target}`,
+              fileName: s.target,
+              status: 'active' as const,
               startedAt: Date.now(),
-              completedAt: Date.now(),
-            });
-            return {
-              ...prev,
-              files: newFiles,
-              activeFile: result.fileNames.includes('App.tsx') ? 'App.tsx' : result.fileNames[0] || prev.activeFile,
-              generationSteps: steps,
-            };
-          });
-          toast.success(`✨ ${result.fileNames.length} fichier(s) généré(s) !`);
-          // Save snapshot to database
-          (async () => {
-            try {
-              const { data: userData } = await supabase.auth.getUser();
-              if (userData.user?.id && state.projectId) {
-                await supabase.from('project_snapshots' as any).insert({
-                  project_id: state.projectId,
-                  user_id: userData.user.id,
-                  label: `AI Gen: ${result.fileNames.join(', ')}`,
-                  files_snapshot: state.files,
-                } as any);
-              }
-            } catch { /* ignore */ }
-          })();
-          // Push to undo history
-          setState(prev => {
-            setFileHistory(h => {
-              const trimmed = h.slice(0, fileHistoryIndex + 1);
-              return [...trimmed, { ...prev.files }].slice(-30); // keep max 30 snapshots
-            });
-            setFileHistoryIndex(i => i + 1);
-            return prev;
-          });
-        }
-
-        // Display only explanation in chat
-        const displayText = result.explanation || fullText;
-
-        setState(prev => ({
-          ...prev,
-          isGenerating: false,
-          aiStatusText: null,
-          history: prev.history.map((m) =>
-            m.id.startsWith('stream_')
-              ? { ...m, content: displayText, codeApplied: hasFiles, codeLineCount: totalLines }
-              : m
-          ),
-        }));
-
-        // Clear generation steps after a delay
-        setTimeout(() => {
-          setState(prev => ({ ...prev, generationSteps: [] }));
-        }, 3000);
-
-        persistMessage(state.projectId, 'assistant', displayText, hasFiles, totalLines, 'agent');
-        refetchCredits();
-        if (hasFiles) fetchSuggestions();
+            })),
+          ];
+          return { ...prev, aiStatusText: "⚡ Génération du code…", generationSteps: genSteps };
+        });
       },
-      onError: (error, code) => {
-        const errorMessage: Message = {
-          id: `err_${Date.now()}`,
-          role: 'assistant',
-          content: `⚠️ ${error}`,
-          timestamp: Date.now(),
-        };
-        setState(prev => ({
-          ...prev,
-          isGenerating: false,
-          aiStatusText: null,
-          history: [...prev.history, errorMessage],
-        }));
 
+      onFilesGenerated: (files, deletedFiles) => {
+        setRetryCount(0);
+        const totalLines = files.reduce((sum, f) => sum + f.content.split('\n').length, 0);
+
+        setState(prev => {
+          const newFiles = { ...prev.files };
+          for (const f of files) {
+            newFiles[f.path] = f.content;
+          }
+          for (const d of deletedFiles) {
+            if (d !== 'App.tsx') delete newFiles[d];
+          }
+
+          const steps = (prev.generationSteps || []).map(s =>
+            s.status === 'active' ? { ...s, status: 'done' as const, completedAt: Date.now() } : s
+          );
+          steps.push({
+            id: `step_applied_${Date.now()}`, type: 'edited',
+            label: `${files.length} fichier(s) appliqué(s)`, status: 'done',
+            startedAt: Date.now(), completedAt: Date.now(),
+          });
+
+          return {
+            ...prev,
+            files: newFiles,
+            activeFile: files.find(f => f.path === 'App.tsx') ? 'App.tsx' : files[0]?.path || prev.activeFile,
+            isGenerating: false,
+            aiStatusText: null,
+            generationSteps: steps,
+            history: [...prev.history, {
+              id: `orch_${Date.now()}`, role: 'assistant' as const,
+              content: `✅ ${files.length} fichier(s) généré(s) et validé(s) par le pipeline agent.\n\nFichiers: ${files.map(f => f.path).join(', ')}`,
+              timestamp: Date.now(), codeApplied: true, codeLineCount: totalLines,
+            }],
+          };
+        });
+
+        toast.success(`✨ ${files.length} fichier(s) — pipeline agent terminé !`);
+
+        // Save snapshot
+        (async () => {
+          try {
+            const { data: userData } = await supabase.auth.getUser();
+            if (userData.user?.id && state.projectId) {
+              await supabase.from('project_snapshots' as any).insert({
+                project_id: state.projectId, user_id: userData.user.id,
+                label: `Agent: ${files.map(f => f.path).join(', ')}`,
+                files_snapshot: state.files,
+              } as any);
+            }
+          } catch { /* ignore */ }
+        })();
+
+        // Push to undo history
+        setState(prev => {
+          setFileHistory(h => {
+            const trimmed = h.slice(0, fileHistoryIndex + 1);
+            return [...trimmed, { ...prev.files }].slice(-30);
+          });
+          setFileHistoryIndex(i => i + 1);
+          return prev;
+        });
+
+        persistMessage(state.projectId, 'assistant', `Agent pipeline: ${files.map(f => f.path).join(', ')}`, true, totalLines, 'agent');
+        refetchCredits();
+        fetchSuggestions();
+
+        // Clear steps after delay
+        setTimeout(() => setState(prev => ({ ...prev, generationSteps: [] })), 3000);
+      },
+
+      onConversationalReply: (reply) => {
+        setRetryCount(0);
+        setState(prev => ({
+          ...prev, isGenerating: false, aiStatusText: null, generationSteps: [],
+          history: [...prev.history, { id: `conv_${Date.now()}`, role: 'assistant', content: reply, timestamp: Date.now() }],
+        }));
+        persistMessage(state.projectId, 'assistant', reply, false, 0, 'agent');
+        refetchCredits();
+      },
+
+      onError: (error, code) => {
+        setState(prev => ({
+          ...prev, isGenerating: false, aiStatusText: null,
+          history: [...prev.history, { id: `err_${Date.now()}`, role: 'assistant', content: `⚠️ ${error}`, timestamp: Date.now() }],
+        }));
         if (code === 401) {
           toast.info("Redirection vers la connexion…");
           setTimeout(() => navigate("/auth", { state: { from: "/app" } }), 1000);
-          return;
         }
-
-        if (code === 402) {
-          setState(prev => ({ ...prev, showUpgradeModal: true }));
-        }
-
+        if (code === 402) setState(prev => ({ ...prev, showUpgradeModal: true }));
         toast.error(error);
       },
-      onStatusChange: (status) => {
-        setState(prev => ({ ...prev, aiStatusText: status }));
-      },
-      onBackendHint: (needs) => {
-        setState(prev => ({ ...prev, backendHints: needs as BackendNeed[] }));
-      },
-    }, projectContext, {
-      supabaseUrl: state.supabaseUrl,
-      supabaseAnonKey: state.supabaseAnonKey,
-      firecrawlEnabled: state.firecrawlEnabled,
-    }, currentMode);
-  }, [state.currentInput, state.isGenerating, state.history, state.files, state.chatMode, state.supabaseUrl, state.supabaseAnonKey, state.firecrawlEnabled, showLanding, sendAIMessage, refetchCredits, fetchSuggestions]);
+    });
+  }, [state.currentInput, state.isGenerating, state.history, state.files, state.chatMode, state.supabaseUrl, state.supabaseAnonKey, state.firecrawlEnabled, showLanding, sendAIMessage, sendOrchestrator, refetchCredits, fetchSuggestions]);
 
   const canUndo = fileHistoryIndex > 0;
   const canRedo = fileHistoryIndex < fileHistory.length - 1;
