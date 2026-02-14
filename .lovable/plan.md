@@ -1,36 +1,33 @@
 
-# Plan : Etape 2 — Ajouter la route /preview
+# Plan: Rendre le Preview Public
 
 ## Objectif
+Modifier la route `/preview` pour qu'elle retourne une URL publique (accessible depuis Internet) au lieu de `localhost`.
 
-Ajouter une route POST `/preview` au serveur qui cree un mini projet HTML et le sert, plus un dossier `projects/` pour stocker les projets generes.
-
-## Fichiers a modifier
+## Ce qui change
 
 ### 1. `server/index.js`
-- Ajouter les imports: `exec` (child_process), `path`, `fs`
-- Ajouter `express.json()` middleware (necessaire pour lire le body des requetes POST)
-- Ajouter la route `POST /preview` qui:
-  - Cree un dossier `projects/demo/` s'il n'existe pas
-  - Ecrit un fichier `index.html` basique dedans
-  - Lance `npx serve` sur ce dossier (port 4000)
-  - Retourne l'URL en JSON
+Un seul changement: remplacer `http://localhost:${port}` par une URL basee sur la variable d'environnement `PUBLIC_URL`.
 
-### 2. `server/package.json`
-- Ajouter `"serve": "^14.2.0"` dans les dependances
+```text
+// Avant
+res.json({ url: `http://localhost:${port}` });
 
-### 3. `server/projects/.gitkeep`
-- Creer un fichier vide pour que le dossier `projects/` soit versionne par Git
+// Apres  
+const publicBaseUrl = process.env.PUBLIC_URL || `http://localhost:${port}`;
+res.json({ url: `${publicBaseUrl}:${port}` });
+```
 
-## Detail technique
+Le fallback sur `localhost` permet au serveur de fonctionner meme sans la variable configuree.
 
-La route `/preview` est un premier test mecanique. L'URL retournee (`localhost:4000`) ne sera pas accessible publiquement depuis Railway a ce stade — c'est normal. Le but est de valider que le serveur peut:
-1. Creer des fichiers sur le filesystem
-2. Lancer un process enfant (serve)
-3. Retourner une reponse
+## Ce que tu dois faire manuellement sur Railway
+Apres le push, ajouter une variable d'environnement dans Railway:
+- **Key**: `PUBLIC_URL`
+- **Value**: ton URL Railway (ex: `https://huggy-code-haven.up.railway.app`)
 
-## Apres implementation
-1. Push sur GitHub
-2. Railway rebuild automatiquement
-3. Tester avec `POST https://TON_URL/preview`
-4. Verifier la reponse `{ "url": "..." }`
+## Limitation importante
+Railway ne permet pas d'exposer plusieurs ports sur un meme service. Le port dynamique (5000-5999) ne sera pas accessible publiquement via Railway tel quel. Pour un vrai preview public, il faudra a terme:
+- soit utiliser un VPS (Hetzner/DigitalOcean) qui supporte Docker + ports multiples
+- soit servir le preview directement depuis le serveur Express (sans Docker) sur une sous-route comme `/preview/demo`
+
+Pour l'instant, on met en place la mecanique avec `PUBLIC_URL` pour que la structure soit prete.
