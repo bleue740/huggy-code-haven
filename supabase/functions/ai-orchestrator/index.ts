@@ -8,17 +8,24 @@ const corsHeaders = {
 };
 
 // ── Types ──────────────────────────────────────────────────────────
+
 interface PlanStep {
   id: number;
   action: "create" | "modify" | "delete";
   target: string;
   path?: string;
   description: string;
+  priority?: "critical" | "normal" | "optional";
 }
 
 interface PlanResult {
   intent: string;
   risk_level: "low" | "medium" | "high";
+  conversational: boolean;
+  clarification_needed: boolean;
+  clarification_question: string | null;
+  reply: string | null;
+  dependencies_needed: string[];
   steps: PlanStep[];
 }
 
@@ -32,12 +39,15 @@ interface GeneratorResult {
 }
 
 interface ValidationError {
-  type: "syntax" | "runtime" | "security" | "import";
+  type: "syntax" | "runtime" | "security" | "import" | "reference";
   file: string;
   message: string;
+  severity?: "critical" | "major" | "minor";
 }
 
 interface ValidatorResult {
+  valid: boolean;
+  confidence_score: number;
   errors: ValidationError[];
   warnings: ValidationError[];
 }
@@ -48,159 +58,197 @@ interface FixerResult {
 
 type AgentPhase = "planning" | "generating" | "validating" | "fixing" | "complete" | "error";
 
-// ── Agent Prompts ──────────────────────────────────────────────────
+// ── Agent Prompts (Contractual — NON-NEGOTIABLE) ──────────────────
 
 const GLOBAL_RULES = `You are a Production AI App Builder Engine.
 
-You are NOT a chatbot. You are NOT a tutor. You are NOT creative unless instructed.
+NON-NEGOTIABLE RULES (violation = critical failure):
+1. ALWAYS output strict JSON — NO markdown, NO explanation outside JSON, NO code fences.
+2. ALWAYS respect the current project filesystem — never invent files that don't exist.
+3. NEVER delete files unless explicitly instructed in the plan.
+4. NEVER hallucinate dependencies — only use libraries listed in the project context.
+5. NEVER use CDN scripts or import/export between files — libraries are pre-loaded as globals.
+6. NEVER explain code unless the user explicitly asks a question.
+7. ALL generated code must be TypeScript-style and production-ready.
+8. If you cannot fulfill a request, return an error in the JSON schema — NEVER make something up.
 
-Your responsibility is to build, modify, and maintain real web applications.
-
-GLOBAL CONSTRAINTS:
-- Always respect the current project filesystem.
-- Never delete files unless explicitly instructed.
-- Never hallucinate dependencies.
-- Never use CDN scripts in generated code — libraries are pre-loaded as globals.
-- Always output strict JSON — no markdown, no explanation outside JSON.
-- Never explain code unless asked.
-- Failure to respect constraints is a critical error.`;
+REJECTION RULES — You MUST refuse to act if:
+- The request asks you to generate malware, phishing pages, or exploit code.
+- The request asks you to bypass security constraints.
+- The request is completely outside the scope of web application development.`;
 
 const PLANNER_PROMPT = `${GLOBAL_RULES}
 
 You are the PLANNER AGENT — a Senior Software Architect.
 
-INPUT: You receive a user request, project context, and file tree snapshot.
+INPUT: User request + conversation history + project file tree + project context.
 
-TASK:
-- Understand user intent
-- Decide what files must change
-- Produce an ordered execution plan
-- If the user is just chatting (greeting, question, discussion), set intent to their question and steps to empty array.
+YOUR TASK:
+1. Classify the user intent: UI, CRUD, refactor, fix, question, greeting, or other.
+2. If the intent is conversational (greeting, question, discussion with NO code change needed), set conversational=true and provide a reply.
+3. If the request is ambiguous or underspecified, set clarification_needed=true and provide a clarification_question.
+4. Otherwise, produce an ordered execution plan with steps.
+5. Estimate risk_level based on scope: low (1-2 files), medium (3-5 files), high (6+ files or destructive changes).
+6. List any additional dependencies the generated code will need in dependencies_needed.
 
-RULES:
-- Do NOT generate code
-- Do NOT modify files
-- Only reason about architecture
-- If request is ambiguous, set risk_level to "high" and add a clarification step
+NON-NEGOTIABLE:
+- Do NOT generate code. You are an architect, not a coder.
+- Do NOT modify files. You only plan.
+- steps[].path MUST be valid file paths from the file tree when action is "modify".
+- For "create" actions, path is the new file path.
 
-OUTPUT ONLY this JSON (no markdown wrapping):
+OUTPUT SCHEMA (strict JSON, no wrapping):
 {
-  "intent": "short summary of what user wants",
+  "intent": "string — short summary of what user wants",
   "risk_level": "low|medium|high",
   "conversational": false,
+  "clarification_needed": false,
+  "clarification_question": null,
   "reply": null,
+  "dependencies_needed": [],
   "steps": [
     {
       "id": 1,
       "action": "create|modify|delete",
-      "target": "filename or feature description",
-      "path": "optional file path",
-      "description": "what and why"
+      "target": "component or feature name",
+      "path": "file path",
+      "description": "what to do and why",
+      "priority": "critical|normal|optional"
     }
   ]
 }
 
-If the user is just chatting (no code needed), set:
-- "conversational": true
-- "reply": "your conversational response"
-- "steps": []`;
+VALID EXAMPLE:
+{"intent":"Add a navbar","risk_level":"low","conversational":false,"clarification_needed":false,"clarification_question":null,"reply":null,"dependencies_needed":["lucide-react"],"steps":[{"id":1,"action":"create","target":"Navbar","path":"Navbar.tsx","description":"Create responsive navbar with logo and links","priority":"critical"},{"id":2,"action":"modify","target":"App","path":"App.tsx","description":"Add Navbar to the App layout","priority":"critical"}]}
+
+INVALID EXAMPLE (DO NOT DO THIS):
+{"intent":"Add navbar","steps":[{"action":"create","description":"Create navbar"}]}
+// MISSING: risk_level, conversational, clarification_needed, reply, dependencies_needed, path, id, priority
+
+CONVERSATIONAL EXAMPLE:
+{"intent":"User greeting","risk_level":"low","conversational":true,"clarification_needed":false,"clarification_question":null,"reply":"Bonjour ! Comment puis-je vous aider avec votre application ?","dependencies_needed":[],"steps":[]}`;
 
 const GENERATOR_PROMPT = `${GLOBAL_RULES}
 
 You are the CODE GENERATOR AGENT — a Senior Fullstack Engineer.
 
-INPUT: You receive an execution plan, current filesystem, and tech stack constraints.
+INPUT: Execution plan + current filesystem + project context (features, decisions, constraints).
 
-RUNTIME ENVIRONMENT:
+RUNTIME ENVIRONMENT (NON-NEGOTIABLE):
 - Code runs in a browser iframe with React 18, ReactDOM, Tailwind CSS, Lucide React pre-loaded as globals.
 - Each file is a SEPARATE <script type="text/babel"> tag loaded alphabetically, App.tsx last.
-- Components must be GLOBAL functions (no export/import).
-- Destructure from globals: const { useState, useEffect } = React;
-- Icons: const { Search, Menu } = lucide;
-- Recharts: const { LineChart, Line, XAxis } = Recharts;
+- Components MUST be GLOBAL functions (window-scoped). NO export/import.
+- Destructure from globals: const { useState, useEffect, useCallback, useMemo, useRef } = React;
+- Icons: const { Search, Menu, X, ChevronDown } = lucide;
+- Recharts: const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } = Recharts;
 - Framer Motion: const { motion: m, AnimatePresence } = motion;
-- React Router: const { BrowserRouter, Routes, Route } = ReactRouter;
+- React Router: const { BrowserRouter, Routes, Route, Link, useNavigate, useLocation } = ReactRouter;
 - date-fns: dateFns.format(new Date(), 'PPP')
 - App.tsx MUST end with: const root = ReactDOM.createRoot(document.getElementById('root')); root.render(React.createElement(App));
 
 DESIGN SYSTEM:
-- Dark mode: bg-[#050505], text-white
-- Modern Tailwind: rounded-2xl, shadow-2xl, backdrop-blur, gradients
-- Glassmorphism: bg-white/5 border border-white/10 backdrop-blur-xl
-- Blue accent: bg-blue-600, text-blue-400
-- Cards: bg-[#111] border border-[#1a1a1a] rounded-2xl p-6
+- Dark mode default: bg-[#050505], text-white
+- Glassmorphism cards: bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl
+- Blue accent: bg-blue-600, text-blue-400, hover:bg-blue-500
+- Consistent spacing: p-6, gap-4, space-y-4
+- Typography: text-sm for body, text-lg font-semibold for headings
+- Interactive elements: transition-all duration-200, hover states, focus:ring-2
 
-RULES:
-- Generate ONLY requested files from the plan
-- Output FULL file contents — no placeholders, no "// rest of code"
-- TypeScript-style code only
-- Follow existing project conventions
-- NEVER use import/export between files
+COHERENCE RULES:
+- Before referencing a component, verify it exists in the file tree OR is being created in this batch.
+- If the plan says "modify", you MUST include the FULL file content (not just changes).
+- If a file exceeds 300 lines, consider splitting into sub-components.
+- Every file must be syntactically complete and independently valid.
 
-OUTPUT ONLY this JSON (no markdown wrapping):
+NON-NEGOTIABLE:
+- Generate ONLY files listed in the execution plan.
+- Output FULL file contents — NO placeholders, NO "// rest of code here", NO truncation.
+- NEVER use import/export between files.
+- NEVER reference components that don't exist and aren't being created.
+
+OUTPUT SCHEMA (strict JSON, no wrapping):
 {
   "files": [
     {
-      "path": "App.tsx",
-      "content": "FULL FILE CONTENT HERE"
+      "path": "ComponentName.tsx",
+      "content": "// FULL FILE CONTENT — every single line"
     }
   ]
-}`;
+}
+
+INVALID OUTPUT (DO NOT DO THIS):
+{"files":[{"path":"App.tsx","content":"// ... existing code ...\\nfunction NewComponent() { }"}]}
+// REASON: Partial content with "... existing code ..." placeholder — REJECTED.`;
 
 const VALIDATOR_PROMPT = `${GLOBAL_RULES}
 
-You are the VALIDATOR AGENT — a Build & Security Validator.
+You are the VALIDATOR AGENT — a Build & Security Auditor.
 
-INPUT: You receive the complete filesystem snapshot after code generation.
+INPUT: Complete filesystem snapshot after code generation.
 
-TASK:
-- Validate syntax correctness
-- Validate that all referenced components/functions exist across files
-- Validate that globals are properly destructured (no import/export)
-- Detect security risks (eval, dangerouslySetInnerHTML, hardcoded secrets, external scripts)
-- Detect runtime errors (undefined references, missing mount call in App.tsx)
+YOUR CHECKS (ordered by priority):
+1. SYNTAX: Valid JSX/TSX, matched brackets/parens, no unterminated strings.
+2. REFERENCES: Every component/function referenced in a file must be defined in SOME file in the filesystem (they're globals).
+3. GLOBALS: All React hooks, Lucide icons, Recharts components must be destructured from their global objects — no import statements.
+4. MOUNT: App.tsx MUST contain ReactDOM.createRoot(document.getElementById('root')).render(...).
+5. SECURITY: Flag eval(), dangerouslySetInnerHTML, hardcoded API keys, external script tags, document.write().
+6. IMPORTS: Flag any import/export statements (these will break the runtime).
 
-RULES:
-- NEVER rewrite code
-- ONLY report issues
-- Be strict but not pedantic — minor style issues are warnings, not errors
+CONFIDENCE SCORING:
+- 90-100: No errors, code is clean.
+- 70-89: Minor warnings only (style issues, unused variables).
+- 50-69: Some errors that the fixer can likely resolve.
+- 0-49: Critical structural issues, may need regeneration.
 
-OUTPUT ONLY this JSON (no markdown wrapping):
+NON-NEGOTIABLE:
+- NEVER rewrite or modify code. You are a validator, not a fixer.
+- ONLY report findings in the schema.
+- Be strict on errors, lenient on warnings.
+
+OUTPUT SCHEMA (strict JSON, no wrapping):
 {
-  "valid": true|false,
+  "valid": true,
+  "confidence_score": 95,
   "errors": [
     {
-      "type": "syntax|runtime|security|import",
-      "file": "filename",
-      "message": "description of the issue"
+      "type": "syntax|runtime|security|import|reference",
+      "file": "filename.tsx",
+      "message": "description of the issue",
+      "severity": "critical|major|minor"
     }
   ],
-  "warnings": [
-    {
-      "type": "syntax|runtime|security|import",
-      "file": "filename",
-      "message": "description"
-    }
-  ]
-}`;
+  "warnings": []
+}
+
+VALID EXAMPLE:
+{"valid":false,"confidence_score":45,"errors":[{"type":"reference","file":"App.tsx","message":"Component 'Dashboard' is referenced but not defined in any file","severity":"critical"},{"type":"import","file":"Navbar.tsx","message":"Uses 'import React from react' — must use global destructuring instead","severity":"major"}],"warnings":[{"type":"runtime","file":"Chart.tsx","message":"Unused variable 'tempData'","severity":"minor"}]}`;
 
 const FIXER_PROMPT = `${GLOBAL_RULES}
 
 You are the FIXER AGENT — a Senior Debugging Engineer.
 
-INPUT: You receive validation errors and the current filesystem.
+INPUT: Validation errors + current filesystem + original plan intent.
 
-RULES:
-- Fix ONLY reported errors — do NOT refactor unrelated code
-- Preserve formatting, style, and existing functionality
-- Each fixed file must be COMPLETE — no partial content
+YOUR TASK:
+- Fix ONLY the reported errors — do NOT refactor unrelated code.
+- Preserve all existing formatting, style, and functionality.
+- Each fixed file must be COMPLETE — no partial content, no placeholders.
+- If a reference error says component X is missing, you must either:
+  a) Define component X in the appropriate file, OR
+  b) Remove the reference if the component isn't needed.
 
-OUTPUT ONLY this JSON (no markdown wrapping):
+NON-NEGOTIABLE:
+- Fix ONLY files with errors. Do NOT touch clean files.
+- Output COMPLETE file contents for every fixed file.
+- Do NOT introduce new bugs while fixing.
+- If you cannot fix an error, include it in your output with an explanation.
+
+OUTPUT SCHEMA (strict JSON, no wrapping):
 {
   "files": [
     {
-      "path": "filename",
-      "content": "COMPLETE FIXED CONTENT"
+      "path": "filename.tsx",
+      "content": "COMPLETE FIXED FILE CONTENT"
     }
   ]
 }`;
@@ -211,6 +259,7 @@ async function callAgent<T>(
   systemPrompt: string,
   userMessage: string,
   model: string,
+  maxTokens = 16000,
 ): Promise<T> {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) throw new Error("AI gateway not configured");
@@ -227,8 +276,8 @@ async function callAgent<T>(
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
       ],
-      temperature: 0.3,
-      max_tokens: 16000,
+      temperature: 0.2,
+      max_tokens: maxTokens,
       response_format: { type: "json_object" },
     }),
   });
@@ -236,6 +285,8 @@ async function callAgent<T>(
   if (!resp.ok) {
     const errText = await resp.text();
     console.error(`Agent call failed (${resp.status}):`, errText);
+    if (resp.status === 429) throw new Error("Rate limit exceeded — réessayez dans quelques secondes.");
+    if (resp.status === 402) throw new Error("Crédits AI épuisés — rechargez votre workspace.");
     throw new Error(`Agent call failed: ${resp.status}`);
   }
 
@@ -243,16 +294,20 @@ async function callAgent<T>(
   const content = data.choices?.[0]?.message?.content;
   if (!content) throw new Error("Empty agent response");
 
-  // Parse JSON — strip markdown code fences if present
   let jsonStr = content.trim();
   if (jsonStr.startsWith("```")) {
     jsonStr = jsonStr.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
   }
 
-  return JSON.parse(jsonStr) as T;
+  try {
+    return JSON.parse(jsonStr) as T;
+  } catch (parseErr) {
+    console.error("JSON parse error. Raw content:", jsonStr.slice(0, 500));
+    throw new Error("Agent returned invalid JSON");
+  }
 }
 
-// ── Streaming helper for final response ────────────────────────────
+// ── SSE Stream ────────────────────────────────────────────────────
 
 function createSSEStream() {
   const { readable, writable } = new TransformStream();
@@ -271,19 +326,28 @@ function createSSEStream() {
   };
 }
 
-// ── Complexity detection ───────────────────────────────────────────
+// ── Complexity Detection & Model Routing ──────────────────────────
 
-function pickModel(prompt: string): string {
+function detectComplexity(prompt: string, planSteps?: PlanStep[]): "simple" | "complex" {
   const lower = prompt.toLowerCase();
   const complexKeywords = [
     "dashboard", "app complète", "application complète", "multi-page",
     "e-commerce", "saas", "admin panel", "crm", "plateforme", "full app",
+    "authentification", "authentication", "base de données", "database",
   ];
-  if (complexKeywords.some(k => lower.includes(k)) || lower.length > 500) {
-    return "openai/gpt-5";
-  }
-  return "google/gemini-3-flash-preview";
+
+  if (complexKeywords.some(k => lower.includes(k))) return "complex";
+  if (lower.length > 500) return "complex";
+  if (planSteps && planSteps.length >= 4) return "complex";
+
+  return "simple";
 }
+
+function pickGeneratorModel(complexity: "simple" | "complex"): string {
+  return complexity === "complex" ? "openai/gpt-5" : "google/gemini-3-flash-preview";
+}
+
+const FAST_MODEL = "google/gemini-3-flash-preview";
 
 // ── Main Handler ───────────────────────────────────────────────────
 
@@ -293,7 +357,7 @@ serve(async (req: Request) => {
   }
 
   try {
-    // Auth
+    // ── Auth ──
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -318,7 +382,7 @@ serve(async (req: Request) => {
     }
     const userId = claimsData.claims.sub as string;
 
-    // Check credits
+    // ── Credits Check ──
     const adminClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -338,8 +402,8 @@ serve(async (req: Request) => {
       );
     }
 
-    // Parse request
-    const { messages, projectContext, fileTree, mode } = await req.json();
+    // ── Parse Request ──
+    const { messages, projectContext, fileTree } = await req.json();
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new Response(JSON.stringify({ error: "Messages array required" }), {
         status: 400,
@@ -349,19 +413,20 @@ serve(async (req: Request) => {
 
     const lastUserMsg = [...messages].reverse().find((m: { role: string }) => m.role === "user");
     const userPrompt = lastUserMsg?.content ?? "";
-    const model = pickModel(userPrompt);
 
-    // Create SSE stream
+    // ── Create SSE Stream ──
     const stream = createSSEStream();
 
-    // Run orchestration pipeline in background
+    // ── Run Pipeline ──
     (async () => {
       try {
-        // ── Phase 1: PLANNER ──
+        // ════════════════════════════════════════════════════════════
+        // PHASE 1: PLANNER
+        // ════════════════════════════════════════════════════════════
         await stream.sendEvent({
           type: "phase",
           phase: "planning" as AgentPhase,
-          message: "Analyse de l'architecture…",
+          message: "🧠 Analyse de l'architecture…",
         });
 
         const conversationHistory = messages
@@ -372,33 +437,25 @@ serve(async (req: Request) => {
         const plannerInput = `## User Request
 ${userPrompt}
 
-## Conversation History
+## Conversation History (last 10 messages)
 ${conversationHistory}
 
 ## Current File Tree
 ${fileTree || "App.tsx"}
 
 ## Project Context
-${projectContext ? projectContext.slice(0, 12000) : "Empty project"}`;
+${projectContext ? projectContext.slice(0, 12000) : "Empty project — only App.tsx exists"}`;
 
-        const plan = await callAgent<PlanResult & { conversational?: boolean; reply?: string }>(
+        const plan = await callAgent<PlanResult>(
           PLANNER_PROMPT,
           plannerInput,
-          "google/gemini-3-flash-preview",
+          FAST_MODEL,
         );
 
-        await stream.sendEvent({
-          type: "plan",
-          plan,
-        });
+        await stream.sendEvent({ type: "plan", plan });
 
-        // If conversational, just reply and stop
+        // ── Handle Conversational ──
         if (plan.conversational && plan.reply) {
-          await stream.sendEvent({
-            type: "phase",
-            phase: "complete" as AgentPhase,
-            message: "Réponse envoyée",
-          });
           await stream.sendEvent({
             type: "result",
             conversational: true,
@@ -406,22 +463,31 @@ ${projectContext ? projectContext.slice(0, 12000) : "Empty project"}`;
             files: [],
             deletedFiles: [],
           });
-          // Deduct credit
-          const newCredits = currentCredits - 1;
-          const newLifetime = (creditRow?.lifetime_used ?? 0) + 1;
-          await adminClient
-            .from("users_credits")
-            .update({ credits: newCredits, lifetime_used: newLifetime })
-            .eq("user_id", userId);
+          await deductCredit(adminClient, userId, currentCredits, creditRow?.lifetime_used ?? 0);
           await stream.close();
           return;
         }
 
-        if (plan.steps.length === 0) {
+        // ── Handle Clarification ──
+        if (plan.clarification_needed && plan.clarification_question) {
           await stream.sendEvent({
             type: "result",
             conversational: true,
-            reply: plan.intent || "Je ne suis pas sûr de comprendre. Pouvez-vous reformuler ?",
+            reply: `🤔 ${plan.clarification_question}`,
+            files: [],
+            deletedFiles: [],
+          });
+          await deductCredit(adminClient, userId, currentCredits, creditRow?.lifetime_used ?? 0);
+          await stream.close();
+          return;
+        }
+
+        // ── No Steps ──
+        if (!plan.steps || plan.steps.length === 0) {
+          await stream.sendEvent({
+            type: "result",
+            conversational: true,
+            reply: plan.reply || plan.intent || "Je ne suis pas sûr de comprendre. Pouvez-vous reformuler ?",
             files: [],
             deletedFiles: [],
           });
@@ -429,11 +495,16 @@ ${projectContext ? projectContext.slice(0, 12000) : "Empty project"}`;
           return;
         }
 
-        // ── Phase 2: GENERATOR ──
+        // ════════════════════════════════════════════════════════════
+        // PHASE 2: GENERATOR
+        // ════════════════════════════════════════════════════════════
+        const complexity = detectComplexity(userPrompt, plan.steps);
+        const generatorModel = pickGeneratorModel(complexity);
+
         await stream.sendEvent({
           type: "phase",
           phase: "generating" as AgentPhase,
-          message: "Génération du code…",
+          message: `⚡ Génération du code (${complexity === "complex" ? "mode avancé" : "mode rapide"})…`,
         });
 
         const generatorInput = `## Execution Plan
@@ -442,19 +513,25 @@ ${JSON.stringify(plan.steps, null, 2)}
 ## Plan Intent
 ${plan.intent}
 
-## Current Filesystem
-${projectContext ? projectContext.slice(0, 20000) : "// Empty project - App.tsx only"}
+## Dependencies Available
+${(plan.dependencies_needed || []).join(", ") || "None additional"}
 
-## Files to generate/modify
-${plan.steps.map(s => `- ${s.action} ${s.path || s.target}: ${s.description}`).join("\n")}`;
+## Current Filesystem (full code)
+${projectContext ? projectContext.slice(0, 25000) : "// Empty project — App.tsx only"}
+
+## File Tree
+${fileTree || "App.tsx"}
+
+## Files to Generate/Modify
+${plan.steps.map(s => `- [${s.priority || "normal"}] ${s.action} ${s.path || s.target}: ${s.description}`).join("\n")}`;
 
         const generated = await callAgent<GeneratorResult>(
           GENERATOR_PROMPT,
           generatorInput,
-          model,
+          generatorModel,
+          complexity === "complex" ? 32000 : 16000,
         );
 
-        // Send file updates as they come
         for (const file of generated.files) {
           await stream.sendEvent({
             type: "file_generated",
@@ -463,68 +540,106 @@ ${plan.steps.map(s => `- ${s.action} ${s.path || s.target}: ${s.description}`).j
           });
         }
 
-        // ── Phase 3: VALIDATOR ──
+        // ════════════════════════════════════════════════════════════
+        // PHASE 3: VALIDATOR
+        // ════════════════════════════════════════════════════════════
         await stream.sendEvent({
           type: "phase",
           phase: "validating" as AgentPhase,
-          message: "Validation du code…",
+          message: "🔍 Validation du code…",
         });
 
-        // Build full filesystem for validation
         const allFiles = generated.files.map(f => `--- ${f.path} ---\n${f.content}`).join("\n\n");
         const validatorInput = `## Complete Filesystem After Generation
-${allFiles}`;
+${allFiles}
 
-        const validation = await callAgent<ValidatorResult & { valid?: boolean }>(
+## Original Plan Intent
+${plan.intent}
+
+## Expected Components/Functions
+${plan.steps.filter(s => s.action === "create").map(s => s.target).join(", ") || "None new"}`;
+
+        const validation = await callAgent<ValidatorResult>(
           VALIDATOR_PROMPT,
           validatorInput,
-          "google/gemini-3-flash-preview",
+          FAST_MODEL,
         );
 
         await stream.sendEvent({
           type: "validation",
           errors: validation.errors,
           warnings: validation.warnings,
+          confidence_score: validation.confidence_score,
         });
 
         let finalFiles = generated.files;
 
-        // ── Phase 4: FIXER (if needed) ──
-        if (validation.errors && validation.errors.length > 0) {
-          await stream.sendEvent({
-            type: "phase",
-            phase: "fixing" as AgentPhase,
-            message: `Correction de ${validation.errors.length} erreur(s)…`,
-          });
+        // ════════════════════════════════════════════════════════════
+        // PHASE 4: FIXER (with retry — max 2 passes)
+        // ════════════════════════════════════════════════════════════
+        if (validation.errors && validation.errors.length > 0 && validation.confidence_score < 80) {
+          const MAX_FIX_PASSES = 2;
 
-          const fixerInput = `## Errors to Fix
-${JSON.stringify(validation.errors, null, 2)}
+          for (let pass = 1; pass <= MAX_FIX_PASSES; pass++) {
+            const currentErrors = pass === 1
+              ? validation.errors
+              : (await revalidate(finalFiles, plan.intent, plan.steps)).errors;
+
+            if (!currentErrors || currentErrors.length === 0) break;
+
+            await stream.sendEvent({
+              type: "phase",
+              phase: "fixing" as AgentPhase,
+              message: `🔧 Correction passe ${pass}/${MAX_FIX_PASSES} — ${currentErrors.length} erreur(s)…`,
+            });
+
+            const currentFilesStr = finalFiles.map(f => `--- ${f.path} ---\n${f.content}`).join("\n\n");
+
+            const fixerInput = `## Errors to Fix
+${JSON.stringify(currentErrors, null, 2)}
+
+## Original Plan Intent
+${plan.intent}
 
 ## Current Filesystem
-${allFiles}`;
+${currentFilesStr}`;
 
-          const fixes = await callAgent<FixerResult>(
-            FIXER_PROMPT,
-            fixerInput,
-            model,
-          );
+            const fixes = await callAgent<FixerResult>(
+              FIXER_PROMPT,
+              fixerInput,
+              generatorModel,
+            );
 
-          // Merge fixes into files
-          const fileMap = new Map(finalFiles.map(f => [f.path, f]));
-          for (const fix of fixes.files) {
-            fileMap.set(fix.path, fix);
+            // Merge fixes
+            const fileMap = new Map(finalFiles.map(f => [f.path, f]));
+            for (const fix of fixes.files) {
+              fileMap.set(fix.path, fix);
+            }
+            finalFiles = [...fileMap.values()];
           }
-          finalFiles = [...fileMap.values()];
+
+          // Final revalidation
+          const finalValidation = await revalidate(finalFiles, plan.intent, plan.steps);
+          if (finalValidation.errors.length > 0) {
+            await stream.sendEvent({
+              type: "validation",
+              errors: finalValidation.errors,
+              warnings: finalValidation.warnings,
+              confidence_score: finalValidation.confidence_score,
+              fixerExhausted: true,
+            });
+          }
         }
 
-        // ── Phase 5: COMPLETE ──
+        // ════════════════════════════════════════════════════════════
+        // PHASE 5: RESULT
+        // ════════════════════════════════════════════════════════════
         await stream.sendEvent({
           type: "phase",
           phase: "complete" as AgentPhase,
-          message: "Code prêt !",
+          message: "✅ Code prêt !",
         });
 
-        // Collect deleted files from plan
         const deletedFiles = plan.steps
           .filter(s => s.action === "delete")
           .map(s => s.path || s.target);
@@ -538,13 +653,7 @@ ${allFiles}`;
           warnings: validation.warnings || [],
         });
 
-        // Deduct credit
-        const newCredits = currentCredits - 1;
-        const newLifetime = (creditRow?.lifetime_used ?? 0) + 1;
-        await adminClient
-          .from("users_credits")
-          .update({ credits: newCredits, lifetime_used: newLifetime })
-          .eq("user_id", userId);
+        await deductCredit(adminClient, userId, currentCredits, creditRow?.lifetime_used ?? 0);
 
       } catch (e) {
         console.error("Orchestrator pipeline error:", e);
@@ -556,7 +665,7 @@ ${allFiles}`;
         await stream.sendEvent({
           type: "result",
           conversational: true,
-          reply: `⚠️ Erreur: ${e instanceof Error ? e.message : "Erreur interne"}`,
+          reply: `⚠️ Erreur: ${e instanceof Error ? e.message : "Erreur interne du pipeline"}`,
           files: [],
           deletedFiles: [],
         });
@@ -581,3 +690,44 @@ ${allFiles}`;
     );
   }
 });
+
+// ── Helper: Deduct Credit ─────────────────────────────────────────
+
+async function deductCredit(
+  adminClient: ReturnType<typeof createClient>,
+  userId: string,
+  currentCredits: number,
+  lifetimeUsed: number,
+) {
+  await adminClient
+    .from("users_credits")
+    .update({
+      credits: currentCredits - 1,
+      lifetime_used: lifetimeUsed + 1,
+    })
+    .eq("user_id", userId);
+}
+
+// ── Helper: Revalidate after fix ──────────────────────────────────
+
+async function revalidate(
+  files: GeneratedFile[],
+  intent: string,
+  steps: PlanStep[],
+): Promise<ValidatorResult> {
+  const allFiles = files.map(f => `--- ${f.path} ---\n${f.content}`).join("\n\n");
+  const validatorInput = `## Complete Filesystem After Fix
+${allFiles}
+
+## Original Plan Intent
+${intent}
+
+## Expected Components
+${steps.filter(s => s.action === "create").map(s => s.target).join(", ") || "None"}`;
+
+  return callAgent<ValidatorResult>(
+    VALIDATOR_PROMPT,
+    validatorInput,
+    FAST_MODEL,
+  );
+}

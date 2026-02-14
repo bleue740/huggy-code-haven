@@ -10,7 +10,9 @@ import {
 import type { VirtualFS } from "../engine/VirtualFS";
 import type { ProjectContext } from "../engine/ProjectContext";
 
-const ORCHESTRATOR_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-orchestrator`;
+const ORCHESTRATOR_URL = import.meta.env.VITE_BACKEND_URL
+  ? `${import.meta.env.VITE_BACKEND_URL}/api/orchestrator`
+  : `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-orchestrator`;
 
 interface OrchestratorCallbacks {
   onFilesGenerated: (files: Array<{ path: string; content: string }>, deletedFiles: string[]) => void;
