@@ -31,7 +31,8 @@ app.post("/preview", (req, res) => {
       return res.status(500).json({ error: "docker failed" });
     }
 
-    res.json({ url: `http://localhost:${port}` });
+    const publicBaseUrl = process.env.PUBLIC_URL || `http://localhost:${port}`;
+    res.json({ url: `${publicBaseUrl}:${port}` });
   });
 });
 
