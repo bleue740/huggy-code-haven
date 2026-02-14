@@ -27,6 +27,7 @@ interface TopNavProps {
   onToggleCodeView?: () => void;
   onShowVersionHistory?: () => void;
   onShowCollaboration?: () => void;
+  onGitHubSync?: () => void;
   isCodeView?: boolean;
   isGenerating?: boolean;
   projectName?: string;
@@ -40,6 +41,7 @@ export const TopNav: React.FC<TopNavProps> = ({
   onToggleCodeView,
   onShowVersionHistory,
   onShowCollaboration,
+  onGitHubSync,
   isCodeView,
   isGenerating,
   projectName = 'New Project',
@@ -175,7 +177,7 @@ export const TopNav: React.FC<TopNavProps> = ({
                 icon={<Github size={14} />}
                 label="Connect GitHub"
                 description="Sync with a repository"
-                onClick={() => { toast.info('GitHub integration coming soon!'); setShowPublishMenu(false); }}
+                onClick={() => { onGitHubSync?.(); setShowPublishMenu(false); }}
               />
               <DropdownItem
                 icon={<Globe size={14} />}
