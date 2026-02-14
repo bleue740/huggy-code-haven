@@ -21,6 +21,7 @@ import { X, CheckCircle2, Zap, Rocket, ShieldCheck, AlertTriangle, Info, Loader2
 import type { ProjectTemplate } from './data/templates';
 import { SupabaseConnectModal } from './components/SupabaseConnectModal';
 import { FirecrawlConnectCard } from './components/FirecrawlConnectCard';
+import { GitHubSyncModal } from './components/GitHubSyncModal';
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -130,6 +131,7 @@ const App: React.FC = () => {
   });
 
   const [showFirecrawlModal, setShowFirecrawlModal] = useState(false);
+  const [showGitHubModal, setShowGitHubModal] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showCollabPanel, setShowCollabPanel] = useState(false);
 
@@ -899,6 +901,7 @@ const App: React.FC = () => {
             onToggleCodeView={() => setState(prev => ({ ...prev, isCodeView: !prev.isCodeView }))}
             onShowVersionHistory={handleShowVersionHistory}
             onShowCollaboration={() => setShowCollabPanel(true)}
+            onGitHubSync={() => setShowGitHubModal(true)}
             isCodeView={state.isCodeView}
             isGenerating={state.isGenerating}
             projectName={state.projectName}
@@ -1059,6 +1062,18 @@ const App: React.FC = () => {
           isOpen={showCollabPanel}
           onClose={() => setShowCollabPanel(false)}
           projectId={state.projectId}
+        />
+
+        {/* GitHub Sync Modal */}
+        <GitHubSyncModal
+          isOpen={showGitHubModal}
+          onClose={() => setShowGitHubModal(false)}
+          files={state.files}
+          onFilesImported={(imported) => {
+            setState(prev => ({ ...prev, files: { ...prev.files, ...imported }, activeFile: 'App.tsx' }));
+            toast.success('Fichiers importés depuis GitHub !');
+          }}
+          projectName={state.projectName}
         />
       </div>
     </div>
