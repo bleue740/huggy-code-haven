@@ -1,42 +1,36 @@
 
+# Plan : Etape 2 — Ajouter la route /preview
 
-# Plan : Ajouter le serveur minimal + Dockerfile pour Railway
+## Objectif
 
-## Contexte
+Ajouter une route POST `/preview` au serveur qui cree un mini projet HTML et le sert, plus un dossier `projects/` pour stocker les projets generes.
 
-Railway essaie de builder le frontend (Vite/Bun) au lieu du serveur Node.js. La solution est de creer un dossier `server/` isole et un `Dockerfile` a la racine pour que Railway ne regarde que le serveur.
-
-## Fichiers a creer
-
-| Fichier | Description |
-|---|---|
-| `server/index.js` | Serveur Express minimal avec endpoint `/health` |
-| `server/package.json` | Dependances du serveur (express uniquement) |
-| `Dockerfile` | A la racine — dit a Railway d'utiliser Node 20 et de ne builder que `server/` |
-
-## Contenu des fichiers
+## Fichiers a modifier
 
 ### 1. `server/index.js`
-Serveur Express basique avec un seul endpoint GET `/health` qui retourne `{ "status": "ok" }`.
+- Ajouter les imports: `exec` (child_process), `path`, `fs`
+- Ajouter `express.json()` middleware (necessaire pour lire le body des requetes POST)
+- Ajouter la route `POST /preview` qui:
+  - Cree un dossier `projects/demo/` s'il n'existe pas
+  - Ecrit un fichier `index.html` basique dedans
+  - Lance `npx serve` sur ce dossier (port 4000)
+  - Retourne l'URL en JSON
 
 ### 2. `server/package.json`
-Package minimal avec `"type": "module"` pour les imports ES, et express comme seule dependance.
+- Ajouter `"serve": "^14.2.0"` dans les dependances
 
-### 3. `Dockerfile` (racine)
-- Base: `node:20`
-- Copie uniquement le dossier `server/`
-- Installe les dependances avec npm (pas bun)
-- Expose le port 3000
-- Lance `node index.js`
+### 3. `server/projects/.gitkeep`
+- Creer un fichier vide pour que le dossier `projects/` soit versionne par Git
 
-## Ce qui ne change PAS
-- Aucun fichier existant n'est modifie
-- Le frontend Lovable reste intact
-- Le `railway.json` n'existe pas donc rien a supprimer
+## Detail technique
+
+La route `/preview` est un premier test mecanique. L'URL retournee (`localhost:4000`) ne sera pas accessible publiquement depuis Railway a ce stade — c'est normal. Le but est de valider que le serveur peut:
+1. Creer des fichiers sur le filesystem
+2. Lancer un process enfant (serve)
+3. Retourner une reponse
 
 ## Apres implementation
 1. Push sur GitHub
-2. Railway detecte le Dockerfile
-3. Build uniquement le serveur Node.js
-4. Tester `https://TON_URL/health` → `{ "status": "ok" }`
-
+2. Railway rebuild automatiquement
+3. Tester avec `POST https://TON_URL/preview`
+4. Verifier la reponse `{ "url": "..." }`
