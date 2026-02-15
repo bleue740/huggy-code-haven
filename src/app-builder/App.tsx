@@ -1025,6 +1025,7 @@ const App: React.FC = () => {
               onShowCollaboration={() => setShowCollabPanel(true)}
               onGitHubSync={() => setShowGitHubModal(true)}
               onSharePreview={handleSharePreview}
+              onRenameProject={handleRenameProject}
               isCodeView={state.isCodeView}
               isGenerating={state.isGenerating}
               isSharingPreview={isSharingPreview}
