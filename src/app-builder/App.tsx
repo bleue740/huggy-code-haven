@@ -1014,6 +1014,7 @@ const App: React.FC = () => {
             code={concatenatedCode}
             files={state.files}
             isGenerating={state.isGenerating}
+            isBuilding={!!(state as any)._generationPhase && (state as any)._generationPhase !== 'preview_ready' && (state as any)._generationPhase !== 'error'}
             generationStatus={state.aiStatusText ?? undefined}
             supabaseUrl={state.supabaseUrl}
             supabaseAnonKey={state.supabaseAnonKey}

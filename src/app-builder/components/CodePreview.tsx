@@ -8,6 +8,7 @@ interface CodePreviewProps {
   code: string;
   files?: Record<string, string>;
   isGenerating: boolean;
+  isBuilding?: boolean;
   generationStatus?: string;
   supabaseUrl?: string | null;
   supabaseAnonKey?: string | null;
@@ -197,7 +198,7 @@ const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(React.createElement(App));
 `;
 
-export const CodePreview: React.FC<CodePreviewProps> = ({ code, files, isGenerating, generationStatus, supabaseUrl, supabaseAnonKey, firecrawlEnabled }) => {
+export const CodePreview: React.FC<CodePreviewProps> = ({ code, files, isGenerating, isBuilding, generationStatus, supabaseUrl, supabaseAnonKey, firecrawlEnabled }) => {
   const [deviceMode, setDeviceMode] = useState<DeviceMode>("desktop");
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -303,7 +304,7 @@ export const CodePreview: React.FC<CodePreviewProps> = ({ code, files, isGenerat
             sandbox="allow-scripts allow-same-origin"
             title="Code Preview"
           />
-          <GeneratingOverlay isVisible={isGenerating} statusText={generationStatus} />
+          <GeneratingOverlay isVisible={!!isBuilding} statusText={generationStatus} />
         </div>
       </div>
     </div>
