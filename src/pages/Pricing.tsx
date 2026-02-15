@@ -164,7 +164,7 @@ function PlanCard({
 
 function GiftCardsSection() {
   return (
-    <div className="flex items-center justify-between p-6 rounded-2xl border border-white/10 bg-white/[0.03]">
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 sm:p-6 rounded-2xl border border-white/10 bg-white/[0.03]">
       <div>
         <h3 className="font-bold text-white text-lg">Gift cards</h3>
         <p className="text-sm text-gray-400 mt-1">
@@ -174,7 +174,7 @@ function GiftCardsSection() {
           View all gift cards
         </button>
       </div>
-      <div className="hidden sm:flex items-center justify-center w-24 h-20">
+      <div className="hidden sm:flex items-center justify-center w-24 h-20 shrink-0">
         <Gift size={48} className="text-purple-400" />
       </div>
     </div>
@@ -183,7 +183,7 @@ function GiftCardsSection() {
 
 function StudentDiscountSection() {
   return (
-    <div className="flex items-center justify-between p-6 rounded-2xl border border-white/10 bg-white/[0.03]">
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 sm:p-6 rounded-2xl border border-white/10 bg-white/[0.03]">
       <div>
         <h3 className="font-bold text-white">Student discount</h3>
         <p className="text-sm text-gray-400 mt-1">
@@ -202,12 +202,22 @@ function StudentDiscountSection() {
 
 function SecuritySection() {
   return (
-    <div className="flex items-center justify-between p-6 rounded-2xl border border-white/10 bg-white/[0.03]">
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 sm:p-6 rounded-2xl border border-white/10 bg-white/[0.03]">
       <div>
         <h3 className="font-bold text-white">Security & compliance</h3>
         <p className="text-sm text-gray-400 mt-1">
           Enterprise-level security and compliance certifications.
         </p>
+        <div className="flex items-center gap-1.5 mt-3 sm:hidden">
+          {['ISO 27001', 'GDPR', 'SOC 2'].map((badge) => (
+            <span
+              key={badge}
+              className="px-2.5 py-1 text-[10px] font-bold bg-blue-600/20 text-blue-400 rounded-lg border border-blue-500/30"
+            >
+              {badge}
+            </span>
+          ))}
+        </div>
       </div>
       <div className="hidden sm:flex items-center gap-2">
         <div className="flex gap-1.5">
@@ -223,7 +233,7 @@ function SecuritySection() {
       </div>
       <a
         href="mailto:contact@blink.ai?subject=Security"
-        className="shrink-0 ml-4 px-5 py-2.5 text-sm font-medium rounded-lg border border-white/20 text-white hover:bg-white/5 transition-colors"
+        className="shrink-0 px-5 py-2.5 text-sm font-medium rounded-lg border border-white/20 text-white hover:bg-white/5 transition-colors"
       >
         Learn more
       </a>

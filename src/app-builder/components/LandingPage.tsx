@@ -207,6 +207,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
             <button onClick={() => scrollTo('features')} className="text-sm font-semibold text-neutral-400 hover:text-white transition-colors">Features</button>
             <button onClick={() => scrollTo('how-it-works')} className="text-sm font-semibold text-neutral-400 hover:text-white transition-colors">How it works</button>
             <button onClick={() => scrollTo('community')} className="text-sm font-semibold text-neutral-400 hover:text-white transition-colors">Community</button>
+            <Link to="/pricing" className="text-sm font-semibold text-neutral-400 hover:text-white transition-colors">Pricing</Link>
             <Link to="/about" className="text-sm font-semibold text-neutral-400 hover:text-white transition-colors">About</Link>
           </div>
         </div>
@@ -236,6 +237,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
             <button onClick={() => scrollTo('features')} className="block text-2xl font-black text-white">Features</button>
             <button onClick={() => scrollTo('how-it-works')} className="block text-2xl font-black text-white">How it works</button>
             <button onClick={() => scrollTo('community')} className="block text-2xl font-black text-white">Community</button>
+            <Link to="/pricing" className="block text-2xl font-black text-white" onClick={() => setIsMenuOpen(false)}>Pricing</Link>
             <Link to="/about" className="block text-2xl font-black text-white" onClick={() => setIsMenuOpen(false)}>About</Link>
             <Link to="/auth" className="block text-2xl font-black text-neutral-400" onClick={() => setIsMenuOpen(false)}>Sign in</Link>
           </div>
@@ -256,25 +258,25 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
           <Sparkles size={14} /> AI-POWERED APP BUILDER
         </div>
 
-        <h1 className="text-6xl md:text-[110px] font-black mb-12 tracking-tight leading-[0.85] text-white">
+        <h1 className="text-4xl sm:text-6xl md:text-[110px] font-black mb-8 sm:mb-12 tracking-tight leading-[0.85] text-white">
           Build any SaaS <br />
           <span className="italic text-blue-500 font-medium">instantly.</span>
         </h1>
 
-        <p className="text-neutral-400 text-xl md:text-2xl max-w-3xl mb-16 leading-relaxed font-medium">
+        <p className="text-neutral-400 text-lg sm:text-xl md:text-2xl max-w-3xl mb-10 sm:mb-16 leading-relaxed font-medium px-2">
           Describe your project, Blink does the rest. AI-generated code, UI, dashboards, and data tables in seconds.
         </p>
 
-        <div className="w-full max-w-4xl bg-[#111] border border-white/5 rounded-[40px] shadow-[0_40px_80px_rgba(0,0,0,0.5)] p-8 md:p-10 mb-20 group transition-all hover:border-blue-500/30 focus-within:ring-8 focus-within:ring-blue-500/5">
+        <div className="w-full max-w-4xl bg-[#111] border border-white/5 rounded-[24px] sm:rounded-[40px] shadow-[0_40px_80px_rgba(0,0,0,0.5)] p-5 sm:p-8 md:p-10 mb-12 sm:mb-20 group transition-all hover:border-blue-500/30 focus-within:ring-8 focus-within:ring-blue-500/5">
           <textarea
             ref={textareaRef}
-            className="w-full bg-transparent border-none focus:ring-0 text-2xl md:text-3xl text-white placeholder-neutral-700 resize-none h-40 scrollbar-none outline-none font-bold leading-tight"
+            className="w-full bg-transparent border-none focus:ring-0 text-lg sm:text-2xl md:text-3xl text-white placeholder-neutral-700 resize-none h-28 sm:h-40 scrollbar-none outline-none font-bold leading-tight"
             placeholder="Build a CRM for real estate with client tracking..."
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSubmit())}
           />
-          <div className="flex items-center justify-between mt-8 pt-8 border-t border-white/5">
+          <div className="flex items-center justify-between mt-5 sm:mt-8 pt-5 sm:pt-8 border-t border-white/5">
             <div className="flex items-center gap-6">
               <button className="text-neutral-500 hover:text-white transition-colors"><Plus size={28} /></button>
               <div className="hidden sm:flex items-center gap-3">
@@ -292,17 +294,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
         </div>
 
         {/* Suggestions grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 w-full">
           {suggestions.map((item, idx) => (
             <button
               key={`${item.title}-${idx}`}
               onClick={() => handleSuggestionClick(item.prompt)}
-              className="flex flex-col items-center gap-4 px-6 py-8 bg-[#111] border border-white/5 rounded-[32px] hover:border-blue-500/50 hover:bg-[#161616] transition-all shadow-sm group"
+              className="flex flex-row sm:flex-col items-center gap-3 sm:gap-4 px-4 sm:px-6 py-4 sm:py-8 bg-[#111] border border-white/5 rounded-2xl sm:rounded-[32px] hover:border-blue-500/50 hover:bg-[#161616] transition-all shadow-sm group"
             >
-              <div className="p-4 bg-white/5 rounded-2xl group-hover:scale-110 transition-transform group-hover:bg-white/10">
+              <div className="p-3 sm:p-4 bg-white/5 rounded-xl sm:rounded-2xl group-hover:scale-110 transition-transform group-hover:bg-white/10">
                 {iconMap[item.icon] || <Sparkles size={14} className="text-blue-400" />}
               </div>
-              <span className="text-[14px] font-black text-white">{item.title}</span>
+              <span className="text-[13px] sm:text-[14px] font-black text-white">{item.title}</span>
             </button>
           ))}
         </div>
@@ -321,10 +323,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
       {/* Stats / Social Proof */}
       <AnimatedSection>
         <section className="max-w-5xl mx-auto px-6 py-16">
-          <div className="grid grid-cols-3 gap-8 text-center">
+          <div className="grid grid-cols-3 gap-4 sm:gap-8 text-center">
             {dynamicStats.map((s, i) => (
               <div key={i}>
-                <div className="text-4xl md:text-5xl font-black text-white">{s.value}</div>
+                <div className="text-2xl sm:text-4xl md:text-5xl font-black text-white">{s.value}</div>
                 <div className="text-neutral-500 text-sm font-semibold mt-2 uppercase tracking-wider">{s.label}</div>
               </div>
             ))}
@@ -391,7 +393,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
             </p>
           </div>
         </AnimatedSection>
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
           {displayedShowcases.map((item, i) => (
             <AnimatedSection key={item.id} delay={i * 80}>
               <div className="bg-[#111] border border-white/5 rounded-3xl p-6 hover:border-blue-500/30 transition-all group relative overflow-hidden">
@@ -456,6 +458,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
               <h4 className="text-sm font-black text-white uppercase tracking-wider mb-4">Product</h4>
               <ul className="space-y-2 text-sm text-neutral-400">
                 <li><button onClick={() => scrollTo('features')} className="hover:text-white transition-colors">Features</button></li>
+                <li><Link to="/pricing" className="hover:text-white transition-colors">Pricing</Link></li>
                 <li><Link to="/credits" className="hover:text-white transition-colors">Credits</Link></li>
               </ul>
             </div>
