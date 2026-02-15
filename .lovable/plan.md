@@ -1,69 +1,94 @@
 
 
-# Premium Generation Overlay + Smart Activation
+# Pricing Page & Landing Pricing: Alignement Lovable.dev + Stripe Integration
 
-## Problem
-1. The preview overlay animation (GeneratingOverlay) is too basic — floating code cards with a simple orb feel generic
-2. The overlay appears during ALL AI interactions, including simple conversations where no code is being generated
+## Objectif
 
-## Solution
+Reproduire le modele de pricing de Lovable.dev avec 4 plans (Free, Pro, Business, Enterprise), des fonctionnalites realistes alignees sur Blink, un toggle annuel/mensuel fonctionnel, et une integration Stripe reelle pour les paiements. Unifier les deux endroits ou le pricing apparait (landing page + page /pricing).
 
-### 1. Smart Activation: Only show overlay during code generation
+## Ce qui change
 
-Update `CodePreview` to accept a new prop `isBuilding` (true only when the orchestrator is in building/planning phase, not during simple conversation). The `GeneratingOverlay` will only render when actual code generation is happening.
+### 1. Activer Stripe
 
-In `App.tsx`, pass `isBuilding` based on `_generationPhase` being one of `thinking`, `planning`, or `building` (not `undefined` which means conversational mode).
+Utiliser l'outil Stripe de Lovable pour connecter un compte Stripe au projet. Cela permettra de creer des produits, prix, et sessions de checkout reels.
 
-### 2. Premium Overlay Redesign
+### 2. Creer une edge function `create-checkout`
 
-Replace the current basic overlay with a cinematic, Lovable-grade experience:
+Une edge function qui :
+- Recoit le `planId` et `billingInterval` (monthly/yearly)
+- Verifie l'authentification de l'utilisateur
+- Cree ou recupere un Stripe Customer lie au user
+- Cree une Checkout Session Stripe avec le bon price ID
+- Retourne l'URL de checkout pour redirection
 
-- **Animated particle grid**: A subtle dot-grid background with particles that pulse outward from center, creating a "neural network" feel
-- **Morphing orb**: Replace the static pulsing circles with a gradient orb that uses CSS animations to morph between shapes (blob effect) with a blue-to-purple gradient
-- **Code rain effect**: Instead of static floating cards, show thin vertical streams of code characters (matrix-style but subtle and elegant) fading in/out
-- **Phase-aware center display**: The center text adapts based on the current generation phase with smooth crossfade transitions
-- **Glassmorphic status card**: A frosted-glass card in the center showing the current phase icon, status text, and an animated progress ring (SVG circle with stroke-dasharray animation)
-- **Radial glow pulse**: A large, soft radial gradient that slowly breathes behind the orb
+### 3. Creer une edge function `stripe-webhook`
 
-### Technical Details
+Recoit les evenements Stripe (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`) et met a jour la table `subscriptions` en consequence.
 
-**Files to modify:**
-- `src/app-builder/components/GeneratingOverlay.tsx` — Complete rewrite with premium animations
-- `src/app-builder/components/CodePreview.tsx` — Add `isBuilding` prop, pass it to overlay instead of `isGenerating`
-- `src/app-builder/App.tsx` — Compute `isBuilding` from `_generationPhase` state; pass to `CodePreview`
+### 4. Refactorer les plans dans un fichier partage
 
-**New overlay structure:**
+Creer `src/config/plans.ts` avec les 4 plans et leurs features, utilise a la fois par la landing page et la page /pricing. Les plans seront :
+
+- **Free** : 5 credits quotidiens (max 30/mois), projets publics, 1 domaine blink.app, Cloud
+- **Pro** ($25/mois ou $20/mois annuel) : 100 credits/mois, 5 credits quotidiens (max 150/mois), domaines illimites, domaines personnalises, export ZIP, retrait du badge
+- **Business** ($50/mois ou $40/mois annuel) : 100 credits/mois, publish interne, SSO, workspace equipe, templates de design, controle d'acces par roles, centre de securite
+- **Enterprise** (sur devis) : support dedie, onboarding, systemes de design, SCIM, controles de publication
+
+### 5. Refactorer `src/pages/Pricing.tsx`
+
+- Layout en grille 4 colonnes comme Lovable.dev (fond clair/neutre, pas dark)
+- Chaque plan : nom, description, prix barre + prix promo si annuel, toggle annuel par plan, bouton CTA
+- Pro et Business : selecteur de credits (dropdown) avec prix ajustes
+- Enterprise : bouton "Book a demo" qui redirige vers un formulaire de contact
+- Free : bouton "Get Started" qui redirige vers /auth
+- Pro/Business : bouton "Get Started" qui appelle `create-checkout` et redirige vers Stripe
+- Section FAQ en bas (accordeon)
+- Section "Student discount" avec lien
+
+### 6. Mettre a jour la landing page (`LandingPage.tsx`)
+
+Remplacer les 3 plans inline par les 4 plans du fichier partage `plans.ts`. Garder le design compact (cartes) mais avec les bons prix et features. Les boutons "Choose X" redirigent vers `/pricing` pour les plans payants.
+
+### 7. Coherence dans le SaaS
+
+- Le header de la page /pricing utilise le meme branding Blink
+- Les boutons d'upgrade dans l'app (sidebar, modales) pointent vers `/pricing`
+- La table `subscriptions` est deja prete avec les champs `stripe_customer_id`, `stripe_subscription_id`, `plan`, `status`, `current_period_end`
+
+## Details techniques
+
+**Fichiers a creer :**
+- `src/config/plans.ts` — configuration centralisee des plans
+- `supabase/functions/create-checkout/index.ts` — creation de session Stripe
+- `supabase/functions/stripe-webhook/index.ts` — webhook Stripe
+
+**Fichiers a modifier :**
+- `src/pages/Pricing.tsx` — refonte complete alignee sur Lovable.dev
+- `src/app-builder/components/LandingPage.tsx` — mise a jour des plans inline (lignes 153-157)
+- `src/App.tsx` — aucun changement necessaire (route /pricing existe deja)
+
+**Architecture du checkout :**
+
 ```text
-+------------------------------------------+
-|  [particle grid background]              |
-|                                          |
-|     [code rain streams - subtle]         |
-|                                          |
-|        +-------------------+             |
-|        | [morphing orb]    |             |
-|        | [radial glow]     |             |
-|        +-------------------+             |
-|                                          |
-|     +-------------------------+          |
-|     | [glass card]            |          |
-|     |  Phase icon + text      |          |
-|     |  Progress ring (SVG)    |          |
-|     |  Phase dots             |          |
-|     +-------------------------+          |
-|                                          |
-+------------------------------------------+
+User clique "Get Started" (Pro/Business)
+       |
+       v
+Frontend appelle create-checkout edge function
+       |
+       v
+Edge function cree Stripe Checkout Session
+       |
+       v
+User redirige vers Stripe hosted checkout
+       |
+       v
+Stripe webhook -> met a jour subscriptions table
+       |
+       v
+User revient sur /app avec plan actif
 ```
 
-**Animation techniques (CSS only, no libraries):**
-- `@keyframes blob` for morphing orb shape
-- `@keyframes code-rain` for vertical code streams
-- `@keyframes breathe` for radial glow
-- `@keyframes grid-pulse` for particle grid dots
-- SVG `stroke-dashoffset` transition for progress ring
-- `transition` on text opacity for smooth phase crossfade
-
-**Activation logic in App.tsx:**
-- `isBuilding = state._generationPhase && state._generationPhase !== 'preview_ready' && state._generationPhase !== 'error'`
-- Pass `isBuilding` to `CodePreview` instead of `isGenerating`
-- Conversational replies already clear `_generationPhase` to `undefined`, so the overlay naturally hides
+**Prerequis :**
+- Activation de Stripe via l'outil Lovable (cle secrete)
+- Creation des produits/prix dans Stripe via l'edge function ou manuellement
 
