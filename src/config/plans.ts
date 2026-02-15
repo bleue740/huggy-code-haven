@@ -1,7 +1,8 @@
 export interface CreditTier {
   credits: number;
-  label: string;
-  additionalPrice: number;
+  monthlyPrice: number;
+  annualPrice: number;
+  annualMonthly: number;
 }
 
 export interface PlanTier {
@@ -9,7 +10,6 @@ export interface PlanTier {
   name: string;
   description: string;
   monthlyPrice: number | null;
-  annualFirstMonthPrice: number | null; // 50% off first month
   badge?: string;
   highlight: boolean;
   cta: string;
@@ -21,123 +21,162 @@ export interface PlanTier {
   hasAnnualToggle: boolean;
 }
 
-export const CREDIT_TIERS: CreditTier[] = [
-  { credits: 100, label: '100 credits per month', additionalPrice: 0 },
-  { credits: 200, label: '200 credits per month', additionalPrice: 15 },
-  { credits: 500, label: '500 credits per month', additionalPrice: 40 },
+export const CREDIT_TIERS_PRO: CreditTier[] = [
+  { credits: 100, monthlyPrice: 25, annualPrice: 250, annualMonthly: 21 },
+  { credits: 200, monthlyPrice: 50, annualPrice: 500, annualMonthly: 42 },
+  { credits: 400, monthlyPrice: 100, annualPrice: 1000, annualMonthly: 84 },
+  { credits: 800, monthlyPrice: 200, annualPrice: 2000, annualMonthly: 167 },
+  { credits: 1200, monthlyPrice: 294, annualPrice: 2940, annualMonthly: 245 },
+  { credits: 2000, monthlyPrice: 480, annualPrice: 4800, annualMonthly: 400 },
+  { credits: 3000, monthlyPrice: 705, annualPrice: 7050, annualMonthly: 588 },
+  { credits: 4000, monthlyPrice: 920, annualPrice: 9200, annualMonthly: 767 },
+  { credits: 5000, monthlyPrice: 1125, annualPrice: 11250, annualMonthly: 938 },
+  { credits: 7500, monthlyPrice: 1688, annualPrice: 16880, annualMonthly: 1407 },
+  { credits: 10000, monthlyPrice: 2250, annualPrice: 22500, annualMonthly: 1875 },
+];
+
+export const CREDIT_TIERS_BUSINESS: CreditTier[] = [
+  { credits: 100, monthlyPrice: 50, annualPrice: 500, annualMonthly: 42 },
+  { credits: 200, monthlyPrice: 100, annualPrice: 1000, annualMonthly: 84 },
+  { credits: 400, monthlyPrice: 200, annualPrice: 2000, annualMonthly: 167 },
+  { credits: 800, monthlyPrice: 400, annualPrice: 4000, annualMonthly: 334 },
+  { credits: 1200, monthlyPrice: 588, annualPrice: 5880, annualMonthly: 490 },
+  { credits: 2000, monthlyPrice: 960, annualPrice: 9600, annualMonthly: 800 },
+  { credits: 3000, monthlyPrice: 1410, annualPrice: 14100, annualMonthly: 1175 },
+  { credits: 4000, monthlyPrice: 1840, annualPrice: 18400, annualMonthly: 1534 },
+  { credits: 5000, monthlyPrice: 2250, annualPrice: 22500, annualMonthly: 1875 },
+  { credits: 7500, monthlyPrice: 3300, annualPrice: 33000, annualMonthly: 2750 },
+  { credits: 10000, monthlyPrice: 4300, annualPrice: 43000, annualMonthly: 3584 },
 ];
 
 export const PLANS: PlanTier[] = [
   {
+    id: 'free',
+    name: 'Free',
+    description: 'Découvrez Blink gratuitement et construisez vos premiers prototypes.',
+    monthlyPrice: 0,
+    highlight: false,
+    cta: 'Get Started',
+    ctaVariant: 'outline',
+    ctaAction: 'auth',
+    hasCreditSelector: false,
+    hasAnnualToggle: false,
+    features: [
+      '5 crédits journaliers (max 30/mois)',
+      'Projets privés',
+      'Workspace collaboratif illimité',
+      '5 domaines blink.app',
+      'Accès à Blink Cloud',
+    ],
+  },
+  {
     id: 'pro',
     name: 'Pro',
-    description: 'Built for fast-moving teams shipping in real time.',
+    description: 'Pour les équipes rapides qui livrent en temps réel.',
     monthlyPrice: 25,
-    annualFirstMonthPrice: 12.5,
+    badge: 'Popular',
     highlight: true,
     cta: 'Upgrade',
     ctaVariant: 'primary',
     ctaAction: 'checkout',
     hasCreditSelector: true,
     hasAnnualToggle: true,
-    featuresIntro: 'All Free features, plus:',
+    featuresIntro: 'Tout le plan Free, plus :',
     features: [
-      '100 monthly credits',
-      '5 daily credits (up to 150/month)',
-      'Usage-based Cloud + AI',
-      'Credit rollovers',
-      'On-demand credit top-ups',
-      'Unlimited blink.app domains',
-      'Custom domains',
-      'Remove the Blink badge',
-      'User roles & permissions',
+      'Crédits mensuels selon votre forfait',
+      '5 crédits journaliers (max 150/mois)',
+      'Cloud + AI à l\'usage',
+      'Report de crédits',
+      'Recharges ponctuelles',
+      'Domaines blink.app illimités',
+      'Domaines personnalisés',
+      'Supprimer le badge Blink',
+      'Rôles et autorisations',
+      'Mode Code',
     ],
   },
   {
     id: 'business',
     name: 'Business',
-    description: 'Advanced controls and power features for growing departments.',
+    description: 'Contrôles avancés et fonctionnalités puissantes pour les équipes en croissance.',
     monthlyPrice: 50,
-    annualFirstMonthPrice: 25,
     highlight: false,
     cta: 'Upgrade',
     ctaVariant: 'outline',
     ctaAction: 'checkout',
     hasCreditSelector: true,
     hasAnnualToggle: true,
-    featuresIntro: 'All Pro features, plus:',
+    featuresIntro: 'Tout le plan Pro, plus :',
     features: [
-      '100 monthly credits',
-      'Internal publish',
+      'Crédits mensuels selon votre forfait',
       'SSO',
-      'Team workspace',
-      'Personal projects',
-      'Design templates',
-      'Role-based access',
-      'Security center',
+      'Projets restreints au sein des espaces de travail',
+      'Refuser la formation aux données',
+      'Modèles de conception réutilisables',
+      'Contrôle d\'accès basé sur les rôles',
+      'Centre de sécurité',
     ],
   },
   {
     id: 'enterprise',
     name: 'Enterprise',
-    description: 'Built for large organizations needing flexibility, scalability and governance.',
+    description: 'Pour les grandes organisations nécessitant flexibilité, scalabilité et gouvernance.',
     monthlyPrice: null,
-    annualFirstMonthPrice: null,
     highlight: false,
     cta: 'Book a Demo',
     ctaVariant: 'outline',
     ctaAction: 'contact',
     hasCreditSelector: false,
     hasAnnualToggle: false,
-    featuresIntro: 'All Business features, plus:',
+    featuresIntro: 'Tout le plan Business, plus :',
     features: [
-      'Dedicated support',
-      'Onboarding services',
+      'Support dédié',
+      'Services d\'onboarding',
       'Design systems',
       'SCIM',
-      'Support for custom connectors',
-      'Publishing controls',
-      'Sharing controls',
-      'Audit logs (coming soon!)',
+      'Support pour connecteurs personnalisés',
+      'Contrôles de publication',
+      'Contrôles de partage',
+      'Logs d\'audit (bientôt !)',
     ],
   },
 ];
 
 export const FAQ_ITEMS = [
   {
-    question: 'What is Blink and how does it work?',
-    answer: 'Blink is an AI-powered app builder that turns your ideas into real, full-stack web applications. Just describe what you want to build in plain English, and Blink generates production-ready code, deploys it, and gives you a live URL — all in seconds.',
+    question: 'Qu\'est-ce que Blink et comment ça marche ?',
+    answer: 'Blink est un constructeur d\'applications alimenté par l\'IA qui transforme vos idées en vraies applications web full-stack. Décrivez simplement ce que vous voulez construire et Blink génère du code production-ready, le déploie et vous donne une URL en direct — le tout en quelques secondes.',
   },
   {
-    question: 'What does the free plan include?',
-    answer: 'The free plan includes 5 daily credits (up to 30 per month), public projects, unlimited collaborators, 5 blink.app domains, and access to Blink Cloud. It\'s perfect for trying out the platform and building prototypes.',
+    question: 'Que comprend le plan gratuit ?',
+    answer: 'Le plan gratuit inclut 5 crédits journaliers (jusqu\'à 30 par mois), des projets privés, un nombre illimité de collaborateurs, 5 domaines blink.app et l\'accès à Blink Cloud. C\'est parfait pour découvrir la plateforme et construire des prototypes.',
   },
   {
-    question: 'What is a credit?',
-    answer: 'A credit corresponds to one interaction with the AI — a generation request, an iteration, or a code modification. Credits reset each month on paid plans, and daily credits refresh every day.',
+    question: 'Qu\'est-ce qu\'un crédit ?',
+    answer: 'Un crédit correspond à une interaction avec l\'IA — une génération, une itération ou une modification de code. Le coût varie selon la complexité du message. Les crédits se rechargent chaque mois pour les forfaits payants, et les crédits journaliers sont renouvelés chaque jour.',
   },
   {
-    question: 'What technologies does Blink support?',
-    answer: 'Blink generates production-ready React applications with TypeScript, Tailwind CSS, and Vite. It also supports backend features through Blink Cloud including databases, authentication, edge functions, and file storage.',
+    question: 'Quelles sont les formules payantes disponibles ?',
+    answer: 'Nous proposons des plans Pro (à partir de 25$/mois pour 100 crédits) et Business (à partir de 50$/mois pour 100 crédits), chacun avec 11 paliers de crédits allant de 100 à 10 000 crédits/mois. La facturation annuelle offre un tarif mensuel réduit.',
   },
   {
-    question: 'Who owns the projects and code?',
-    answer: 'You do. All code generated by Blink is 100% yours. You can export it as a ZIP file (Pro plan and above), host it anywhere, and modify it freely. We don\'t claim any ownership over your projects.',
+    question: 'Que se passe-t-il lors d\'un upgrade ?',
+    answer: 'Lorsque vous passez à un forfait supérieur (ex : de 100 à 200 crédits), votre solde total est mis à jour au nouveau total. Vous ne recevez pas 200 crédits supplémentaires — si vous aviez 100 crédits, le passage à 200 vous en donne 100 de plus.',
   },
   {
-    question: 'How much does it cost to use?',
-    answer: 'Blink offers a generous free tier to get started. The Pro plan starts at $12.50/month for the first month (then $25/month), and includes 100 monthly credits with the option to add more. The Business plan starts at $25/month for the first month (then $50/month) for teams. Enterprise pricing is custom.',
+    question: 'Quelles technologies Blink supporte-t-il ?',
+    answer: 'Blink génère des applications React production-ready avec TypeScript, Tailwind CSS et Vite. Il supporte aussi les fonctionnalités backend via Blink Cloud, incluant bases de données, authentification, fonctions edge et stockage de fichiers.',
   },
   {
-    question: 'How does Cloud + AI pricing work?',
-    answer: 'Cloud + AI usage is billed based on actual consumption. This includes database operations, edge function invocations, file storage, and AI model calls. Each plan includes a free tier of Cloud + AI usage, with additional usage billed at competitive rates.',
+    question: 'Qui possède les projets et le code ?',
+    answer: 'Vous. Tout le code généré par Blink est 100% le vôtre. Vous pouvez l\'exporter en ZIP (plan Pro et supérieur), l\'héberger n\'importe où et le modifier librement.',
   },
   {
-    question: 'Do you offer a student discount?',
-    answer: 'Yes! Students get up to 50% off the Pro plan. Verify your student status to claim your discount.',
+    question: 'Comment fonctionne la tarification Cloud + AI ?',
+    answer: 'L\'utilisation Cloud + AI est facturée selon la consommation réelle : opérations de base de données, invocations de fonctions edge, stockage de fichiers et appels aux modèles AI. Chaque plan inclut un usage gratuit de Cloud + AI.',
   },
   {
-    question: 'Where can I find more information?',
-    answer: 'Visit our documentation at docs.blink.ai for comprehensive guides, tutorials, and API references. You can also join our community on Discord for real-time support and discussions.',
+    question: 'Proposez-vous une réduction étudiante ?',
+    answer: 'Oui ! Les étudiants bénéficient de jusqu\'à 50% de réduction sur le plan Pro. Vérifiez votre statut étudiant pour réclamer votre réduction.',
   },
 ];
