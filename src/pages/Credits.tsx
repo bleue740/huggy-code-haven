@@ -36,26 +36,19 @@ const TOTAL_CREDITS = CREDIT_BAR_SEGMENTS.reduce((s, seg) => s + seg.amount, 0);
 
 /* ── Cost examples ────────────────────────────────────── */
 const COST_EXAMPLES = [
-  {
-    prompt: "Rendez le bouton gris",
-    work: "Modifie le style des boutons",
-    cost: 0.5,
-  },
-  {
-    prompt: "Supprimer le pied de page",
-    work: "Supprime le composant de pied de page",
-    cost: 0.9,
-  },
-  {
-    prompt: "Ajouter l'authentification",
-    work: "Ajoute une logique de connexion et d'authentification",
-    cost: 1.2,
-  },
-  {
-    prompt: "Créez une page de destination avec des images",
-    work: "Crée une page d'accueil avec des images générées, un thème et des sections",
-    cost: 2.0,
-  },
+  { prompt: "Rendez le bouton gris", work: "Modifie le style des boutons", cost: 0.5 },
+  { prompt: "Supprimer le pied de page", work: "Supprime le composant de pied de page", cost: 0.9 },
+  { prompt: "Ajouter l'authentification", work: "Ajoute une logique de connexion et d'authentification", cost: 1.2 },
+  { prompt: "Créez une page de destination avec des images", work: "Crée une page d'accueil avec des images générées, un thème et des sections", cost: 2.0 },
+];
+
+/* ── Plan comparison for credits ──────────────────────── */
+const PLAN_CREDIT_COMPARISON = [
+  { feature: 'Crédits journaliers', free: '5', pro: '5', business: '5' },
+  { feature: 'Plafond mensuel (journaliers)', free: '30', pro: '150', business: '150' },
+  { feature: 'Crédits mensuels inclus', free: '—', pro: '100 à 10 000', business: '100 à 10 000' },
+  { feature: 'Report de crédits', free: '—', pro: '✓', business: '✓' },
+  { feature: 'Recharges ponctuelles', free: '—', pro: '✓', business: '✓' },
 ];
 
 /* ── Credit bar component ─────────────────────────────── */
@@ -80,17 +73,13 @@ function CreditBar() {
                   style={{ width: `${pct}%` }}
                 />
               </TooltipTrigger>
-              <TooltipContent
-                side="top"
-                className="bg-[#1a1a1a] border-white/10 text-white text-xs"
-              >
+              <TooltipContent side="top" className="bg-[#1a1a1a] border-white/10 text-white text-xs">
                 {seg.label}: {seg.amount} crédits
               </TooltipContent>
             </Tooltip>
           );
         })}
       </div>
-      {/* Legend */}
       <div className="mt-3 flex flex-wrap gap-4">
         {CREDIT_BAR_SEGMENTS.map((seg) => (
           <div key={seg.label} className="flex items-center gap-2 text-xs text-gray-400">
@@ -139,8 +128,7 @@ export default function CreditsPage() {
             L'envoi de messages pour générer un résultat dans Blink nécessite des crédits.
             Le coût dépend de la complexité du message. Votre espace de travail bénéficie
             de crédits provenant de votre forfait, d'allocations quotidiennes et de
-            recharges ponctuelles facultatives. Cette section explique le fonctionnement
-            des crédits, leur utilisation et comment en obtenir davantage en cas de besoin.
+            recharges ponctuelles facultatives.
           </motion.p>
         </motion.section>
 
@@ -150,31 +138,21 @@ export default function CreditsPage() {
           <motion.p variants={fadeUp} custom={1} className="mt-3 text-gray-400 leading-relaxed">
             Pour consulter votre solde de crédits, sélectionnez le nom de votre espace de
             travail sur le tableau de bord principal ou le nom du projet dans l'éditeur.
-            Vous verrez alors le nombre de crédits restants pour cette période de
-            facturation, ainsi que la barre de crédits.
           </motion.p>
-
           <motion.div variants={fadeUp} custom={2}><CreditBar /></motion.div>
-
           <motion.div variants={fadeUp} custom={3} className="mt-6 space-y-3">
-              <div className="flex items-start gap-3 p-4 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/10 transition-colors">
+            <div className="flex items-start gap-3 p-4 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/10 transition-colors">
               <div className="w-3 h-3 rounded-full bg-gray-600 mt-1 shrink-0" />
               <div>
                 <p className="text-sm font-medium">Partie grise</p>
-                <p className="text-sm text-gray-400">
-                  Indique le nombre de crédits déjà utilisés durant cette période de facturation.
-                </p>
+                <p className="text-sm text-gray-400">Crédits déjà utilisés durant cette période.</p>
               </div>
             </div>
             <div className="flex items-start gap-3 p-4 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/10 transition-colors">
               <div className="w-3 h-3 rounded-full bg-blue-500 mt-1 shrink-0" />
               <div>
                 <p className="text-sm font-medium">Parties bleues</p>
-                <p className="text-sm text-gray-400">
-                  Indiquent les différents types de crédits restants. En survolant chaque
-                  section colorée, une infobulle s'affiche indiquant le type de crédit et
-                  le nombre exact de crédits disponibles.
-                </p>
+                <p className="text-sm text-gray-400">Les différents types de crédits restants. Survolez pour voir le détail.</p>
               </div>
             </div>
           </motion.div>
@@ -184,29 +162,16 @@ export default function CreditsPage() {
         <motion.section initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} variants={stagger}>
           <motion.h2 variants={fadeUp} custom={0} className="text-2xl font-bold">Utilisation des crédits</motion.h2>
           <motion.p variants={fadeUp} custom={1} className="mt-3 text-gray-400 leading-relaxed">
-            Blink utilise un système de crédits basé sur l'utilisation : l'envoi de
-            messages déduit des crédits. Le coût d'un message dépend de sa complexité afin
-            que vous ne payiez que ce que vous consommez réellement.
+            Blink utilise un système basé sur l'utilisation : l'envoi de messages déduit des crédits 
+            selon la complexité, afin que vous ne payiez que ce que vous consommez réellement.
           </motion.p>
-          <motion.p variants={fadeUp} custom={2} className="mt-2 text-gray-400 leading-relaxed">
-            De nombreux messages coûtent moins d'un crédit, tandis que les plus complexes
-            peuvent coûter davantage. Cette approche permet des modifications plus précises
-            et une plus grande efficacité par message, rendant ainsi Blink plus abordable.
-          </motion.p>
-
-          <motion.div variants={fadeUp} custom={3} className="mt-6 rounded-xl border border-gray-200 dark:border-white/10 overflow-x-auto transition-colors">
+          <motion.div variants={fadeUp} custom={2} className="mt-6 rounded-xl border border-gray-200 dark:border-white/10 overflow-x-auto transition-colors">
             <Table>
               <TableHeader>
                 <TableRow className="border-gray-200 dark:border-white/10 hover:bg-transparent">
-                  <TableHead className="text-gray-400 font-semibold">
-                    Invite de l'utilisateur
-                  </TableHead>
-                  <TableHead className="text-gray-400 font-semibold">
-                    Travail effectué
-                  </TableHead>
-                  <TableHead className="text-gray-400 font-semibold text-right">
-                    Crédits utilisés
-                  </TableHead>
+                  <TableHead className="text-gray-400 font-semibold">Invite</TableHead>
+                  <TableHead className="text-gray-400 font-semibold">Travail effectué</TableHead>
+                  <TableHead className="text-gray-400 font-semibold text-right">Crédits</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -214,9 +179,7 @@ export default function CreditsPage() {
                   <TableRow key={ex.prompt} className="border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/[0.03]">
                     <TableCell className="font-medium">{ex.prompt}</TableCell>
                     <TableCell className="text-gray-400">{ex.work}</TableCell>
-                    <TableCell className="text-right font-mono text-blue-400 font-semibold">
-                      {ex.cost.toFixed(2)}
-                    </TableCell>
+                    <TableCell className="text-right font-mono text-blue-400 font-semibold">{ex.cost.toFixed(2)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -232,33 +195,65 @@ export default function CreditsPage() {
           </motion.p>
           <div className="mt-6 grid gap-4">
             {[
-              {
-                title: "Crédits du forfait",
-                desc: "Chaque forfait inclut un nombre mensuel de crédits. Le plan Pro offre 100 crédits/mois, avec la possibilité de passer à 200 ou 500.",
-                color: "bg-blue-500",
-              },
-              {
-                title: "Allocations quotidiennes",
-                desc: "Tous les plans bénéficient de 5 crédits quotidiens gratuits, accumulables jusqu'à un plafond mensuel (30 pour Free, 150 pour Pro).",
-                color: "bg-blue-400",
-              },
-              {
-                title: "Recharges ponctuelles (Top-ups)",
-                desc: "Besoin de plus de crédits ? Achetez des recharges à tout moment sans changer de forfait. Les crédits achetés n'expirent pas.",
-                color: "bg-cyan-400",
-              },
+              { title: "Crédits du forfait", desc: "Chaque forfait payant inclut un nombre mensuel de crédits allant de 100 à 10 000 selon le palier choisi.", color: "bg-blue-500" },
+              { title: "Allocations quotidiennes", desc: "Tous les plans bénéficient de 5 crédits quotidiens. Plafond mensuel : 30 pour Free, 150 pour Pro et Business.", color: "bg-blue-400" },
+              { title: "Recharges ponctuelles (Top-ups)", desc: "Achetez des crédits supplémentaires à tout moment sans changer de forfait. Les crédits achetés n'expirent pas.", color: "bg-cyan-400" },
             ].map((source, i) => (
               <motion.div key={source.title} variants={fadeUp} custom={i + 2} whileHover={{ y: -3, transition: { duration: 0.2 } }} className="flex items-start gap-4 p-5 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/10 transition-colors">
                 <div className={`w-3 h-3 rounded-full ${source.color} mt-1.5 shrink-0`} />
                 <div>
                   <h3 className="font-semibold">{source.title}</h3>
-                  <p className="mt-1 text-sm text-gray-400 leading-relaxed">
-                    {source.desc}
-                  </p>
+                  <p className="mt-1 text-sm text-gray-400 leading-relaxed">{source.desc}</p>
                 </div>
               </motion.div>
             ))}
           </div>
+        </motion.section>
+
+        {/* ── Section 5: Plan comparison ── */}
+        <motion.section initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} variants={stagger}>
+          <motion.h2 variants={fadeUp} custom={0} className="text-2xl font-bold">Crédits par plan</motion.h2>
+          <motion.p variants={fadeUp} custom={1} className="mt-3 text-gray-400 leading-relaxed">
+            Comparaison des crédits disponibles selon votre formule :
+          </motion.p>
+          <motion.div variants={fadeUp} custom={2} className="mt-6 rounded-xl border border-gray-200 dark:border-white/10 overflow-x-auto transition-colors">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-gray-200 dark:border-white/10 hover:bg-transparent">
+                  <TableHead className="text-gray-400 font-semibold"></TableHead>
+                  <TableHead className="text-gray-400 font-semibold text-center">Free</TableHead>
+                  <TableHead className="text-blue-400 font-semibold text-center">Pro</TableHead>
+                  <TableHead className="text-gray-400 font-semibold text-center">Business</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {PLAN_CREDIT_COMPARISON.map((row) => (
+                  <TableRow key={row.feature} className="border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/[0.03]">
+                    <TableCell className="font-medium text-sm">{row.feature}</TableCell>
+                    <TableCell className="text-center text-sm text-gray-400">{row.free}</TableCell>
+                    <TableCell className="text-center text-sm text-gray-400">{row.pro}</TableCell>
+                    <TableCell className="text-center text-sm text-gray-400">{row.business}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </motion.div>
+        </motion.section>
+
+        {/* ── Section 6: Upgrade note ── */}
+        <motion.section initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} variants={stagger}>
+          <motion.div variants={fadeUp} custom={0} className="flex items-start gap-3 p-5 rounded-xl bg-blue-50 dark:bg-blue-500/5 border border-blue-200 dark:border-blue-500/20 transition-colors">
+            <Info size={18} className="text-blue-500 mt-0.5 shrink-0" />
+            <div>
+              <h3 className="font-semibold text-sm">Comportement lors d'un upgrade</h3>
+              <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                Lorsque vous passez à un forfait supérieur (ex : de 100 à 200 crédits), 
+                votre solde total est mis à jour au nouveau total. Vous ne recevez pas 200 crédits 
+                supplémentaires — si vous aviez 100 crédits mensuels, le passage à 200 vous en donne 
+                100 de plus, et non 200.
+              </p>
+            </div>
+          </motion.div>
         </motion.section>
 
         {/* ── CTA ── */}
