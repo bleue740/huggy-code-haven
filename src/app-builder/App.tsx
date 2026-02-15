@@ -134,6 +134,7 @@ const App: React.FC = () => {
   const [showGitHubModal, setShowGitHubModal] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showCollabPanel, setShowCollabPanel] = useState(false);
+  const [isSharingPreview, setIsSharingPreview] = useState(false);
 
   useEffect(() => {
     if (!creditsLoading) {
@@ -619,6 +620,50 @@ const App: React.FC = () => {
     }
   }, [state.files, state.projectName]);
 
+  const handleSharePreview = useCallback(async () => {
+    if (!state.projectId) {
+      toast.error('Créez un projet d\'abord.');
+      return;
+    }
+    setIsSharingPreview(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData.user?.id;
+      if (!userId) throw new Error('Non authentifié');
+
+      const slug = `blink-${state.projectId.slice(0, 8)}`;
+      const { data: deployment, error } = await supabase
+        .from('deployments')
+        .upsert(
+          {
+            user_id: userId,
+            project_id: state.projectId,
+            slug,
+            schema_snapshot: { code: serializeFiles(state.files), files: state.files } as any,
+            url: `/p/preview`,
+          } as any,
+          { onConflict: 'project_id' }
+        )
+        .select('id')
+        .single();
+
+      if (error) throw error;
+      const deployUrl = `/p/${(deployment as any).id}`;
+      setState(prev => ({ ...prev, deployedUrl: deployUrl }));
+
+      const fullUrl = `${window.location.origin}${deployUrl}`;
+      await navigator.clipboard.writeText(fullUrl);
+      toast.success('🔗 Lien public généré et copié !', {
+        description: fullUrl,
+        action: { label: 'Ouvrir', onClick: () => window.open(deployUrl, '_blank') },
+      });
+    } catch (e: any) {
+      toast.error('Erreur lors de la génération du lien', { description: e?.message });
+    } finally {
+      setIsSharingPreview(false);
+    }
+  }, [state.projectId, state.files]);
+
   const handleConnectSupabase = useCallback((url: string, anonKey: string) => {
     setState(prev => ({ ...prev, supabaseUrl: url, supabaseAnonKey: anonKey, backendHints: [] }));
     // Persist to project
@@ -902,9 +947,12 @@ const App: React.FC = () => {
             onShowVersionHistory={handleShowVersionHistory}
             onShowCollaboration={() => setShowCollabPanel(true)}
             onGitHubSync={() => setShowGitHubModal(true)}
+            onSharePreview={handleSharePreview}
             isCodeView={state.isCodeView}
             isGenerating={state.isGenerating}
+            isSharingPreview={isSharingPreview}
             projectName={state.projectName}
+            deployedUrl={state.deployedUrl}
           />
           <CodePreview
             code={concatenatedCode}

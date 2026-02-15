@@ -28,9 +28,12 @@ interface TopNavProps {
   onShowVersionHistory?: () => void;
   onShowCollaboration?: () => void;
   onGitHubSync?: () => void;
+  onSharePreview?: () => void;
   isCodeView?: boolean;
   isGenerating?: boolean;
+  isSharingPreview?: boolean;
   projectName?: string;
+  deployedUrl?: string | null;
 }
 
 export const TopNav: React.FC<TopNavProps> = ({
@@ -42,9 +45,12 @@ export const TopNav: React.FC<TopNavProps> = ({
   onShowVersionHistory,
   onShowCollaboration,
   onGitHubSync,
+  onSharePreview,
   isCodeView,
   isGenerating,
+  isSharingPreview,
   projectName = 'New Project',
+  deployedUrl,
 }) => {
   const [showPublishMenu, setShowPublishMenu] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
@@ -60,14 +66,21 @@ export const TopNav: React.FC<TopNavProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const publicUrl = deployedUrl ? `${window.location.origin}${deployedUrl}` : null;
+
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(window.location.href);
-    toast.success('Lien copié !');
+    if (publicUrl) {
+      navigator.clipboard.writeText(publicUrl);
+      toast.success('Lien public copié !');
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      toast.success('Lien copié !');
+    }
     setShowShareMenu(false);
   };
 
   const handleOpenNewTab = () => {
-    window.open(window.location.href, '_blank');
+    window.open(publicUrl || window.location.href, '_blank');
     setShowShareMenu(false);
   };
 
@@ -127,8 +140,25 @@ export const TopNav: React.FC<TopNavProps> = ({
             <ChevronDown size={12} />
           </button>
           {showShareMenu && (
-            <div className="absolute right-0 top-full mt-1 w-52 bg-[#1a1a1a] border border-[#333] rounded-xl shadow-2xl z-50 py-1 animate-in fade-in zoom-in-95 duration-150">
-              <DropdownItem icon={<Copy size={14} />} label="Copy Link" onClick={handleCopyLink} />
+            <div className="absolute right-0 top-full mt-1 w-64 bg-[#1a1a1a] border border-[#333] rounded-xl shadow-2xl z-50 py-1 animate-in fade-in zoom-in-95 duration-150">
+              {!publicUrl && (
+                <DropdownItem
+                  icon={isSharingPreview ? <Loader2 size={14} className="animate-spin" /> : <Globe size={14} />}
+                  label="Generate Public Link"
+                  description="Create a shareable preview URL"
+                  onClick={() => { onSharePreview?.(); setShowShareMenu(false); }}
+                />
+              )}
+              {publicUrl && (
+                <>
+                  <div className="px-3 py-2">
+                    <div className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest mb-1">Public URL</div>
+                    <div className="text-xs text-blue-400 truncate">{publicUrl}</div>
+                  </div>
+                  <div className="h-px bg-[#333] mx-2 my-1" />
+                </>
+              )}
+              <DropdownItem icon={<Copy size={14} />} label={publicUrl ? "Copy Public Link" : "Copy Editor Link"} onClick={handleCopyLink} />
               <DropdownItem icon={<ExternalLink size={14} />} label="Open in new tab" onClick={handleOpenNewTab} />
             </div>
           )}
