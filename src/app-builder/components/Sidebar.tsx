@@ -7,7 +7,7 @@ import {
   Table, CircleDashed, Square, Undo2, Redo2, FileCode2,
   History as HistoryIcon, Mic, MicOff, Image as ImageIcon,
   FileUp, Camera, Link, X, Pencil, FolderPlus, Settings, LayoutDashboard,
-  MessageCirclePlus,
+  MessageCirclePlus, CreditCard,
 } from 'lucide-react';
 import { AppState, AISuggestion } from '../types';
 import { BackendConnectCard } from './BackendConnectCard';
@@ -302,6 +302,16 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                   </button>
 
                   <div className="h-[1px] bg-[#333] my-2" />
+
+                  <button
+                    onClick={() => { setShowProjectMenu(false); navigate('/account/billing'); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-cyan-500/10 flex items-center justify-center group-hover:bg-cyan-500/20 transition-colors">
+                      <CreditCard size={14} className="text-cyan-400" />
+                    </div>
+                    <span>Billing & Credits</span>
+                  </button>
 
                   <button
                     onClick={() => { setShowProjectMenu(false); navigate('/settings'); }}
