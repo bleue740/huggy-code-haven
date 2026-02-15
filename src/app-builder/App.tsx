@@ -79,8 +79,8 @@ function deserializeFiles(raw: string | null | undefined): Record<string, string
 
 const App: React.FC = () => {
   const navigate = useNavigate();
-  const [showLanding, setShowLanding] = useState(false);
-  const [showDashboard, setShowDashboard] = useState(false); // kept as internal flag only
+  const [showLanding, setShowLanding] = useState(true);
+  const [showDashboard, setShowDashboard] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string | undefined>();
@@ -178,7 +178,7 @@ const App: React.FC = () => {
   const filesRef = useRef(state.files);
   useEffect(() => { filesRef.current = state.files; vfsRef.current = new VirtualFS(state.files); }, [state.files]);
 
-  // Auth disabled — go straight to editor, try to load project if logged in
+  // Auth check: show landing for unauthenticated or new users, load project for returning users
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -187,10 +187,14 @@ const App: React.FC = () => {
       setUserEmail(data.user?.email ?? undefined);
 
       if (!userId) {
-        // No auth — just open editor with defaults
+        // Not authenticated → show landing page
+        setShowLanding(true);
         setAuthChecked(true);
         return;
       }
+
+      // Check for pending prompt from pre-auth landing page submission
+      const pendingPrompt = sessionStorage.getItem('blink_pending_prompt');
 
       const { data: existing } = await supabase
         .from("projects")
@@ -200,6 +204,16 @@ const App: React.FC = () => {
         .limit(1);
 
       if (!mounted) return;
+
+      if (pendingPrompt) {
+        // User just authenticated with a pending prompt → create project and start generation
+        sessionStorage.removeItem('blink_pending_prompt');
+        setShowLanding(false);
+        setAuthChecked(true);
+        // Defer to let state settle, then use handleStartWithPrompt
+        setTimeout(() => handleStartWithPrompt(pendingPrompt), 100);
+        return;
+      }
 
       if (existing && existing.length > 0) {
         const proj = existing[0] as any;
@@ -240,6 +254,11 @@ const App: React.FC = () => {
           supabaseAnonKey: proj.supabase_anon_key || null,
           firecrawlEnabled: proj.firecrawl_enabled || false,
         }));
+        // Authenticated user with existing project → go to editor
+        setShowLanding(false);
+      } else {
+        // Authenticated but no projects → show landing
+        setShowLanding(true);
       }
 
       setAuthChecked(true);
@@ -825,16 +844,20 @@ const App: React.FC = () => {
       if (prompt.trim()) {
         sessionStorage.setItem('blink_pending_prompt', prompt);
       }
-      navigate("/auth", { state: { from: "/app" } });
+      navigate("/auth", { state: { from: "/" } });
       return;
     }
-    setState(prev => ({ ...prev, currentInput: prompt }));
-    handleSendMessage(prompt);
+    // Authenticated → create project and start generating
+    setShowLanding(false);
+    if (prompt.trim()) {
+      handleStartWithPrompt(prompt);
+    } else {
+      handleCreateNewFromDashboard();
+    }
   };
 
   const handleBackToDashboard = useCallback(() => {
-    setShowDashboard(true);
-    setShowLanding(false);
+    setShowLanding(true);
   }, []);
 
   const handleOpenProject = useCallback(async (projectId: string) => {
@@ -984,9 +1007,17 @@ const App: React.FC = () => {
     );
   }
 
-  // Landing page and auth disabled
-
-  // Dashboard removed — authenticated users go straight to editor
+  // Show landing page for unauthenticated users or users with no projects
+  if (showLanding) {
+    return (
+      <div className="dark">
+        <LandingPage
+          onStart={handleStartFromLanding}
+          isAuthenticated={!!userEmail}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="dark">
