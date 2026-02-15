@@ -286,12 +286,14 @@ export default function PricingPage() {
             Blink
           </span>
         </Link>
-        <Link
-          to="/auth"
-          className="text-sm font-semibold text-gray-400 hover:text-white transition-colors"
-        >
-          Sign in
-        </Link>
+        <div className="flex items-center gap-4">
+          <Link to="/about" className="text-sm font-semibold text-gray-400 hover:text-white transition-colors">
+            About Blink
+          </Link>
+          <Link to="/auth" className="text-sm font-semibold text-gray-400 hover:text-white transition-colors">
+            Sign in
+          </Link>
+        </div>
       </header>
 
       {/* Hero */}
