@@ -999,8 +999,8 @@ const App: React.FC = () => {
 
   if (!authChecked) {
     return (
-      <div className="dark">
-        <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+      <div>
+        <div className="min-h-screen bg-white dark:bg-[#050505] flex items-center justify-center">
           <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
         </div>
       </div>
@@ -1010,7 +1010,7 @@ const App: React.FC = () => {
   // Show landing page for unauthenticated users or users with no projects
   if (showLanding) {
     return (
-      <div className="dark">
+      <div>
         <LandingPage
           onStart={handleStartFromLanding}
           isAuthenticated={!!userEmail}
@@ -1020,8 +1020,8 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="dark">
-      <div className="flex h-screen bg-[#050505] overflow-hidden select-none relative">
+    <div>
+      <div className="flex h-screen bg-white dark:bg-[#050505] overflow-hidden select-none relative transition-colors">
         <Sidebar
           state={state}
           setState={setState}
