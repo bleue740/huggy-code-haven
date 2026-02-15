@@ -12,7 +12,6 @@ const FRAMER_MOTION_CDN = "https://unpkg.com/framer-motion@11.18.0/dist/framer-m
 const REACT_ROUTER_CDN = "https://unpkg.com/react-router-dom@6.30.1/dist/umd/react-router-dom.production.min.js";
 const DATE_FNS_CDN = "https://unpkg.com/date-fns@3.6.0/cdn.min.js";
 
-// Same multi-script builder as CodePreview
 function buildMultiScriptTags(files?: Record<string, string>, fallbackCode?: string): string {
   if (!files || Object.keys(files).length <= 1) {
     const code = files?.['App.tsx'] || fallbackCode || '';
@@ -27,13 +26,14 @@ function buildMultiScriptTags(files?: Record<string, string>, fallbackCode?: str
   ).join('\n  ');
 }
 
-function buildPublishedHtml(files: Record<string, string> | null, fallbackCode: string): string {
+function buildPublishedHtml(files: Record<string, string> | null, fallbackCode: string, title: string): string {
   return `<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Blink App</title>
+  <title>${title}</title>
+  <meta name="description" content="App built with Blink AI" />
   <script src="${TAILWIND_CDN}"><\/script>
   <script>
     tailwind.config = {
@@ -90,31 +90,25 @@ function buildPublishedHtml(files: Record<string, string> | null, fallbackCode: 
 
 function extractFilesAndCode(snapshot: any): { files: Record<string, string> | null; code: string } {
   if (!snapshot) return { files: null, code: '' };
-
-  // New format: { code, files }
   if (typeof snapshot === 'object' && snapshot.files && typeof snapshot.files === 'object') {
     return { files: snapshot.files as Record<string, string>, code: '' };
   }
-
-  // Old format: raw code string in snapshot.code
   if (typeof snapshot === 'object' && typeof snapshot.code === 'string') {
     try {
       const parsed = JSON.parse(snapshot.code);
       if (parsed?.__multifile && typeof parsed.files === 'object') {
         return { files: parsed.files as Record<string, string>, code: '' };
       }
-    } catch {
-      // not JSON, use as raw code
-    }
+    } catch { /* not JSON */ }
     return { files: null, code: snapshot.code };
   }
-
   return { files: null, code: '' };
 }
 
 export default function PublishedDeploymentPage() {
   const { deploymentId } = useParams();
   const [filesData, setFilesData] = useState<{ files: Record<string, string> | null; code: string } | null>(null);
+  const [projectName, setProjectName] = useState("Blink App");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -127,11 +121,21 @@ export default function PublishedDeploymentPage() {
         if (!deploymentId) throw new Error("Missing deployment id");
         const { data, error } = await supabase
           .from("deployments")
-          .select("id, slug, schema_snapshot")
+          .select("id, slug, schema_snapshot, project_id")
           .eq("id", deploymentId)
           .maybeSingle();
         if (error) throw error;
         if (!data) throw new Error("Deployment not found");
+
+        // Try to get project name
+        if ((data as any).project_id) {
+          const { data: proj } = await supabase
+            .from("projects")
+            .select("name")
+            .eq("id", (data as any).project_id)
+            .maybeSingle();
+          if (proj && mounted) setProjectName((proj as any).name || "Blink App");
+        }
 
         const extracted = extractFilesAndCode((data as any).schema_snapshot);
         if (!extracted.files && !extracted.code) throw new Error("No code found in deployment");
@@ -147,15 +151,15 @@ export default function PublishedDeploymentPage() {
 
   const iframeSrcDoc = useMemo(() => {
     if (!filesData) return null;
-    return buildPublishedHtml(filesData.files, filesData.code);
-  }, [filesData]);
+    return buildPublishedHtml(filesData.files, filesData.code, projectName);
+  }, [filesData, projectName]);
 
   if (isLoading) {
     return (
       <main className="min-h-screen bg-[#050505] text-white flex items-center justify-center">
-        <div className="flex items-center gap-3">
-          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-neutral-500">Loading deployment…</span>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm text-neutral-500">Loading preview…</span>
         </div>
       </main>
     );
@@ -164,20 +168,44 @@ export default function PublishedDeploymentPage() {
   if (error || !iframeSrcDoc) {
     return (
       <main className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-black">Deployment introuvable</h1>
-          <p className="text-sm text-neutral-500 mt-2">{error}</p>
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <span className="text-3xl">🔗</span>
+          </div>
+          <h1 className="text-2xl font-black mb-2">Preview introuvable</h1>
+          <p className="text-sm text-neutral-500 mb-6">{error || "Ce lien de preview n'existe pas ou a expiré."}</p>
+          <a href="/" className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-colors">
+            Retour à l'accueil
+          </a>
         </div>
       </main>
     );
   }
 
   return (
-    <iframe
-      srcDoc={iframeSrcDoc}
-      className="w-full h-screen border-none"
-      sandbox="allow-scripts allow-same-origin"
-      title="Published App"
-    />
+    <div className="h-screen w-full flex flex-col bg-[#050505]">
+      {/* Minimal top bar */}
+      <div className="h-10 bg-[#0a0a0a] border-b border-[#1a1a1a] flex items-center justify-between px-4 shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="w-5 h-5 bg-blue-600 rounded-md flex items-center justify-center">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          </div>
+          <span className="text-xs font-bold text-neutral-400">{projectName}</span>
+          <span className="text-[10px] text-neutral-600 px-2 py-0.5 bg-neutral-800 rounded-full font-medium">Preview</span>
+        </div>
+        <a
+          href="/"
+          className="text-[10px] font-bold text-neutral-500 hover:text-white transition-colors uppercase tracking-widest"
+        >
+          Built with Blink AI
+        </a>
+      </div>
+      <iframe
+        srcDoc={iframeSrcDoc}
+        className="flex-1 w-full border-none"
+        sandbox="allow-scripts allow-same-origin"
+        title={projectName}
+      />
+    </div>
   );
 }
