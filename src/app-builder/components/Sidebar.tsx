@@ -64,7 +64,7 @@ const TypingDots = () => (
 
 const ShimmerLine = ({ width = 'w-full', delay = 0 }: { width?: string; delay?: number }) => (
   <div
-    className={`h-3 ${width} rounded bg-gradient-to-r from-[#1a1a1a] via-[#333] to-[#1a1a1a] bg-[length:200%_100%] animate-shimmer`}
+    className={`h-3 ${width} rounded bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-[#1a1a1a] dark:via-[#333] dark:to-[#1a1a1a] bg-[length:200%_100%] animate-shimmer`}
     style={{ animationDelay: `${delay}ms` }}
   />
 );
@@ -72,7 +72,7 @@ const ShimmerLine = ({ width = 'w-full', delay = 0 }: { width?: string; delay?: 
 export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
   ({ state, setState, onSend, onStop, onScreenshotRequest, onToggleVisualEdit, onShowHistory, onNewChat, onNewProject, onRenameProject, onBackToLanding, onConnectSupabase, onEnableFirecrawl, onDismissBackendHints, onApprovePlan, onUndo, onRedo, canUndo, canRedo, collabExtension }, ref) => {
     const navigate = useNavigate();
-    const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
     const [showScrollBottom, setShowScrollBottom] = useState(false);
     const [inputHistory, setInputHistory] = useState<string[]>([]);
     const [inputHistoryIndex, setInputHistoryIndex] = useState(-1);
@@ -232,9 +232,9 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
               </button>
 
               {showProjectMenu && (
-                <div className="absolute top-full left-0 mt-2 bg-[#1a1a1a] border border-[#333] rounded-2xl p-2 min-w-[220px] shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 z-[100]">
+                <div className="absolute top-full left-0 mt-2 bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-[#333] rounded-2xl p-2 min-w-[220px] shadow-2xl animate-in fade-in slide-in-from-top-2 duration-200 z-[100]">
                   {/* Project Name Header */}
-                  <div className="px-3 py-2.5 border-b border-[#333] mb-2">
+                  <div className="px-3 py-2.5 border-b border-gray-200 dark:border-[#333] mb-2">
                     {isRenaming ? (
                       <form
                         onSubmit={(e) => {
@@ -251,7 +251,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                           autoFocus
                           value={renameValue}
                           onChange={(e) => setRenameValue(e.target.value)}
-                          className="flex-1 bg-[#111] border border-[#444] rounded-lg px-2 py-1.5 text-sm text-white outline-none focus:border-blue-500 transition-colors"
+                          className="flex-1 bg-gray-100 dark:bg-[#111] border border-gray-300 dark:border-[#444] rounded-lg px-2 py-1.5 text-sm text-gray-900 dark:text-white outline-none focus:border-blue-500 transition-colors"
                           placeholder="Nom du projet"
                           onKeyDown={(e) => { if (e.key === 'Escape') { setIsRenaming(false); } }}
                         />
@@ -259,10 +259,10 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                       </form>
                     ) : (
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-widest truncate">{state.projectName || 'New Project'}</span>
+                        <span className="text-[11px] font-bold text-gray-500 dark:text-neutral-400 uppercase tracking-widest truncate">{state.projectName || 'New Project'}</span>
                         <button
                           onClick={() => { setRenameValue(state.projectName || 'New Project'); setIsRenaming(true); }}
-                          className="p-1 hover:bg-white/10 rounded-md transition-colors text-neutral-500 hover:text-white"
+                          className="p-1 hover:bg-black/5 dark:hover:bg-white/10 rounded-md transition-colors text-gray-400 dark:text-neutral-500 hover:text-gray-900 dark:hover:text-white"
                         >
                           <Pencil size={12} />
                         </button>
@@ -273,7 +273,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                   {/* Menu Items */}
                   <button
                     onClick={() => { setShowProjectMenu(false); onNewChat?.(); }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors group"
                   >
                     <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
                       <MessageCirclePlus size={14} className="text-blue-400" />
@@ -283,7 +283,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
 
                   <button
                     onClick={() => { setShowProjectMenu(false); onNewProject?.(); }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors group"
                   >
                     <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
                       <FolderPlus size={14} className="text-emerald-400" />
@@ -293,7 +293,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
 
                   <button
                     onClick={() => { setRenameValue(state.projectName || 'New Project'); setIsRenaming(true); }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors group"
                   >
                     <div className="w-7 h-7 rounded-lg bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
                       <Pencil size={14} className="text-purple-400" />
@@ -301,11 +301,11 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                     <span>Rename Project</span>
                   </button>
 
-                  <div className="h-[1px] bg-[#333] my-2" />
+                  <div className="h-[1px] bg-gray-200 dark:bg-[#333] my-2" />
 
                   <button
                     onClick={() => { setShowProjectMenu(false); navigate('/account/billing'); }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors group"
                   >
                     <div className="w-7 h-7 rounded-lg bg-cyan-500/10 flex items-center justify-center group-hover:bg-cyan-500/20 transition-colors">
                       <CreditCard size={14} className="text-cyan-400" />
@@ -315,7 +315,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
 
                   <button
                     onClick={() => { setShowProjectMenu(false); navigate('/settings'); }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors group"
                   >
                     <div className="w-7 h-7 rounded-lg bg-neutral-500/10 flex items-center justify-center group-hover:bg-neutral-500/20 transition-colors">
                       <Settings size={14} className="text-neutral-400" />
@@ -325,7 +325,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
 
                   <button
                     onClick={() => { setShowProjectMenu(false); onBackToLanding?.(); }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors group"
                   >
                     <div className="w-7 h-7 rounded-lg bg-orange-500/10 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
                       <LayoutDashboard size={14} className="text-orange-400" />
@@ -337,7 +337,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
             </div>
           )}
           <div className={`flex items-center gap-3 ${isCollapsed ? 'flex-col' : ''}`}>
-            <button onClick={() => setIsCollapsed(!isCollapsed)} className="p-1.5 hover:bg-white/5 rounded-lg text-neutral-400 hover:text-white transition-colors">
+            <button onClick={() => setIsCollapsed(!isCollapsed)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg text-gray-400 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white transition-colors">
               {isCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
             </button>
           </div>
@@ -345,21 +345,21 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
 
         <div className="flex-1 overflow-hidden flex flex-col relative">
           {isCollapsed ? (
-            <div className="flex-1 flex flex-col items-center py-4 gap-6 text-neutral-500">
-              <MessageSquare size={20} className={`cursor-pointer hover:text-white transition-colors ${!isCodeView ? 'text-blue-500' : ''}`} onClick={() => { setIsCodeView(false); setIsCollapsed(false); }} />
-              <Code2 size={20} className={`cursor-pointer hover:text-white transition-colors ${isCodeView ? 'text-blue-500' : ''}`} onClick={() => { setIsCodeView(true); setIsCollapsed(false); }} />
-              <div className="w-8 h-[1px] bg-neutral-800" />
-              <FileCode2 size={20} className="cursor-pointer hover:text-white transition-colors" onClick={() => { setIsCodeView(true); setIsCollapsed(false); }} />
+            <div className="flex-1 flex flex-col items-center py-4 gap-6 text-gray-400 dark:text-neutral-500">
+              <MessageSquare size={20} className={`cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors ${!isCodeView ? 'text-blue-500' : ''}`} onClick={() => { setIsCodeView(false); setIsCollapsed(false); }} />
+              <Code2 size={20} className={`cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors ${isCodeView ? 'text-blue-500' : ''}`} onClick={() => { setIsCodeView(true); setIsCollapsed(false); }} />
+              <div className="w-8 h-[1px] bg-gray-200 dark:bg-neutral-800" />
+              <FileCode2 size={20} className="cursor-pointer hover:text-gray-900 dark:hover:text-white transition-colors" onClick={() => { setIsCodeView(true); setIsCollapsed(false); }} />
             </div>
           ) : isCodeView ? (
             <div className="flex-1 flex flex-col overflow-hidden animate-in fade-in duration-200">
-              <div className="px-4 py-2 border-b border-[#1a1a1a] flex items-center justify-between bg-[#0f0f0f] shrink-0">
-                <div className="flex items-center gap-2 text-white font-medium">
+              <div className="px-4 py-2 border-b border-gray-200 dark:border-[#1a1a1a] flex items-center justify-between bg-gray-50 dark:bg-[#0f0f0f] shrink-0">
+                <div className="flex items-center gap-2 text-gray-900 dark:text-white font-medium">
                   <button onClick={() => setIsCodeView(false)} className="p-1 -ml-1 hover:bg-white/10 rounded-md transition-colors"><MessageSquare size={14} /></button>
                   <Terminal size={14} className="text-blue-500" />
                   <span className="text-[10px] font-bold tracking-tight uppercase">TSX Editor</span>
                 </div>
-                <span className="text-[10px] text-neutral-600 font-mono">{state.activeFile}</span>
+                <span className="text-[10px] text-gray-400 dark:text-neutral-600 font-mono">{state.activeFile}</span>
               </div>
               <FileTree files={state.files} activeFile={state.activeFile} onSelectFile={handleSelectFile} onCreateFile={handleCreateFile} onDeleteFile={handleDeleteFile} />
               <div className="flex-1 overflow-hidden">
@@ -377,11 +377,11 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                 <span className="text-[10px] uppercase font-bold tracking-widest text-neutral-600">Active Session</span>
                 <div className="flex items-center gap-1">
                   {(canUndo || canRedo) && (
-                    <div className="flex items-center bg-black/40 rounded-lg px-1 py-0.5 mr-1">
-                      <button onClick={onUndo} disabled={!canUndo} className="p-1 text-neutral-500 hover:text-white disabled:opacity-20 transition-colors" title="Undo (fichiers)">
+                    <div className="flex items-center bg-gray-200/60 dark:bg-black/40 rounded-lg px-1 py-0.5 mr-1">
+                      <button onClick={onUndo} disabled={!canUndo} className="p-1 text-gray-400 dark:text-neutral-500 hover:text-gray-900 dark:hover:text-white disabled:opacity-20 transition-colors" title="Undo (fichiers)">
                         <Undo2 size={11} />
                       </button>
-                      <button onClick={onRedo} disabled={!canRedo} className="p-1 text-neutral-500 hover:text-white disabled:opacity-20 transition-colors" title="Redo (fichiers)">
+                      <button onClick={onRedo} disabled={!canRedo} className="p-1 text-gray-400 dark:text-neutral-500 hover:text-gray-900 dark:hover:text-white disabled:opacity-20 transition-colors" title="Redo (fichiers)">
                         <Redo2 size={11} />
                       </button>
                     </div>
@@ -400,10 +400,10 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                   </div>
                   <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
                     {state.suggestions.map((s) => (
-                      <button key={s.id} onClick={() => handleSuggestionClick(s)} className="shrink-0 w-36 bg-[#1a1a1a] border border-[#333] hover:border-blue-500/50 rounded-xl p-3 text-left transition-all hover:bg-[#222] group">
-                        <div className="w-6 h-6 rounded-lg bg-black/40 flex items-center justify-center mb-2">{getSuggestionIcon(s.icon)}</div>
-                        <div className="text-[11px] font-bold text-white mb-1 truncate">{s.label}</div>
-                        <div className="text-[9px] text-neutral-500 line-clamp-2 leading-tight">{s.description}</div>
+                      <button key={s.id} onClick={() => handleSuggestionClick(s)} className="shrink-0 w-36 bg-gray-100 dark:bg-[#1a1a1a] border border-gray-200 dark:border-[#333] hover:border-blue-500/50 rounded-xl p-3 text-left transition-all hover:bg-gray-200 dark:hover:bg-[#222] group">
+                        <div className="w-6 h-6 rounded-lg bg-gray-200/60 dark:bg-black/40 flex items-center justify-center mb-2">{getSuggestionIcon(s.icon)}</div>
+                        <div className="text-[11px] font-bold text-gray-900 dark:text-white mb-1 truncate">{s.label}</div>
+                        <div className="text-[9px] text-gray-500 dark:text-neutral-500 line-clamp-2 leading-tight">{s.description}</div>
                       </button>
                     ))}
                   </div>
@@ -412,27 +412,27 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
 
               {state.history.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full py-20 text-center">
-                  <div className="w-16 h-16 bg-[#1a1a1a] rounded-2xl flex items-center justify-center mb-4 text-neutral-700">
+                  <div className="w-16 h-16 bg-gray-100 dark:bg-[#1a1a1a] rounded-2xl flex items-center justify-center mb-4 text-gray-300 dark:text-neutral-700">
                     <MessageSquarePlus size={32} />
                   </div>
-                  <h3 className="text-white font-bold text-sm mb-1">Start a new conversation!</h3>
+                  <h3 className="text-gray-900 dark:text-white font-bold text-sm mb-1">Start a new conversation!</h3>
                 </div>
               ) : (
                 state.history.map((msg) => (
                   <div key={msg.id} className="group animate-in slide-in-from-bottom-2 duration-300">
                     <div className="flex items-start gap-3">
-                      <div className={`shrink-0 w-6 h-6 rounded-md flex items-center justify-center ${msg.role === 'assistant' ? 'bg-blue-600/20 text-blue-400' : 'bg-neutral-800 text-neutral-400'}`}>
+                      <div className={`shrink-0 w-6 h-6 rounded-md flex items-center justify-center ${msg.role === 'assistant' ? 'bg-blue-600/20 text-blue-400' : 'bg-gray-200 dark:bg-neutral-800 text-gray-500 dark:text-neutral-400'}`}>
                         {msg.role === 'assistant' ? <Bot size={14} /> : <User size={14} />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-tight">{msg.role === 'assistant' ? 'BLINK' : 'YOU'}</span>
-                          <span className="text-[9px] text-neutral-600 font-mono">{formatTime(msg.timestamp)}</span>
+                          <span className="text-[10px] font-bold text-gray-400 dark:text-neutral-500 uppercase tracking-tight">{msg.role === 'assistant' ? 'BLINK' : 'YOU'}</span>
+                          <span className="text-[9px] text-gray-400 dark:text-neutral-600 font-mono">{formatTime(msg.timestamp)}</span>
                         </div>
                         {msg.role === 'assistant' ? (
                           <ChatMessage message={msg} onApprovePlan={onApprovePlan} />
                         ) : (
-                          <div className="text-[13px] leading-relaxed text-neutral-400">{msg.content}</div>
+                          <div className="text-[13px] leading-relaxed text-gray-600 dark:text-neutral-400">{msg.content}</div>
                         )}
                       </div>
                     </div>
@@ -491,17 +491,17 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
           )}
         </div>
 
-        <div className={`p-4 bg-[#0a0a0a] border-t border-[#1a1a1a] transition-all duration-300 ${isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'} shrink-0`}>
-          <div className="bg-[#1a1a1a] border border-[#333] rounded-2xl p-4 shadow-xl">
+        <div className={`p-4 bg-gray-50 dark:bg-[#0a0a0a] border-t border-gray-200 dark:border-[#1a1a1a] transition-all duration-300 ${isCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'} shrink-0`}>
+          <div className="bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-[#333] rounded-2xl p-4 shadow-xl">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-                <span className="text-[11px] text-neutral-400 font-medium">{state.credits.toFixed(2)} credits</span>
+                <span className="text-[11px] text-gray-500 dark:text-neutral-400 font-medium">{state.credits.toFixed(2)} credits</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="flex items-center bg-black/40 rounded-lg px-1.5 py-0.5 mr-2">
-                  <button onClick={() => navigateInputHistory('up')} disabled={inputHistoryIndex >= inputHistory.length - 1} className="p-1 text-neutral-500 hover:text-white disabled:opacity-20 transition-colors"><Undo2 size={12} /></button>
-                  <button onClick={() => navigateInputHistory('down')} disabled={inputHistoryIndex <= -1} className="p-1 text-neutral-500 hover:text-white disabled:opacity-20 transition-colors"><Redo2 size={12} /></button>
+                <div className="flex items-center bg-gray-200/60 dark:bg-black/40 rounded-lg px-1.5 py-0.5 mr-2">
+                  <button onClick={() => navigateInputHistory('up')} disabled={inputHistoryIndex >= inputHistory.length - 1} className="p-1 text-gray-400 dark:text-neutral-500 hover:text-gray-900 dark:hover:text-white disabled:opacity-20 transition-colors"><Undo2 size={12} /></button>
+                  <button onClick={() => navigateInputHistory('down')} disabled={inputHistoryIndex <= -1} className="p-1 text-gray-400 dark:text-neutral-500 hover:text-gray-900 dark:hover:text-white disabled:opacity-20 transition-colors"><Redo2 size={12} /></button>
                 </div>
                 <span className={`text-[10px] font-mono ${state.currentInput.length > MAX_CHARS * 0.9 ? 'text-red-500 font-bold' : 'text-neutral-600'}`}>
                   {state.currentInput.length.toLocaleString()} / {MAX_CHARS.toLocaleString()}
@@ -518,7 +518,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
 
             <textarea
               ref={chatInputRef}
-              className="w-full bg-transparent border-none focus:ring-0 text-white placeholder-neutral-600 resize-none min-h-[40px] text-[14px] leading-relaxed mb-2 scrollbar-thin overflow-y-auto outline-none"
+              className="w-full bg-transparent border-none focus:ring-0 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-neutral-600 resize-none min-h-[40px] text-[14px] leading-relaxed mb-2 scrollbar-thin overflow-y-auto outline-none"
               placeholder="Ask Blink to build something..."
               maxLength={MAX_CHARS}
               rows={1}
@@ -539,40 +539,40 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                 <div className="relative" ref={attachMenuRef}>
                   <button
                     onClick={() => setShowAttachMenu(!showAttachMenu)}
-                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${showAttachMenu ? 'bg-blue-600 text-white' : 'hover:bg-white/5 text-neutral-400'}`}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${showAttachMenu ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 dark:text-neutral-400'}`}
                   >
                     <Plus size={18} className={showAttachMenu ? 'rotate-45' : ''} style={{ transition: 'transform 0.2s' }} />
                   </button>
 
                   {showAttachMenu && (
-                    <div className="absolute bottom-full left-0 mb-2 bg-[#1a1a1a] border border-[#333] rounded-2xl p-2 min-w-[180px] shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200 z-50">
-                      <button onClick={() => { setShowAttachMenu(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group">
+                    <div className="absolute bottom-full left-0 mb-2 bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-[#333] rounded-2xl p-2 min-w-[180px] shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200 z-50">
+                      <button onClick={() => { setShowAttachMenu(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors group">
                         <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
                           <ImageIcon size={14} className="text-blue-400" />
                         </div>
                         <span>Attach Image</span>
                       </button>
-                      <button onClick={() => { setShowAttachMenu(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group">
+                      <button onClick={() => { setShowAttachMenu(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors group">
                         <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
                           <FileUp size={14} className="text-emerald-400" />
                         </div>
                         <span>Attach File</span>
                       </button>
-                      <div className="h-[1px] bg-[#333] my-2" />
-                      <button onClick={() => { setShowAttachMenu(false); onScreenshotRequest?.(); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group">
+                      <div className="h-[1px] bg-gray-200 dark:bg-[#333] my-2" />
+                      <button onClick={() => { setShowAttachMenu(false); onScreenshotRequest?.(); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors group">
                         <div className="w-7 h-7 rounded-lg bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
                           <Camera size={14} className="text-purple-400" />
                         </div>
                         <span>Screenshot</span>
                       </button>
-                      <button onClick={() => { setShowAttachMenu(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group">
+                      <button onClick={() => { setShowAttachMenu(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors group">
                         <div className="w-7 h-7 rounded-lg bg-orange-500/10 flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
                           <Link size={14} className="text-orange-400" />
                         </div>
                         <span>Import URL</span>
                       </button>
-                      <div className="h-[1px] bg-[#333] my-2" />
-                      <button onClick={() => { setShowAttachMenu(false); onShowHistory?.(); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-neutral-300 hover:bg-white/5 rounded-xl transition-colors group">
+                      <div className="h-[1px] bg-gray-200 dark:bg-[#333] my-2" />
+                      <button onClick={() => { setShowAttachMenu(false); onShowHistory?.(); }} className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-gray-700 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors group">
                         <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center group-hover:bg-amber-500/20 transition-colors">
                           <HistoryIcon size={14} className="text-amber-400" />
                         </div>
@@ -591,7 +591,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                   className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
                     (state.isVisualEditMode ?? false)
                       ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                      : 'bg-[#262626] text-neutral-300 hover:bg-[#333]'
+                      : 'bg-gray-200 dark:bg-[#262626] text-gray-700 dark:text-neutral-300 hover:bg-gray-300 dark:hover:bg-[#333]'
                   }`}
                 >
                   <Sparkles size={13} className={(state.isVisualEditMode ?? false) ? 'text-white' : 'text-blue-400'} />
@@ -601,7 +601,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                 {/* Voice Input Button */}
                 <button
                   onClick={toggleListening}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isListening ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/30' : 'hover:bg-white/5 text-neutral-400'}`}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${isListening ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-500/30' : 'hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 dark:text-neutral-400'}`}
                   title={isListening ? 'Stop listening' : 'Start voice input'}
                 >
                   {isListening ? <MicOff size={16} /> : <Mic size={16} />}
@@ -624,18 +624,18 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                   className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
                     (state.chatMode || 'agent') === 'plan'
                       ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                      : 'bg-[#262626] text-neutral-300 hover:bg-[#333]'
+                      : 'bg-gray-200 dark:bg-[#262626] text-gray-700 dark:text-neutral-300 hover:bg-gray-300 dark:hover:bg-[#333]'
                   }`}
                   title={(state.chatMode || 'agent') === 'plan' ? 'Mode Plan actif — cliquez pour passer en Agent' : 'Passer en mode Plan (discussion sans code)'}
                 >
                   <MessageSquare size={13} /> {(state.chatMode || 'agent') === 'plan' ? 'Plan' : 'Chat'}
                 </button>
                 {state.isGenerating ? (
-                  <button type="button" onClick={onStop} disabled={!onStop} className="w-8 h-8 rounded-full flex items-center justify-center bg-[#262626] text-white hover:bg-[#333] transition-all">
+                  <button type="button" onClick={onStop} disabled={!onStop} className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-200 dark:bg-[#262626] text-gray-700 dark:text-white hover:bg-gray-300 dark:hover:bg-[#333] transition-all">
                     <Square size={16} />
                   </button>
                 ) : (
-                  <button onClick={handleSendClick} disabled={!state.currentInput.trim()} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${state.currentInput.trim() ? 'bg-white text-black active:scale-90 shadow-lg' : 'bg-[#262626] text-neutral-600 cursor-not-allowed'}`}>
+                  <button onClick={handleSendClick} disabled={!state.currentInput.trim()} className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${state.currentInput.trim() ? 'bg-gray-900 dark:bg-white text-white dark:text-black active:scale-90 shadow-lg' : 'bg-gray-200 dark:bg-[#262626] text-gray-400 dark:text-neutral-600 cursor-not-allowed'}`}>
                     <ArrowUp size={18} />
                   </button>
                 )}

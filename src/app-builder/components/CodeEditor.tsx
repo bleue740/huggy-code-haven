@@ -2,6 +2,7 @@ import React, { useMemo, useCallback } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 import { Extension } from '@codemirror/state';
+import { useTheme } from '@/hooks/useTheme';
 
 interface CodeEditorProps {
   value: string;
@@ -11,6 +12,8 @@ interface CodeEditorProps {
 }
 
 export const CodeEditor: React.FC<CodeEditorProps> = ({ value, onChange, readOnly, collabExtension }) => {
+  const { theme } = useTheme();
+
   const extensions = useMemo(() => {
     const exts: Extension[] = [javascript({ jsx: true, typescript: true })];
     if (collabExtension && collabExtension.length > 0) {
@@ -29,10 +32,14 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ value, onChange, readOnl
       value={collabExtension && collabExtension.length > 0 ? undefined : value}
       onChange={handleChange}
       extensions={extensions}
-      theme="dark"
+      theme={theme}
       readOnly={readOnly}
-      className="h-full overflow-hidden [&_.cm-editor]:!h-full [&_.cm-scroller]:!font-mono [&_.cm-scroller]:!text-[13px] [&_.cm-editor]:!bg-[#0a0a0a] [&_.cm-gutters]:!bg-[#111] [&_.cm-gutters]:!border-r-[#1a1a1a] [&_.cm-activeLineGutter]:!bg-[#1a1a1a] [&_.cm-activeLine]:!bg-[#ffffff06]
-      [&_.cm-ySelectionInfo]:!text-[10px] [&_.cm-ySelectionInfo]:!font-bold [&_.cm-ySelectionInfo]:!px-1.5 [&_.cm-ySelectionInfo]:!py-0.5 [&_.cm-ySelectionInfo]:!rounded-md [&_.cm-ySelectionInfo]:!opacity-90"
+      className={`h-full overflow-hidden [&_.cm-editor]:!h-full [&_.cm-scroller]:!font-mono [&_.cm-scroller]:!text-[13px] ${
+        theme === 'dark'
+          ? '[&_.cm-editor]:!bg-[#0a0a0a] [&_.cm-gutters]:!bg-[#111] [&_.cm-gutters]:!border-r-[#1a1a1a] [&_.cm-activeLineGutter]:!bg-[#1a1a1a] [&_.cm-activeLine]:!bg-[#ffffff06]'
+          : '[&_.cm-editor]:!bg-white [&_.cm-gutters]:!bg-gray-50 [&_.cm-gutters]:!border-r-gray-200 [&_.cm-activeLineGutter]:!bg-gray-100 [&_.cm-activeLine]:!bg-blue-50/50'
+      }
+      [&_.cm-ySelectionInfo]:!text-[10px] [&_.cm-ySelectionInfo]:!font-bold [&_.cm-ySelectionInfo]:!px-1.5 [&_.cm-ySelectionInfo]:!py-0.5 [&_.cm-ySelectionInfo]:!rounded-md [&_.cm-ySelectionInfo]:!opacity-90`}
       basicSetup={{
         lineNumbers: true,
         foldGutter: true,

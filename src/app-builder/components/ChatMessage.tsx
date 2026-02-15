@@ -30,11 +30,11 @@ function renderMarkdown(text: string): React.ReactNode[] {
 
     // Headings
     if (line.startsWith('### ')) {
-      nodes.push(<h4 key={i} className="text-sm font-bold text-white mt-3 mb-1">{renderInline(line.slice(4))}</h4>);
+      nodes.push(<h4 key={i} className="text-sm font-bold text-gray-900 dark:text-white mt-3 mb-1">{renderInline(line.slice(4))}</h4>);
       return;
     }
     if (line.startsWith('## ')) {
-      nodes.push(<h3 key={i} className="text-sm font-bold text-white mt-3 mb-1">{renderInline(line.slice(3))}</h3>);
+      nodes.push(<h3 key={i} className="text-sm font-bold text-gray-900 dark:text-white mt-3 mb-1">{renderInline(line.slice(3))}</h3>);
       return;
     }
 
@@ -82,11 +82,11 @@ function renderInline(text: string): React.ReactNode[] {
       parts.push(text.slice(lastIndex, match.index));
     }
     if (match[2]) {
-      parts.push(<strong key={key++} className="text-white font-semibold">{match[2]}</strong>);
+      parts.push(<strong key={key++} className="text-gray-900 dark:text-white font-semibold">{match[2]}</strong>);
     } else if (match[4]) {
-      parts.push(<code key={key++} className="px-1.5 py-0.5 bg-white/10 rounded text-[12px] font-mono text-blue-300">{match[4]}</code>);
+      parts.push(<code key={key++} className="px-1.5 py-0.5 bg-gray-200/60 dark:bg-white/10 rounded text-[12px] font-mono text-blue-600 dark:text-blue-300">{match[4]}</code>);
     } else if (match[6]) {
-      parts.push(<em key={key++} className="italic text-neutral-300">{match[6]}</em>);
+      parts.push(<em key={key++} className="italic text-gray-600 dark:text-neutral-300">{match[6]}</em>);
     }
     lastIndex = match.index + match[0].length;
   }
@@ -112,7 +112,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onApprovePlan
   return (
     <div className="space-y-2">
       {textWithoutPlan && (
-        <div className="text-[13px] leading-relaxed text-neutral-200">
+        <div className="text-[13px] leading-relaxed text-gray-700 dark:text-neutral-200">
           {renderMarkdown(textWithoutPlan)}
         </div>
       )}
@@ -120,7 +120,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onApprovePlan
         <PlanMessage planContent={planContent} onApprove={onApprovePlan} />
       )}
       {planContent && !onApprovePlan && (
-        <div className="text-[13px] leading-relaxed text-neutral-200">
+        <div className="text-[13px] leading-relaxed text-gray-700 dark:text-neutral-200">
           {renderMarkdown(planContent)}
         </div>
       )}
@@ -128,7 +128,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onApprovePlan
         <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg mt-2">
           <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
           <FileCode2 size={14} className="text-emerald-400 shrink-0" />
-          <span className="text-[12px] font-medium text-emerald-300">
+          <span className="text-[12px] font-medium text-emerald-600 dark:text-emerald-300">
             Code appliqué à la preview
             {message.codeLineCount ? ` — ${message.codeLineCount} lignes` : ''}
           </span>
