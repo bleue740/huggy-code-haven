@@ -3,18 +3,46 @@ import { useNavigate, Link } from "react-router-dom";
 import { ArrowLeft, Check, Zap, Loader2, GraduationCap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { PLANS, FAQ_ITEMS } from "@/config/plans";
+import { PLANS, CREDIT_TIERS, FAQ_ITEMS } from "@/config/plans";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function PricingPage() {
   const navigate = useNavigate();
-  const [isYearly, setIsYearly] = useState(true);
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+
+  // Per-plan state
+  const [planAnnual, setPlanAnnual] = useState<Record<string, boolean>>({
+    pro: true,
+    business: true,
+  });
+  const [planCredits, setPlanCredits] = useState<Record<string, number>>({
+    pro: 100,
+    business: 100,
+  });
+
+  const getPrice = (planId: string) => {
+    const plan = PLANS.find((p) => p.id === planId);
+    if (!plan || plan.monthlyPrice === null) return null;
+
+    const isAnnual = planAnnual[planId] ?? false;
+    const basePrice = isAnnual ? plan.yearlyMonthlyPrice! : plan.monthlyPrice;
+    const creditTier = CREDIT_TIERS.find((t) => t.credits === (planCredits[planId] ?? 100));
+    const creditExtra = creditTier?.additionalPrice ?? 0;
+
+    return basePrice + creditExtra;
+  };
 
   const handleSelectPlan = async (planId: string, action: string) => {
     if (action === "auth") {
@@ -26,7 +54,6 @@ export default function PricingPage() {
       return;
     }
 
-    // Stripe checkout (placeholder until Stripe is connected)
     setLoadingPlan(planId);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -34,12 +61,12 @@ export default function PricingPage() {
         navigate("/auth");
         return;
       }
-      toast.info("Le paiement Stripe sera bientôt disponible.", {
-        description: `Plan sélectionné : ${planId}`,
+      toast.info("Stripe checkout coming soon.", {
+        description: `Selected: ${planId} — ${planCredits[planId] ?? 100} credits/mo — ${planAnnual[planId] ? "annual" : "monthly"}`,
         duration: 5000,
       });
     } catch {
-      toast.error("Une erreur est survenue");
+      toast.error("Something went wrong");
     } finally {
       setLoadingPlan(null);
     }
@@ -72,44 +99,22 @@ export default function PricingPage() {
       </header>
 
       {/* Hero */}
-      <section className="max-w-4xl mx-auto px-6 pt-16 pb-10 text-center">
+      <section className="max-w-4xl mx-auto px-6 pt-16 pb-12 text-center">
         <h1 className="text-4xl md:text-5xl font-black tracking-tight text-gray-900">
-          Des plans pour chaque ambition
+          Plans for every ambition
         </h1>
         <p className="mt-4 text-gray-500 text-lg max-w-xl mx-auto">
-          Commencez gratuitement, upgradez quand vous êtes prêt. Pas de surprise, annulez à tout moment.
+          Start for free, upgrade when you're ready. No surprises, cancel anytime.
         </p>
-
-        {/* Toggle */}
-        <div className="mt-8 inline-flex items-center gap-1 bg-gray-100 rounded-full p-1">
-          <button
-            onClick={() => setIsYearly(false)}
-            className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${
-              !isYearly ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            Mensuel
-          </button>
-          <button
-            onClick={() => setIsYearly(true)}
-            className={`px-5 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${
-              isYearly ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            Annuel
-            <span className="text-[11px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
-              -20%
-            </span>
-          </button>
-        </div>
       </section>
 
       {/* Plans grid */}
       <section className="max-w-6xl mx-auto px-6 pb-20 grid md:grid-cols-2 lg:grid-cols-4 gap-5">
         {PLANS.map((plan) => {
-          const price = isYearly ? plan.yearlyPrice : plan.monthlyPrice;
+          const price = getPrice(plan.id);
           const isLoading = loadingPlan === plan.id;
-          const showStrikethrough = isYearly && plan.monthlyPrice !== null && plan.monthlyPrice > 0;
+          const isAnnual = planAnnual[plan.id] ?? false;
+          const selectedCredits = planCredits[plan.id] ?? 100;
 
           return (
             <div
@@ -131,35 +136,65 @@ export default function PricingPage() {
               </div>
               <p className="mt-1 text-sm text-gray-500">{plan.description}</p>
 
+              {/* Price */}
               <div className="mt-5">
                 {price !== null ? (
                   <div>
                     <div className="flex items-baseline gap-1">
                       <span className="text-4xl font-black text-gray-900">${price}</span>
-                      <span className="text-sm text-gray-400 font-semibold">/mois</span>
+                      <span className="text-sm text-gray-400 font-semibold">/mo</span>
                     </div>
-                    {showStrikethrough && (
+                    {isAnnual && plan.monthlyPrice !== null && plan.monthlyPrice > 0 && (
                       <p className="text-xs text-gray-400 mt-1">
-                        <span className="line-through">${plan.monthlyPrice}/mois</span>
-                        {' · '}Facturé ${price! * 12}/an
+                        <span className="line-through">${plan.monthlyPrice + (CREDIT_TIERS.find(t => t.credits === selectedCredits)?.additionalPrice ?? 0)}/mo</span>
+                        {' · '}first month, then ${price}/mo
                       </p>
                     )}
-                    {!showStrikethrough && price === 0 && (
-                      <p className="text-xs text-gray-400 mt-1">Gratuit pour toujours</p>
+                    {price === 0 && (
+                      <p className="text-xs text-gray-400 mt-1">Free forever</p>
                     )}
                   </div>
                 ) : (
                   <div>
-                    <span className="text-2xl font-black text-gray-900">Sur devis</span>
-                    <p className="text-xs text-gray-400 mt-1">Contactez-nous</p>
+                    <span className="text-2xl font-black text-gray-900">Custom</span>
+                    <p className="text-xs text-gray-400 mt-1">Contact us</p>
                   </div>
                 )}
               </div>
 
+              {/* Annual toggle per plan */}
+              {plan.hasAnnualToggle && (
+                <div className="mt-4 flex items-center gap-2">
+                  <button
+                    onClick={() =>
+                      setPlanAnnual((prev) => ({ ...prev, [plan.id]: !prev[plan.id] }))
+                    }
+                    className={`relative w-9 h-5 rounded-full transition-colors ${
+                      isAnnual ? "bg-blue-600" : "bg-gray-300"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                        isAnnual ? "translate-x-4" : ""
+                      }`}
+                    />
+                  </button>
+                  <span className="text-xs font-semibold text-gray-500">
+                    Annual
+                  </span>
+                  {isAnnual && (
+                    <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">
+                      -20%
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* CTA */}
               <button
                 onClick={() => handleSelectPlan(plan.id, plan.ctaAction)}
                 disabled={isLoading}
-                className={`mt-6 w-full py-2.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 ${
+                className={`mt-5 w-full py-2.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 ${
                   plan.highlight
                     ? "bg-blue-600 text-white hover:bg-blue-700"
                     : plan.ctaAction === 'auth'
@@ -171,6 +206,33 @@ export default function PricingPage() {
                 {plan.cta}
               </button>
 
+              {/* Credit selector */}
+              {plan.hasCreditSelector && (
+                <div className="mt-3">
+                  <Select
+                    value={String(selectedCredits)}
+                    onValueChange={(v) =>
+                      setPlanCredits((prev) => ({ ...prev, [plan.id]: Number(v) }))
+                    }
+                  >
+                    <SelectTrigger className="h-9 text-xs bg-white border-gray-200">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-gray-200 z-50">
+                      {CREDIT_TIERS.map((tier) => (
+                        <SelectItem key={tier.credits} value={String(tier.credits)} className="text-xs">
+                          {tier.label}
+                          {tier.additionalPrice > 0 && (
+                            <span className="text-gray-400 ml-1">(+${tier.additionalPrice}/mo)</span>
+                          )}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Features */}
               <div className="mt-6 pt-5 border-t border-gray-100 flex-1">
                 {plan.featuresIntro && (
                   <p className="text-xs font-semibold text-gray-400 mb-3">
@@ -203,14 +265,14 @@ export default function PricingPage() {
             <GraduationCap size={24} className="text-purple-600" />
           </div>
           <div className="flex-1">
-            <h3 className="font-bold text-gray-900">Réduction étudiante</h3>
+            <h3 className="font-bold text-gray-900">Student discount</h3>
             <p className="text-sm text-gray-500 mt-0.5">
-              Les étudiants bénéficient de 50% de réduction sur le plan Pro.{' '}
+              Students get 50% off the Pro plan.{' '}
               <a
                 href="mailto:contact@blink.ai?subject=Student Discount"
                 className="text-purple-600 font-semibold hover:underline"
               >
-                Contactez-nous →
+                Contact us →
               </a>
             </p>
           </div>
@@ -220,7 +282,7 @@ export default function PricingPage() {
       {/* FAQ */}
       <section className="max-w-3xl mx-auto px-6 pb-24">
         <h2 className="text-2xl font-black text-center mb-8 text-gray-900">
-          Questions fréquentes
+          Frequently asked questions
         </h2>
         <Accordion type="single" collapsible className="w-full">
           {FAQ_ITEMS.map((item, i) => (
@@ -238,7 +300,7 @@ export default function PricingPage() {
 
       {/* Footer */}
       <footer className="border-t border-gray-100 py-8 text-center text-sm text-gray-400">
-        © {new Date().getFullYear()} Blink. Tous droits réservés.
+        © {new Date().getFullYear()} Blink. All rights reserved.
       </footer>
     </main>
   );

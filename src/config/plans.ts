@@ -1,6 +1,7 @@
-export interface PlanFeature {
-  text: string;
-  included: boolean;
+export interface CreditTier {
+  credits: number;
+  label: string;
+  additionalPrice: number; // added to base price
 }
 
 export interface PlanTier {
@@ -8,119 +9,139 @@ export interface PlanTier {
   name: string;
   description: string;
   monthlyPrice: number | null;
-  yearlyPrice: number | null;
+  yearlyMonthlyPrice: number | null; // price per month when billed yearly
   badge?: string;
   highlight: boolean;
   cta: string;
   ctaAction: 'auth' | 'checkout' | 'contact';
   featuresIntro?: string;
   features: string[];
+  hasCreditSelector: boolean;
+  hasAnnualToggle: boolean;
 }
+
+export const CREDIT_TIERS: CreditTier[] = [
+  { credits: 100, label: '100 credits / month', additionalPrice: 0 },
+  { credits: 200, label: '200 credits / month', additionalPrice: 15 },
+  { credits: 500, label: '500 credits / month', additionalPrice: 40 },
+];
 
 export const PLANS: PlanTier[] = [
   {
     id: 'free',
     name: 'Free',
-    description: 'Pour découvrir et prototyper vos idées.',
+    description: 'For hobbyists and casual exploration.',
     monthlyPrice: 0,
-    yearlyPrice: 0,
+    yearlyMonthlyPrice: 0,
     highlight: false,
     cta: 'Get Started',
     ctaAction: 'auth',
+    hasCreditSelector: false,
+    hasAnnualToggle: false,
     features: [
-      '5 crédits quotidiens',
-      'Max 30 crédits / mois',
-      'Projets publics uniquement',
-      '1 domaine blink.app',
-      'Cloud intégré',
-      'Prévisualisation en temps réel',
+      '5 daily credits (up to 30/month)',
+      'Public projects',
+      'Unlimited collaborators',
+      '5 blink.app domains',
+      'Cloud',
     ],
   },
   {
     id: 'pro',
     name: 'Pro',
-    description: 'Pour les créateurs sérieux qui veulent plus.',
+    description: 'For creators who need more power.',
     monthlyPrice: 25,
-    yearlyPrice: 20,
-    badge: 'Populaire',
+    yearlyMonthlyPrice: 20,
+    badge: 'Popular',
     highlight: true,
     cta: 'Get Started',
     ctaAction: 'checkout',
-    featuresIntro: 'Tout le Free, plus :',
+    hasCreditSelector: true,
+    hasAnnualToggle: true,
+    featuresIntro: 'Everything in Free, plus:',
     features: [
-      '100 crédits / mois',
-      '5 crédits quotidiens (max 150/mois)',
-      'Projets illimités',
-      'Domaines personnalisés',
-      'Export ZIP du code',
-      'Retrait du badge Blink',
-      'Support prioritaire',
+      '100 monthly credits',
+      '5 daily credits (up to 150/month)',
+      'Usage-based Cloud + AI',
+      'Credit rollovers',
+      'On-demand credit top-ups',
+      'Unlimited blink.app domains',
+      'Custom domains',
+      'Remove the Blink badge',
+      'User roles & permissions',
     ],
   },
   {
     id: 'business',
     name: 'Business',
-    description: 'Pour les équipes qui construisent ensemble.',
+    description: 'For teams building together.',
     monthlyPrice: 50,
-    yearlyPrice: 40,
+    yearlyMonthlyPrice: 40,
     highlight: false,
     cta: 'Get Started',
     ctaAction: 'checkout',
-    featuresIntro: 'Tout le Pro, plus :',
+    hasCreditSelector: true,
+    hasAnnualToggle: true,
+    featuresIntro: 'Everything in Pro, plus:',
     features: [
-      '100 crédits / mois inclus',
-      'Publish interne',
-      'SSO / SAML',
-      'Workspace équipe',
-      'Templates de design',
-      'Contrôle d\'accès par rôles',
-      'Centre de sécurité',
+      '100 monthly credits',
+      'Internal publish',
+      'SSO',
+      'Team workspace',
+      'Personal projects',
+      'Design templates',
+      'Role-based access',
+      'Security center',
     ],
   },
   {
     id: 'enterprise',
     name: 'Enterprise',
-    description: 'Solutions sur mesure pour les organisations.',
+    description: 'Custom solutions for organizations.',
     monthlyPrice: null,
-    yearlyPrice: null,
+    yearlyMonthlyPrice: null,
     highlight: false,
     cta: 'Book a Demo',
     ctaAction: 'contact',
-    featuresIntro: 'Tout le Business, plus :',
+    hasCreditSelector: false,
+    hasAnnualToggle: false,
+    featuresIntro: 'Everything in Business, plus:',
     features: [
-      'Support dédié',
-      'Onboarding personnalisé',
-      'Systèmes de design',
+      'Dedicated support',
+      'Onboarding services',
+      'Design systems',
       'SCIM provisioning',
-      'Contrôles de publication',
-      'Contrat & facturation sur mesure',
+      'Support for custom connectors',
+      'Publishing controls',
+      'Sharing controls',
+      'Audit logs (coming soon!)',
     ],
   },
 ];
 
 export const FAQ_ITEMS = [
   {
-    question: 'Qu\'est-ce qu\'un crédit ?',
-    answer: 'Un crédit correspond à une interaction avec l\'IA — une demande de génération, une itération, ou une modification de code. Les crédits se réinitialisent chaque mois.',
+    question: 'What is Blink and how does it work?',
+    answer: 'Blink is an AI-powered app builder that turns your ideas into real, full-stack web applications. Just describe what you want to build in plain English, and Blink generates production-ready code, deploys it, and gives you a live URL — all in seconds.',
   },
   {
-    question: 'Puis-je changer de plan à tout moment ?',
-    answer: 'Oui ! Vous pouvez upgrader ou downgrader votre plan à tout moment. Les changements prennent effet immédiatement et le prorata est appliqué automatiquement.',
+    question: 'What does the free plan include?',
+    answer: 'The free plan includes 5 daily credits (up to 30 per month), public projects, unlimited collaborators, 5 blink.app domains, and access to Blink Cloud. It\'s perfect for trying out the platform and building prototypes.',
   },
   {
-    question: 'Comment fonctionne la facturation annuelle ?',
-    answer: 'En choisissant la facturation annuelle, vous payez pour 12 mois en une fois et bénéficiez d\'une réduction de 20% par rapport au tarif mensuel.',
+    question: 'What is a credit?',
+    answer: 'A credit corresponds to one interaction with the AI — a generation request, an iteration, or a code modification. Credits reset each month on paid plans, and daily credits refresh every day.',
   },
   {
-    question: 'Puis-je exporter mon code ?',
-    answer: 'Oui, à partir du plan Pro. Vous pouvez exporter l\'intégralité de votre projet en fichier ZIP et l\'héberger où vous voulez.',
+    question: 'Who owns the projects and code?',
+    answer: 'You do. All code generated by Blink is 100% yours. You can export it as a ZIP file (Pro plan and above), host it anywhere, and modify it freely. We don\'t claim any ownership over your projects.',
   },
   {
-    question: 'Proposez-vous une réduction pour les étudiants ?',
-    answer: 'Oui ! Les étudiants bénéficient de 50% de réduction sur le plan Pro. Contactez-nous avec votre adresse email étudiante pour en profiter.',
+    question: 'How much does it cost to use?',
+    answer: 'Blink offers a generous free tier to get started. The Pro plan starts at $20/month (billed annually) or $25/month, and includes 100 monthly credits with the option to add more. The Business plan starts at $40/month (billed annually) for teams. Enterprise pricing is custom.',
   },
   {
-    question: 'Que se passe-t-il si je dépasse mes crédits ?',
-    answer: 'Vous pouvez acheter des crédits supplémentaires à la demande ou upgrader votre plan. Vos projets restent accessibles même sans crédits restants.',
+    question: 'Do you offer a student discount?',
+    answer: 'Yes! Students get 50% off the Pro plan. Contact us with your student email address to claim your discount.',
   },
 ];
