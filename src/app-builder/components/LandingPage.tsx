@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Plus, Zap, ArrowUp, Layout, Calendar, Briefcase, ChevronRight, Sparkles, Menu, X, Code, Monitor, Rocket, FolderTree, Shield, RefreshCw, MessageSquare, ExternalLink } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -48,32 +50,18 @@ const mockShowcases: ShowcaseItem[] = [
   { id: '6', title: 'ShopDash', description: 'E-commerce analytics dashboard with sales trends and inventory alerts.', deploy_url: '#' },
 ];
 
-/* ───────── Scroll animation wrapper ───────── */
-const AnimatedSection: React.FC<{ children: React.ReactNode; className?: string; delay?: number }> = ({ children, className = '', delay = 0 }) => {
-  const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setVisible(true); obs.disconnect(); } },
-      { threshold: 0.15 }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
-
-  return (
-    <div
-      ref={ref}
-      className={`transition-all duration-700 ease-out ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'} ${className}`}
-      style={{ transitionDelay: `${delay}ms` }}
-    >
-      {children}
-    </div>
-  );
-};
+/* ───────── Scroll animation wrapper using framer-motion ───────── */
+const AnimatedSection: React.FC<{ children: React.ReactNode; className?: string; delay?: number }> = ({ children, className = '', delay = 0 }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 24 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    viewport={{ once: true, margin: "-60px" }}
+    transition={{ duration: 0.5, delay: delay / 1000, ease: [0, 0, 0.2, 1] as const }}
+    className={className}
+  >
+    {children}
+  </motion.div>
+);
 
 export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticated }) => {
   const [inputValue, setInputValue] = useState('');
@@ -189,13 +177,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
   const displayedShowcases = showcases.length > 0 ? showcases : mockShowcases;
 
   return (
-    <div className="min-h-screen bg-[#050505] text-white font-['Inter',sans-serif] selection:bg-blue-600/30 overflow-x-hidden">
+    <div className="min-h-screen bg-white dark:bg-[#050505] text-gray-900 dark:text-white font-['Inter',sans-serif] selection:bg-blue-600/30 overflow-x-hidden transition-colors duration-300">
       <div className="absolute top-0 left-0 right-0 h-[1000px] pointer-events-none overflow-hidden -z-10">
         <div className="absolute top-[-200px] left-1/2 -translate-x-1/2 w-[1400px] h-[800px] bg-gradient-to-b from-blue-900/20 via-transparent to-transparent blur-[120px]"></div>
       </div>
 
       {/* Navbar */}
-      <nav className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between sticky top-0 bg-[#050505]/80 backdrop-blur-md z-50 border-b border-white/5">
+      <nav className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between sticky top-0 bg-white/80 dark:bg-[#050505]/80 backdrop-blur-md z-50 border-b border-gray-200/50 dark:border-white/5 transition-colors">
         <div className="flex items-center gap-12">
           <div className="text-2xl font-black tracking-tighter flex items-center gap-2 cursor-pointer group">
             <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
@@ -204,24 +192,25 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
             Blink
           </div>
           <div className="hidden lg:flex items-center gap-8">
-            <button onClick={() => scrollTo('features')} className="text-sm font-semibold text-neutral-400 hover:text-white transition-colors">Features</button>
-            <button onClick={() => scrollTo('how-it-works')} className="text-sm font-semibold text-neutral-400 hover:text-white transition-colors">How it works</button>
-            <button onClick={() => scrollTo('community')} className="text-sm font-semibold text-neutral-400 hover:text-white transition-colors">Community</button>
-            <Link to="/pricing" className="text-sm font-semibold text-neutral-400 hover:text-white transition-colors">Pricing</Link>
-            <Link to="/about" className="text-sm font-semibold text-neutral-400 hover:text-white transition-colors">About</Link>
+            <button onClick={() => scrollTo('features')} className="text-sm font-semibold text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white transition-colors">Features</button>
+            <button onClick={() => scrollTo('how-it-works')} className="text-sm font-semibold text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white transition-colors">How it works</button>
+            <button onClick={() => scrollTo('community')} className="text-sm font-semibold text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white transition-colors">Community</button>
+            <Link to="/pricing" className="text-sm font-semibold text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white transition-colors">Pricing</Link>
+            <Link to="/about" className="text-sm font-semibold text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white transition-colors">About</Link>
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <Link to="/auth" className="hidden sm:inline-block text-sm font-semibold text-neutral-400 hover:text-white transition-colors">
+        <div className="flex items-center gap-3">
+          <Link to="/auth" className="hidden sm:inline-block text-sm font-semibold text-gray-500 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white transition-colors">
             Sign in
           </Link>
           <button
             onClick={() => onStart("")}
-            className="hidden sm:flex bg-white text-black px-5 py-2.5 rounded-2xl text-[13px] font-[800] shadow-xl shadow-white/5 hover:bg-neutral-200 transition-all active:scale-95 items-center gap-1.5 whitespace-nowrap"
+            className="hidden sm:flex bg-blue-600 dark:bg-white text-white dark:text-black px-5 py-2.5 rounded-2xl text-[13px] font-[800] shadow-xl shadow-blue-500/20 dark:shadow-white/5 hover:bg-blue-500 dark:hover:bg-neutral-200 transition-all active:scale-95 items-center gap-1.5 whitespace-nowrap"
           >
             Get started <ChevronRight size={14} />
           </button>
-          <button className="lg:hidden p-2 text-white" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+          <ThemeToggle />
+          <button className="lg:hidden p-2" onClick={() => setIsMenuOpen(!isMenuOpen)}>
             {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
         </div>
@@ -229,8 +218,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
 
       {/* Mobile Menu Overlay */}
       {isMenuOpen && (
-        <div className="fixed inset-0 z-[60] bg-[#050505] flex flex-col pt-24 px-8 animate-in fade-in slide-in-from-top-4 duration-200">
-          <button className="absolute top-6 right-6 text-neutral-400 hover:text-white" onClick={() => setIsMenuOpen(false)}>
+        <div className="fixed inset-0 z-[60] bg-white dark:bg-[#050505] flex flex-col pt-24 px-8 animate-in fade-in slide-in-from-top-4 duration-200">
+          <button className="absolute top-6 right-6 text-gray-400 dark:text-neutral-400 hover:text-gray-900 dark:hover:text-white" onClick={() => setIsMenuOpen(false)}>
             <X size={28} />
           </button>
           <div className="space-y-6">
@@ -244,7 +233,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
           <div className="mt-12">
             <button
               onClick={() => { setIsMenuOpen(false); onStart(""); }}
-              className="w-full bg-white text-black py-4 rounded-2xl text-base font-black flex items-center justify-center gap-2"
+              className="w-full bg-blue-600 dark:bg-white text-white dark:text-black py-4 rounded-2xl text-base font-black flex items-center justify-center gap-2"
             >
               Get started for free <ChevronRight size={18} />
             </button>

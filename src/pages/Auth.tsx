@@ -5,6 +5,8 @@ import { Info, Mail, Lock, Eye, EyeOff, CheckCircle2, XCircle, Loader2 } from "l
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import { useSession } from "@/hooks/useSession";
+import { PageTransition } from "@/components/PageTransition";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const emailSchema = z.string().email("Adresse email invalide");
 const passwordSchema = z.string().min(8, "Minimum 8 caractères requis");
@@ -113,17 +115,21 @@ export default function AuthPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-6">
+    <PageTransition>
+    <main className="min-h-screen bg-gray-50 dark:bg-[#050505] text-gray-900 dark:text-white flex items-center justify-center p-6 transition-colors duration-300">
       <section className="w-full max-w-md">
         {/* Logo / Brand */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
-            Blink
-          </h1>
-          <p className="text-sm text-neutral-500 mt-1">Build apps with AI</p>
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-blue-500 to-violet-500 bg-clip-text text-transparent">
+              Blink
+            </h1>
+            <ThemeToggle />
+          </div>
+          <p className="text-sm text-gray-500 dark:text-neutral-500 mt-1">Build apps with AI</p>
         </div>
 
-        <div className="bg-[#111] border border-[#1a1a1a] rounded-2xl p-6 shadow-2xl shadow-blue-500/5">
+        <div className="bg-white dark:bg-[#111] border border-gray-200 dark:border-[#1a1a1a] rounded-2xl p-6 shadow-xl dark:shadow-2xl dark:shadow-blue-500/5 transition-colors">
           {isRedirected && (
             <div className="flex items-center gap-2 px-4 py-3 mb-5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-sm">
               <Info size={16} className="shrink-0" />
@@ -136,7 +142,7 @@ export default function AuthPage() {
             type="button"
             onClick={handleGoogleSignIn}
             disabled={googleBusy}
-            className="w-full flex items-center justify-center gap-3 py-2.5 rounded-xl border border-[#2a2a2a] bg-[#0a0a0a] hover:bg-[#151515] transition-colors text-sm font-medium disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-3 py-2.5 rounded-xl border border-gray-200 dark:border-[#2a2a2a] bg-gray-50 dark:bg-[#0a0a0a] hover:bg-gray-100 dark:hover:bg-[#151515] transition-colors text-sm font-medium disabled:opacity-50"
           >
             {googleBusy ? (
               <Loader2 size={18} className="animate-spin" />
@@ -153,18 +159,18 @@ export default function AuthPage() {
 
           {/* Divider */}
           <div className="flex items-center gap-3 my-5">
-            <div className="flex-1 h-px bg-[#1a1a1a]" />
-            <span className="text-xs text-neutral-600 uppercase tracking-wider">ou</span>
-            <div className="flex-1 h-px bg-[#1a1a1a]" />
+            <div className="flex-1 h-px bg-gray-200 dark:bg-[#1a1a1a]" />
+            <span className="text-xs text-gray-400 dark:text-neutral-600 uppercase tracking-wider">ou</span>
+            <div className="flex-1 h-px bg-gray-200 dark:bg-[#1a1a1a]" />
           </div>
 
           {/* Mode tabs */}
-          <div className="flex rounded-xl bg-[#0a0a0a] p-1 mb-5">
+          <div className="flex rounded-xl bg-gray-100 dark:bg-[#0a0a0a] p-1 mb-5">
             <button
               type="button"
               onClick={() => { setMode("login"); setError(null); setSuccess(null); }}
               className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${
-                mode === "login" ? "bg-[#1a1a1a] text-white" : "text-neutral-500 hover:text-neutral-300"
+                mode === "login" ? "bg-white dark:bg-[#1a1a1a] shadow-sm" : "text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300"
               }`}
             >
               Connexion
@@ -173,7 +179,7 @@ export default function AuthPage() {
               type="button"
               onClick={() => { setMode("signup"); setError(null); setSuccess(null); }}
               className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${
-                mode === "signup" ? "bg-[#1a1a1a] text-white" : "text-neutral-500 hover:text-neutral-300"
+                mode === "signup" ? "bg-white dark:bg-[#1a1a1a] shadow-sm" : "text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300"
               }`}
             >
               Inscription
@@ -183,17 +189,17 @@ export default function AuthPage() {
           <form onSubmit={onSubmit} className="space-y-4">
             {/* Email */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-neutral-500 flex items-center gap-1.5">
+              <label className="text-xs font-bold text-gray-400 dark:text-neutral-500 flex items-center gap-1.5">
                 <Mail size={12} /> Email
               </label>
               <input
                 type="email"
-                className={`w-full bg-[#0a0a0a] border rounded-xl px-3 py-2.5 text-sm outline-none transition-colors ${
+                className={`w-full bg-gray-50 dark:bg-[#0a0a0a] border rounded-xl px-3 py-2.5 text-sm outline-none transition-colors ${
                   emailValidation
                     ? emailValidation.valid
                       ? "border-emerald-500/30 focus:ring-2 focus:ring-emerald-500/20"
                       : "border-red-500/30 focus:ring-2 focus:ring-red-500/20"
-                    : "border-[#1a1a1a] focus:ring-2 focus:ring-blue-500/30"
+                    : "border-gray-200 dark:border-[#1a1a1a] focus:ring-2 focus:ring-blue-500/30"
                 }`}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -211,18 +217,18 @@ export default function AuthPage() {
 
             {/* Password */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-neutral-500 flex items-center gap-1.5">
+              <label className="text-xs font-bold text-gray-400 dark:text-neutral-500 flex items-center gap-1.5">
                 <Lock size={12} /> Mot de passe
               </label>
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
-                  className={`w-full bg-[#0a0a0a] border rounded-xl px-3 py-2.5 pr-10 text-sm outline-none transition-colors ${
+                  className={`w-full bg-gray-50 dark:bg-[#0a0a0a] border rounded-xl px-3 py-2.5 pr-10 text-sm outline-none transition-colors ${
                     passwordValidation
                       ? passwordValidation.valid
                         ? "border-emerald-500/30 focus:ring-2 focus:ring-emerald-500/20"
                         : "border-red-500/30 focus:ring-2 focus:ring-red-500/20"
-                      : "border-[#1a1a1a] focus:ring-2 focus:ring-blue-500/30"
+                      : "border-gray-200 dark:border-[#1a1a1a] focus:ring-2 focus:ring-blue-500/30"
                   }`}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -233,7 +239,7 @@ export default function AuthPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300 transition-colors"
                 >
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
@@ -270,10 +276,11 @@ export default function AuthPage() {
           </form>
         </div>
 
-        <p className="text-center text-xs text-neutral-600 mt-6">
+        <p className="text-center text-xs text-gray-400 dark:text-neutral-600 mt-6">
           En continuant, tu acceptes nos conditions d'utilisation.
         </p>
       </section>
     </main>
+    </PageTransition>
   );
 }
