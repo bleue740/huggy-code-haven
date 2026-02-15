@@ -108,6 +108,39 @@ export type Database = {
           },
         ]
       }
+      credit_transactions: {
+        Row: {
+          amount: number
+          balance_after: number
+          created_at: string
+          description: string | null
+          id: string
+          metadata: Json | null
+          type: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          balance_after: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          type: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          balance_after?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       deployments: {
         Row: {
           created_at: string
@@ -263,9 +296,13 @@ export type Database = {
       }
       subscriptions: {
         Row: {
+          billing_period: string | null
           created_at: string
+          credit_tier: number | null
+          credits_granted_at: string | null
           current_period_end: string | null
           id: string
+          monthly_credits: number | null
           plan: string
           status: string
           stripe_customer_id: string | null
@@ -274,9 +311,13 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          billing_period?: string | null
           created_at?: string
+          credit_tier?: number | null
+          credits_granted_at?: string | null
           current_period_end?: string | null
           id?: string
+          monthly_credits?: number | null
           plan?: string
           status?: string
           stripe_customer_id?: string | null
@@ -285,9 +326,13 @@ export type Database = {
           user_id: string
         }
         Update: {
+          billing_period?: string | null
           created_at?: string
+          credit_tier?: number | null
+          credits_granted_at?: string | null
           current_period_end?: string | null
           id?: string
+          monthly_credits?: number | null
           plan?: string
           status?: string
           stripe_customer_id?: string | null
@@ -301,24 +346,36 @@ export type Database = {
         Row: {
           created_at: string
           credits: number
+          daily_credits: number | null
+          daily_credits_reset_at: string | null
           id: string
           lifetime_used: number
+          monthly_credits: number | null
+          topup_credits: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
           created_at?: string
           credits?: number
+          daily_credits?: number | null
+          daily_credits_reset_at?: string | null
           id?: string
           lifetime_used?: number
+          monthly_credits?: number | null
+          topup_credits?: number | null
           updated_at?: string
           user_id: string
         }
         Update: {
           created_at?: string
           credits?: number
+          daily_credits?: number | null
+          daily_credits_reset_at?: string | null
           id?: string
           lifetime_used?: number
+          monthly_credits?: number | null
+          topup_credits?: number | null
           updated_at?: string
           user_id?: string
         }
@@ -329,7 +386,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      deduct_credits: {
+        Args: {
+          p_amount: number
+          p_description?: string
+          p_metadata?: Json
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      grant_daily_credits: {
+        Args: { p_amount?: number; p_user_id: string }
+        Returns: Json
+      }
+      grant_monthly_credits: {
+        Args: { p_amount: number; p_plan?: string; p_user_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

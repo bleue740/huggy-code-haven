@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.firecrawl-proxy]
 verify_jwt = false
+
+[functions.daily-credits-cron]
+verify_jwt = false
