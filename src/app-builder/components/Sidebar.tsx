@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Extension } from '@codemirror/state';
 import {
   ChevronDown, Layout, Plus, ArrowUp, ArrowDown,
   Code2, MessageSquare, Sparkles, Terminal, User, Bot,
@@ -37,6 +38,7 @@ interface SidebarProps {
   onRedo?: () => void;
   canUndo?: boolean;
   canRedo?: boolean;
+  collabExtension?: Extension[];
 }
 
 const MAX_CHARS = 10000;
@@ -67,7 +69,7 @@ const ShimmerLine = ({ width = 'w-full', delay = 0 }: { width?: string; delay?: 
 );
 
 export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
-  ({ state, setState, onSend, onStop, onScreenshotRequest, onToggleVisualEdit, onShowHistory, onNewChat, onNewProject, onRenameProject, onBackToLanding, onConnectSupabase, onEnableFirecrawl, onDismissBackendHints, onApprovePlan, onUndo, onRedo, canUndo, canRedo }, ref) => {
+  ({ state, setState, onSend, onStop, onScreenshotRequest, onToggleVisualEdit, onShowHistory, onNewChat, onNewProject, onRenameProject, onBackToLanding, onConnectSupabase, onEnableFirecrawl, onDismissBackendHints, onApprovePlan, onUndo, onRedo, canUndo, canRedo, collabExtension }, ref) => {
     const navigate = useNavigate();
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [showScrollBottom, setShowScrollBottom] = useState(false);
@@ -350,7 +352,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
               </div>
               <FileTree files={state.files} activeFile={state.activeFile} onSelectFile={handleSelectFile} onCreateFile={handleCreateFile} onDeleteFile={handleDeleteFile} />
               <div className="flex-1 overflow-hidden">
-                <CodeEditor value={state.files[state.activeFile] ?? ''} onChange={handleCodeChange} />
+                <CodeEditor value={state.files[state.activeFile] ?? ''} onChange={handleCodeChange} collabExtension={collabExtension} />
               </div>
             </div>
           ) : (
