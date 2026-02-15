@@ -1,107 +1,32 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, Zap, Loader2 } from "lucide-react";
+import { useNavigate, Link } from "react-router-dom";
+import { ArrowLeft, Check, Zap, Loader2, GraduationCap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-
-const PLANS = [
-  {
-    id: "free",
-    name: "Free",
-    description: "Pour découvrir et expérimenter",
-    monthlyPrice: 0,
-    yearlyPrice: 0,
-    cta: "Plan actuel",
-    ctaStyle: "border border-[#222] text-neutral-500 cursor-default",
-    highlight: false,
-    disabled: true,
-    features: [
-      "1 projet actif",
-      "100 crédits / mois",
-      "Prévisualisation en temps réel",
-      "Security scan basique",
-      "Publish sur sous-domaine",
-    ],
-  },
-  {
-    id: "pro",
-    name: "Pro",
-    badge: "Populaire",
-    description: "Pour les créateurs sérieux",
-    monthlyPrice: 29,
-    yearlyPrice: 19,
-    cta: "Passer Pro",
-    ctaStyle: "bg-blue-600 text-white hover:bg-blue-700",
-    highlight: true,
-    disabled: false,
-    featuresIntro: "Tout le Free, plus :",
-    features: [
-      "Projets illimités",
-      "2 000 crédits / mois",
-      "Historique des déploiements",
-      "Domaines personnalisés",
-      "Security scan avancé",
-      "Export ZIP du code",
-      "Support prioritaire",
-    ],
-  },
-  {
-    id: "business",
-    name: "Business",
-    description: "Pour les équipes en croissance",
-    monthlyPrice: 79,
-    yearlyPrice: 59,
-    cta: "Choisir Business",
-    ctaStyle: "border border-[#222] text-white hover:bg-white/5",
-    highlight: false,
-    disabled: false,
-    featuresIntro: "Tout le Pro, plus :",
-    features: [
-      "10 000 crédits / mois",
-      "Collaboration multi-utilisateurs",
-      "Rôles et permissions",
-      "Audit de sécurité complet",
-      "Sync GitHub",
-      "Analytics avancés",
-      "SLA 99.9%",
-    ],
-  },
-  {
-    id: "enterprise",
-    name: "Enterprise",
-    description: "Solutions sur mesure",
-    monthlyPrice: null,
-    yearlyPrice: null,
-    cta: "Nous contacter",
-    ctaStyle: "border border-[#222] text-white hover:bg-white/5",
-    highlight: false,
-    disabled: false,
-    featuresIntro: "Tout le Business, plus :",
-    features: [
-      "Crédits illimités",
-      "SSO / SAML",
-      "Environnements dédiés",
-      "Account manager dédié",
-      "Formation personnalisée",
-      "Contrat & facturation sur mesure",
-    ],
-  },
-];
+import { PLANS, FAQ_ITEMS } from "@/config/plans";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 export default function PricingPage() {
   const navigate = useNavigate();
   const [isYearly, setIsYearly] = useState(true);
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
-  const handleSelectPlan = async (planId: string) => {
-    if (planId === "free") return;
-
-    if (planId === "enterprise") {
-      window.location.href = "mailto:contact@blink.ai?subject=Blink Enterprise";
+  const handleSelectPlan = async (planId: string, action: string) => {
+    if (action === "auth") {
+      navigate("/auth");
+      return;
+    }
+    if (action === "contact") {
+      window.location.href = "mailto:contact@blink.ai?subject=Blink Enterprise Demo";
       return;
     }
 
-    // Stripe not yet integrated — save intent and notify
+    // Stripe checkout (placeholder until Stripe is connected)
     setLoadingPlan(planId);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -109,8 +34,8 @@ export default function PricingPage() {
         navigate("/auth");
         return;
       }
-      toast.info("Le paiement Stripe sera bientôt disponible. Votre intérêt a été noté !", {
-        description: `Plan sélectionné : ${planId === "pro" ? "Pro" : "Business"}`,
+      toast.info("Le paiement Stripe sera bientôt disponible.", {
+        description: `Plan sélectionné : ${planId}`,
         duration: 5000,
       });
     } catch {
@@ -121,38 +46,46 @@ export default function PricingPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#050505] text-white">
+    <main className="min-h-screen bg-white text-gray-900">
       {/* Header */}
-      <header className="border-b border-[#111] px-6 md:px-8 py-4 flex items-center gap-4">
-        <button
-          onClick={() => navigate("/app")}
-          className="p-2 hover:bg-white/5 rounded-xl transition-colors text-neutral-400 hover:text-white"
-        >
-          <ArrowLeft size={20} />
-        </button>
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-            <Zap size={16} className="text-white" fill="currentColor" />
-          </div>
-          <span className="text-lg font-bold tracking-tight">Blink</span>
+      <header className="border-b border-gray-100 px-6 md:px-8 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate("/")}
+            className="p-2 hover:bg-gray-50 rounded-xl transition-colors text-gray-400 hover:text-gray-900"
+          >
+            <ArrowLeft size={20} />
+          </button>
+          <Link to="/" className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+              <Zap size={16} className="text-white" fill="currentColor" />
+            </div>
+            <span className="text-lg font-bold tracking-tight">Blink</span>
+          </Link>
         </div>
+        <Link
+          to="/auth"
+          className="text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors"
+        >
+          Sign in
+        </Link>
       </header>
 
       {/* Hero */}
       <section className="max-w-4xl mx-auto px-6 pt-16 pb-10 text-center">
-        <h1 className="text-4xl md:text-5xl font-black tracking-tight">
+        <h1 className="text-4xl md:text-5xl font-black tracking-tight text-gray-900">
           Des plans pour chaque ambition
         </h1>
-        <p className="mt-4 text-neutral-400 text-lg max-w-xl mx-auto">
+        <p className="mt-4 text-gray-500 text-lg max-w-xl mx-auto">
           Commencez gratuitement, upgradez quand vous êtes prêt. Pas de surprise, annulez à tout moment.
         </p>
 
         {/* Toggle */}
-        <div className="mt-8 inline-flex items-center gap-3 bg-[#111] rounded-full p-1 border border-[#1a1a1a]">
+        <div className="mt-8 inline-flex items-center gap-1 bg-gray-100 rounded-full p-1">
           <button
             onClick={() => setIsYearly(false)}
             className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${
-              !isYearly ? "bg-white text-black" : "text-neutral-400 hover:text-white"
+              !isYearly ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
             }`}
           >
             Mensuel
@@ -160,30 +93,31 @@ export default function PricingPage() {
           <button
             onClick={() => setIsYearly(true)}
             className={`px-5 py-2 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${
-              isYearly ? "bg-white text-black" : "text-neutral-400 hover:text-white"
+              isYearly ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
             }`}
           >
             Annuel
-            <span className="text-[11px] font-bold bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">
-              -35%
+            <span className="text-[11px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+              -20%
             </span>
           </button>
         </div>
       </section>
 
       {/* Plans grid */}
-      <section className="max-w-6xl mx-auto px-6 pb-24 grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+      <section className="max-w-6xl mx-auto px-6 pb-20 grid md:grid-cols-2 lg:grid-cols-4 gap-5">
         {PLANS.map((plan) => {
           const price = isYearly ? plan.yearlyPrice : plan.monthlyPrice;
           const isLoading = loadingPlan === plan.id;
+          const showStrikethrough = isYearly && plan.monthlyPrice !== null && plan.monthlyPrice > 0;
 
           return (
             <div
-              key={plan.name}
+              key={plan.id}
               className={`relative rounded-2xl border p-6 flex flex-col transition-all ${
                 plan.highlight
-                  ? "border-blue-500/50 bg-[#0a0f1a] shadow-[0_0_40px_-12px_rgba(59,130,246,0.3)]"
-                  : "border-[#1a1a1a] bg-[#0a0a0a]"
+                  ? "border-blue-500 bg-blue-50/50 shadow-lg shadow-blue-500/10 ring-1 ring-blue-500"
+                  : "border-gray-200 bg-white hover:border-gray-300"
               }`}
             >
               {plan.badge && (
@@ -192,49 +126,64 @@ export default function PricingPage() {
                 </span>
               )}
 
-              <div className="text-sm font-bold text-neutral-500 uppercase tracking-wider">
+              <div className={`text-sm font-bold uppercase tracking-wider ${plan.highlight ? 'text-blue-600' : 'text-gray-400'}`}>
                 {plan.name}
               </div>
-              <p className="mt-1 text-sm text-neutral-400">{plan.description}</p>
+              <p className="mt-1 text-sm text-gray-500">{plan.description}</p>
 
               <div className="mt-5">
                 {price !== null ? (
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-4xl font-black">${price}</span>
-                    <span className="text-sm text-neutral-500 font-semibold">/mois</span>
+                  <div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-4xl font-black text-gray-900">${price}</span>
+                      <span className="text-sm text-gray-400 font-semibold">/mois</span>
+                    </div>
+                    {showStrikethrough && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        <span className="line-through">${plan.monthlyPrice}/mois</span>
+                        {' · '}Facturé ${price! * 12}/an
+                      </p>
+                    )}
+                    {!showStrikethrough && price === 0 && (
+                      <p className="text-xs text-gray-400 mt-1">Gratuit pour toujours</p>
+                    )}
                   </div>
                 ) : (
-                  <span className="text-2xl font-black">Sur devis</span>
-                )}
-                {isYearly && price !== null && price > 0 && (
-                  <p className="text-xs text-neutral-500 mt-1">
-                    Facturé ${price * 12}/an
-                  </p>
+                  <div>
+                    <span className="text-2xl font-black text-gray-900">Sur devis</span>
+                    <p className="text-xs text-gray-400 mt-1">Contactez-nous</p>
+                  </div>
                 )}
               </div>
 
               <button
-                onClick={() => handleSelectPlan(plan.id)}
-                disabled={plan.disabled || isLoading}
-                className={`mt-6 w-full py-2.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 ${plan.ctaStyle} ${plan.disabled ? 'opacity-50' : ''}`}
+                onClick={() => handleSelectPlan(plan.id, plan.ctaAction)}
+                disabled={isLoading}
+                className={`mt-6 w-full py-2.5 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2 ${
+                  plan.highlight
+                    ? "bg-blue-600 text-white hover:bg-blue-700"
+                    : plan.ctaAction === 'auth'
+                    ? "bg-gray-900 text-white hover:bg-gray-800"
+                    : "border border-gray-300 text-gray-700 hover:bg-gray-50"
+                }`}
               >
                 {isLoading && <Loader2 size={14} className="animate-spin" />}
                 {plan.cta}
               </button>
 
-              <div className="mt-6 pt-5 border-t border-[#1a1a1a] flex-1">
+              <div className="mt-6 pt-5 border-t border-gray-100 flex-1">
                 {plan.featuresIntro && (
-                  <p className="text-xs font-semibold text-neutral-500 mb-3">
+                  <p className="text-xs font-semibold text-gray-400 mb-3">
                     {plan.featuresIntro}
                   </p>
                 )}
                 <ul className="space-y-2.5">
                   {plan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2.5 text-sm text-neutral-300">
+                    <li key={f} className="flex items-start gap-2.5 text-sm text-gray-600">
                       <Check
                         size={15}
                         className={`mt-0.5 shrink-0 ${
-                          plan.highlight ? "text-blue-400" : "text-neutral-600"
+                          plan.highlight ? "text-blue-500" : "text-gray-400"
                         }`}
                       />
                       {f}
@@ -246,6 +195,51 @@ export default function PricingPage() {
           );
         })}
       </section>
+
+      {/* Student Discount */}
+      <section className="max-w-3xl mx-auto px-6 pb-16">
+        <div className="flex items-center gap-4 p-6 rounded-2xl bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-100">
+          <div className="w-12 h-12 rounded-xl bg-purple-100 flex items-center justify-center shrink-0">
+            <GraduationCap size={24} className="text-purple-600" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-bold text-gray-900">Réduction étudiante</h3>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Les étudiants bénéficient de 50% de réduction sur le plan Pro.{' '}
+              <a
+                href="mailto:contact@blink.ai?subject=Student Discount"
+                className="text-purple-600 font-semibold hover:underline"
+              >
+                Contactez-nous →
+              </a>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="max-w-3xl mx-auto px-6 pb-24">
+        <h2 className="text-2xl font-black text-center mb-8 text-gray-900">
+          Questions fréquentes
+        </h2>
+        <Accordion type="single" collapsible className="w-full">
+          {FAQ_ITEMS.map((item, i) => (
+            <AccordionItem key={i} value={`faq-${i}`} className="border-gray-200">
+              <AccordionTrigger className="text-left text-gray-900 hover:no-underline font-semibold">
+                {item.question}
+              </AccordionTrigger>
+              <AccordionContent className="text-gray-500">
+                {item.answer}
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-gray-100 py-8 text-center text-sm text-gray-400">
+        © {new Date().getFullYear()} Blink. Tous droits réservés.
+      </footer>
     </main>
   );
 }
