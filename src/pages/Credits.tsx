@@ -2,6 +2,8 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Zap, Info } from "lucide-react";
+import { PageTransition } from "@/components/PageTransition";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   Table,
   TableBody,
@@ -62,11 +64,11 @@ function CreditBar() {
     <div className="mt-6">
       <div className="flex items-center justify-between text-sm text-gray-400 mb-2">
         <span>Crédits cette période</span>
-        <span className="font-semibold text-white">
+        <span className="font-semibold">
           {(TOTAL_CREDITS - CREDIT_BAR_SEGMENTS[0].amount).toFixed(1)} restants
         </span>
       </div>
-      <div className="flex h-4 rounded-full overflow-hidden bg-white/5 border border-white/10">
+      <div className="flex h-4 rounded-full overflow-hidden bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10">
         {CREDIT_BAR_SEGMENTS.map((seg) => {
           const pct = (seg.amount / TOTAL_CREDITS) * 100;
           if (pct <= 0) return null;
@@ -104,25 +106,27 @@ function CreditBar() {
 /* ── Main page ────────────────────────────────────────── */
 export default function CreditsPage() {
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white font-['Inter',sans-serif] overflow-hidden">
+    <PageTransition>
+    <main className="min-h-screen bg-white dark:bg-[#0a0a0a] text-gray-900 dark:text-white font-['Inter',sans-serif] overflow-hidden transition-colors duration-300">
       {/* Header */}
-      <header className="border-b border-white/10 px-6 md:px-8 py-4 flex items-center justify-between">
+      <header className="border-b border-gray-200 dark:border-white/10 px-6 md:px-8 py-4 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3">
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
             <Zap size={16} className="text-white" fill="currentColor" />
           </div>
-          <span className="text-lg font-bold tracking-tight text-white">Blink</span>
+          <span className="text-lg font-bold tracking-tight">Blink</span>
         </Link>
         <div className="flex items-center gap-4">
-          <Link to="/pricing" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">
+          <Link to="/pricing" className="text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
             Pricing
           </Link>
-          <Link to="/about" className="text-sm font-medium text-gray-400 hover:text-white transition-colors hidden sm:inline-block">
+          <Link to="/about" className="text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors hidden sm:inline-block">
             About
           </Link>
-          <Link to="/auth" className="text-sm font-semibold text-gray-400 hover:text-white transition-colors">
+          <Link to="/auth" className="text-sm font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors">
             Sign in
           </Link>
+          <ThemeToggle />
         </div>
       </header>
 
@@ -153,19 +157,19 @@ export default function CreditsPage() {
           <motion.div variants={fadeUp} custom={2}><CreditBar /></motion.div>
 
           <motion.div variants={fadeUp} custom={3} className="mt-6 space-y-3">
-            <div className="flex items-start gap-3 p-4 rounded-xl bg-white/[0.03] border border-white/10">
+              <div className="flex items-start gap-3 p-4 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/10 transition-colors">
               <div className="w-3 h-3 rounded-full bg-gray-600 mt-1 shrink-0" />
               <div>
-                <p className="text-sm font-medium text-white">Partie grise</p>
+                <p className="text-sm font-medium">Partie grise</p>
                 <p className="text-sm text-gray-400">
                   Indique le nombre de crédits déjà utilisés durant cette période de facturation.
                 </p>
               </div>
             </div>
-            <div className="flex items-start gap-3 p-4 rounded-xl bg-white/[0.03] border border-white/10">
+            <div className="flex items-start gap-3 p-4 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/10 transition-colors">
               <div className="w-3 h-3 rounded-full bg-blue-500 mt-1 shrink-0" />
               <div>
-                <p className="text-sm font-medium text-white">Parties bleues</p>
+                <p className="text-sm font-medium">Parties bleues</p>
                 <p className="text-sm text-gray-400">
                   Indiquent les différents types de crédits restants. En survolant chaque
                   section colorée, une infobulle s'affiche indiquant le type de crédit et
@@ -190,10 +194,10 @@ export default function CreditsPage() {
             et une plus grande efficacité par message, rendant ainsi Blink plus abordable.
           </motion.p>
 
-          <motion.div variants={fadeUp} custom={3} className="mt-6 rounded-xl border border-white/10 overflow-x-auto">
+          <motion.div variants={fadeUp} custom={3} className="mt-6 rounded-xl border border-gray-200 dark:border-white/10 overflow-x-auto transition-colors">
             <Table>
               <TableHeader>
-                <TableRow className="border-white/10 hover:bg-transparent">
+                <TableRow className="border-gray-200 dark:border-white/10 hover:bg-transparent">
                   <TableHead className="text-gray-400 font-semibold">
                     Invite de l'utilisateur
                   </TableHead>
@@ -207,8 +211,8 @@ export default function CreditsPage() {
               </TableHeader>
               <TableBody>
                 {COST_EXAMPLES.map((ex) => (
-                  <TableRow key={ex.prompt} className="border-white/10 hover:bg-white/[0.03]">
-                    <TableCell className="text-white font-medium">{ex.prompt}</TableCell>
+                  <TableRow key={ex.prompt} className="border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/[0.03]">
+                    <TableCell className="font-medium">{ex.prompt}</TableCell>
                     <TableCell className="text-gray-400">{ex.work}</TableCell>
                     <TableCell className="text-right font-mono text-blue-400 font-semibold">
                       {ex.cost.toFixed(2)}
@@ -244,10 +248,10 @@ export default function CreditsPage() {
                 color: "bg-cyan-400",
               },
             ].map((source, i) => (
-              <motion.div key={source.title} variants={fadeUp} custom={i + 2} whileHover={{ y: -3, transition: { duration: 0.2 } }} className="flex items-start gap-4 p-5 rounded-xl bg-white/[0.03] border border-white/10">
+              <motion.div key={source.title} variants={fadeUp} custom={i + 2} whileHover={{ y: -3, transition: { duration: 0.2 } }} className="flex items-start gap-4 p-5 rounded-xl bg-gray-50 dark:bg-white/[0.03] border border-gray-200 dark:border-white/10 transition-colors">
                 <div className={`w-3 h-3 rounded-full ${source.color} mt-1.5 shrink-0`} />
                 <div>
-                  <h3 className="font-semibold text-white">{source.title}</h3>
+                  <h3 className="font-semibold">{source.title}</h3>
                   <p className="mt-1 text-sm text-gray-400 leading-relaxed">
                     {source.desc}
                   </p>
@@ -269,9 +273,10 @@ export default function CreditsPage() {
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-white/10 py-8 text-center text-sm text-gray-500">
+      <footer className="border-t border-gray-200 dark:border-white/10 py-8 text-center text-sm text-gray-400 dark:text-gray-500">
         © {new Date().getFullYear()} Blink. All rights reserved.
       </footer>
     </main>
+    </PageTransition>
   );
 }
