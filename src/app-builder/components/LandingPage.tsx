@@ -151,10 +151,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
   ];
 
   const plans = [
-    { name: 'Free', price: '$0', perks: ['5 crédits / jour', 'Projets publics', '1 domaine blink.app'], highlight: false },
-    { name: 'Pro', price: isAuthenticated ? '$20' : '$25', perks: ['100 crédits / mois', 'Domaines personnalisés', 'Export ZIP'], highlight: true, badge: 'Populaire' },
-    { name: 'Business', price: isAuthenticated ? '$40' : '$50', perks: ['Workspace équipe', 'SSO / SAML', 'Contrôle par rôles'], highlight: false },
-    { name: 'Enterprise', price: 'Custom', perks: ['Support dédié', 'SCIM', 'Contrat sur mesure'], highlight: false },
+    { name: 'Free', price: '$0', perks: ['5 daily credits (up to 30/mo)', 'Public projects', '5 blink.app domains'], highlight: false },
+    { name: 'Pro', price: '$25', perks: ['100 monthly credits', 'Custom domains', 'Remove Blink badge'], highlight: true, badge: 'Popular' },
+    { name: 'Business', price: '$50', perks: ['Team workspace', 'SSO', 'Role-based access'], highlight: false },
+    { name: 'Enterprise', price: 'Custom', perks: ['Dedicated support', 'SCIM', 'Publishing controls'], highlight: false },
   ];
 
   const [dynamicStats, setDynamicStats] = useState([
