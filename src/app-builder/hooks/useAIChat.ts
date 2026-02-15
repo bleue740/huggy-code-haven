@@ -125,6 +125,11 @@ export function useAIChat() {
 
             try {
               const parsed = JSON.parse(jsonStr);
+              // Check for credit cost events
+              if (parsed.type === 'credit_cost') {
+                console.log(`[credits] Cost: ${parsed.cost}, Remaining: ${parsed.remaining}`);
+                continue;
+              }
               // Check for backend hint events
               if (parsed.type === 'backend_hint' && parsed.needs) {
                 callbacks.onBackendHint?.(parsed.needs);

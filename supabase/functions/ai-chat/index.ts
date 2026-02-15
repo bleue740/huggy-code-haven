@@ -73,6 +73,16 @@ function detectComplexity(prompt: string, backendNeeds: BackendNeed[]): Complexi
   return "simple";
 }
 
+function creditCostForComplexity(c: Complexity): number {
+  switch (c) {
+    case "simple": return 0.50;
+    case "fix":    return 0.90;
+    case "complex": return 1.20;
+    case "data":   return 2.00;
+    default: return 1.0;
+  }
+}
+
 function pickModel(complexity: Complexity): ModelChoice {
   switch (complexity) {
     case "simple":
@@ -429,12 +439,6 @@ serve(async (req: Request) => {
     }
 
     const currentCredits = creditRow?.credits ?? 0;
-    if (currentCredits < 1) {
-      return new Response(
-        JSON.stringify({ error: "no_credits", message: "Vous n'avez plus de crédits. Passez à Blink Pro pour continuer." }),
-        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
 
     // Parse body
     const { messages, projectContext, supabaseUrl, supabaseAnonKey, firecrawlEnabled, mode } = await req.json();
@@ -477,9 +481,19 @@ serve(async (req: Request) => {
       fullSystem += `\n\nCurrent project code:\n\`\`\`tsx\n${projectContext.slice(0, 24000)}\n\`\`\`\nThe user wants to modify or extend this code. Preserve existing functionality unless asked to replace it.`;
     }
 
+    // Variable credit cost based on complexity
+    const creditCost = creditCostForComplexity(complexity);
+
+    if (currentCredits < creditCost) {
+      return new Response(
+        JSON.stringify({ error: "no_credits", message: `Crédits insuffisants (${currentCredits.toFixed(2)} restants, ${creditCost} requis). Passez à Blink Pro pour continuer.` }),
+        { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     // Deduct credit before streaming — use service role client to bypass RLS
-    const newCredits = currentCredits - 1;
-    const newLifetime = (creditRow?.lifetime_used ?? 0) + 1;
+    const newCredits = currentCredits - creditCost;
+    const newLifetime = (creditRow?.lifetime_used ?? 0) + creditCost;
     const adminClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -512,33 +526,33 @@ serve(async (req: Request) => {
         });
       }
 
-      // Wrap the Anthropic stream to prepend backend hints
-      const anthropicResponse = await streamAnthropic(anthropicKey, model, fullSystem, messages);
-      
-      if (backendNeeds.length > 0) {
-        const { readable, writable } = new TransformStream();
-        const writer = writable.getWriter();
-        const encoder = new TextEncoder();
+      // Wrap the Anthropic stream to prepend credit_cost and backend hints
+      const { readable, writable } = new TransformStream();
+      const writer = writable.getWriter();
+      const encoder = new TextEncoder();
 
-        (async () => {
-          // Send backend hint first
+      (async () => {
+        // Send credit cost event first
+        const costEvent = { type: "credit_cost", cost: creditCost, remaining: newCredits };
+        await writer.write(encoder.encode(`data: ${JSON.stringify(costEvent)}\n\n`));
+
+        // Send backend hint if needed
+        if (backendNeeds.length > 0) {
           const hint = { type: "backend_hint", needs: backendNeeds };
           await writer.write(encoder.encode(`data: ${JSON.stringify(hint)}\n\n`));
+        }
 
-          // Then pipe the rest
-          const reader = anthropicResponse.body!.getReader();
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            await writer.write(value);
-          }
-          await writer.close();
-        })();
+        // Then pipe the rest
+        const reader = anthropicResponse.body!.getReader();
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          await writer.write(value);
+        }
+        await writer.close();
+      })();
 
-        return new Response(readable, { headers: responseHeaders });
-      }
-
-      return anthropicResponse;
+      return new Response(readable, { headers: responseHeaders });
     }
 
     // ── Route to Lovable AI Gateway (Gemini / GPT) ──
@@ -589,15 +603,22 @@ serve(async (req: Request) => {
       });
     }
 
-    // If backend needs detected, prepend a hint event
-    if (backendNeeds.length > 0) {
+    // Wrap stream to prepend credit_cost and backend hints
+    {
       const { readable, writable } = new TransformStream();
       const writer = writable.getWriter();
       const encoder = new TextEncoder();
 
       (async () => {
-        const hint = { type: "backend_hint", needs: backendNeeds };
-        await writer.write(encoder.encode(`data: ${JSON.stringify(hint)}\n\n`));
+        // Send credit cost event first
+        const costEvent = { type: "credit_cost", cost: creditCost, remaining: newCredits };
+        await writer.write(encoder.encode(`data: ${JSON.stringify(costEvent)}\n\n`));
+
+        // Send backend hint if needed
+        if (backendNeeds.length > 0) {
+          const hint = { type: "backend_hint", needs: backendNeeds };
+          await writer.write(encoder.encode(`data: ${JSON.stringify(hint)}\n\n`));
+        }
 
         const reader = aiResponse.body!.getReader();
         while (true) {
@@ -610,8 +631,6 @@ serve(async (req: Request) => {
 
       return new Response(readable, { headers: responseHeaders });
     }
-
-    return new Response(aiResponse.body, { headers: responseHeaders });
   } catch (e) {
     console.error("ai-chat error:", e);
     return new Response(
