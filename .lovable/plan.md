@@ -1,122 +1,75 @@
 
 
-# Clonage exact du pricing Lovable.dev pour Blink
+# Credits page + deduction par complexite (clone Lovable.dev)
 
-## Objectif
+## Deux changements
 
-Reproduire pixel-perfect le pricing de Lovable.dev : memes prix, memes features, memes interactions (toggle annuel par plan, selecteur de credits, top-up), adapte au branding Blink.
+### 1. Deduction variable dans l'edge function `ai-chat`
 
-## Changements detailles
+Actuellement, chaque message coute exactement 1 credit (ligne 481). On va remplacer ca par un cout variable base sur la complexite detectee :
 
-### 1. Refonte de `src/config/plans.ts`
+| Complexite | Cout en credits | Exemples |
+|------------|----------------|----------|
+| simple     | 0.50           | Changer une couleur, modifier un texte |
+| fix        | 0.90           | Corriger un bug, refactorer |
+| complex    | 1.20           | Ajouter authentification, backend |
+| data       | 2.00           | Scraping, landing page complete |
 
-Remplacer les plans actuels par les plans exacts de Lovable.dev :
+La fonction `detectComplexity()` existe deja dans l'edge function. On ajoute une fonction `creditCostForComplexity()` qui mappe chaque niveau a son cout, puis on utilise ce cout au lieu du `- 1` fixe.
 
-**Free** - $0/mois
-- 5 daily credits (up to 30/month)
-- Public projects
-- Unlimited collaborators
-- 5 blink.app domains
-- Cloud
+Le cout utilise sera aussi envoye au client via un event SSE `credit_cost` en debut de stream pour que le frontend puisse afficher combien de credits ont ete deduits.
 
-**Pro** - $25/mois (toggle annuel par plan, pas global)
-- 100 monthly credits (selecteur: 100, 200, 500)
-- 5 daily credits (up to 150/month)
-- Usage-based Cloud + AI
-- Credit rollovers
-- On-demand credit top-ups
-- Unlimited blink.app domains
-- Custom domains
-- Remove the Blink badge
-- User roles & permissions
+### 2. Nouvelle page `/credits`
 
-**Business** - $50/mois (toggle annuel par plan)
-- 100 monthly credits (selecteur: 100, 200, 500)
-- Internal publish
-- SSO
-- Team workspace
-- Personal projects
-- Design templates
-- Role-based access
-- Security center
+Une page informative dark theme qui explique le systeme de credits :
 
-**Enterprise** - Custom
-- Dedicated support
-- Onboarding services
-- Design systems
-- SCIM
-- Support for custom connectors
-- Publishing controls
-- Sharing controls
-- Audit logs (coming soon!)
+**Sections :**
+- Introduction : les messages deduisent des credits, le cout depend de la complexite
+- Barre de credits visuelle : segment gris (utilises) + segment bleu (restants) avec tooltips
+- Tableau d'exemples de couts (identique a Lovable.dev) :
+  - "Make the button grey" -> 0.50
+  - "Remove the footer" -> 0.90
+  - "Add authentication" -> 1.20
+  - "Create a landing page with images" -> 2.00
+- Sources de credits : forfait mensuel, allocations quotidiennes, recharges top-up
+- Lien vers /pricing
 
-Ajouter une configuration de credit tiers :
+### 3. Mise a jour du frontend
 
-```text
-Credit tiers pour Pro et Business:
-- 100 credits/month -> prix de base
-- 200 credits/month -> +$15/mois
-- 500 credits/month -> +$40/mois
-```
-
-Ajouter les FAQ alignees sur Lovable :
-- What is Blink and how does it work?
-- What does the free plan include?
-- What is a credit?
-- Who owns the projects and code?
-- How much does it cost to use?
-- Do you offer a student discount?
-
-### 2. Refonte de `src/pages/Pricing.tsx`
-
-Reproduire le layout exact de Lovable.dev :
-
-- **Header** : branding Blink + Sign in
-- **Titre** : "Des plans pour chaque ambition" (ou titre equivalent)
-- **Grille 4 colonnes** fond clair, cartes blanches avec bordures subtiles
-- **Toggle annuel** : un switch par plan (Pro et Business seulement), pas un toggle global. Quand annuel est actif, afficher le prix barre + "first month, then $X/mo"
-- **Selecteur de credits** : dropdown sous le bouton CTA pour Pro et Business (100 / 200 / 500 credits par mois), le prix s'ajuste dynamiquement
-- **Boutons CTA** : Free -> "Get Started" (auth), Pro/Business -> "Get Started" (checkout placeholder), Enterprise -> "Book a demo" (mailto)
-- **Section Student Discount** avec lien
-- **Section FAQ** en accordeon
-
-### 3. Mise a jour de `src/app-builder/components/LandingPage.tsx`
-
-Mettre a jour le tableau `plans` (lignes 153-158) pour correspondre aux vrais plans :
-
-- Free: $0, features exactes
-- Pro: $25 (highlight, badge "Popular"), features exactes
-- Business: $50, features exactes
-- Enterprise: Custom, features exactes
-
-Changer les labels en anglais pour correspondre a Lovable.
+- `useCredits.ts` : pas de changement structurel, le hook reste read-only
+- `useAIChat.ts` : parser l'event `credit_cost` du stream SSE et afficher via toast le cout du message
+- Route `/credits` ajoutee dans `App.tsx`
 
 ## Fichiers modifies
 
-- `src/config/plans.ts` : refonte complete avec plans exacts, credit tiers, FAQ
-- `src/pages/Pricing.tsx` : refonte complete avec toggle par plan, selecteur de credits, layout Lovable
-- `src/app-builder/components/LandingPage.tsx` : mise a jour du tableau plans (lignes 153-158)
+- `supabase/functions/ai-chat/index.ts` : remplacer `currentCredits - 1` par `currentCredits - cost` avec cost variable, ajouter event SSE `credit_cost`
+- `src/pages/Credits.tsx` : nouvelle page (creation)
+- `src/App.tsx` : ajouter route `/credits`
+- `src/pages/Pricing.tsx` : ajouter lien "How credits work" vers `/credits`
 
 ## Details techniques
 
-**Credit tier pricing :**
+**Mapping complexite -> cout (edge function) :**
 
 ```text
-Tier       | Base   | +100cr | +400cr
-Pro        | $25    | $40    | $65
-Business   | $50    | $65    | $90
+function creditCostForComplexity(c: Complexity): number {
+  switch (c) {
+    case "simple": return 0.50;
+    case "fix":    return 0.90;
+    case "complex": return 1.20;
+    case "data":   return 2.00;
+  }
+}
 ```
 
-**Toggle annuel par plan :**
-Chaque plan Pro/Business a son propre switch "Annual". Quand actif :
-- Prix barre (mensuel) + prix reduit affiche
-- Texte "first month, then $X/mo"
+**Event SSE envoye au client :**
 
-**Selecteur de credits :**
-Un composant Select sous le bouton CTA de Pro et Business avec les options :
-- 100 credits / month
-- 200 credits / month  
-- 500 credits / month
+```text
+data: {"type":"credit_cost","cost":0.5,"remaining":84.5}
+```
 
-Le prix affiche s'ajuste en temps reel.
+**Verification pre-deduction :**
+Au lieu de `currentCredits < 1`, on verifie `currentCredits < cost` pour bloquer si le solde est insuffisant.
 
+**Colonne credits :**
+La colonne `credits` dans `users_credits` devra supporter les decimales. Si elle est de type `integer`, une migration la changera en `numeric(10,2)`.
