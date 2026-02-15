@@ -1,10 +1,21 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
 import {
   Zap, Rocket, Users, Code2, Shield, User, Palette, Wrench, Building2,
   LayoutDashboard, Globe, ShoppingCart, Settings, Megaphone, GraduationCap, Gamepad2,
   MessageSquare, GitBranch, CloudCog, CheckCircle2
 } from "lucide-react";
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 24 },
+  visible: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.08, duration: 0.5, ease: [0, 0, 0.2, 1] as const } }),
+};
+
+const staggerContainer = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.08 } },
+};
 
 const WHY_CARDS = [
   { icon: Rocket, title: "Faster iteration", desc: "Go from idea to working software using natural language instead of starting from a blank codebase." },
@@ -39,7 +50,7 @@ const WORKFLOW_STEPS = [
 
 export default function AboutPage() {
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white font-['Inter',sans-serif]">
+    <main className="min-h-screen bg-[#0a0a0a] text-white font-['Inter',sans-serif] overflow-hidden">
       {/* Header */}
       <header className="border-b border-white/10 px-6 md:px-8 py-4 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3">
@@ -55,36 +66,41 @@ export default function AboutPage() {
       </header>
 
       {/* Section 1 — Introduction */}
-      <section className="max-w-4xl mx-auto px-6 pt-16 pb-12 text-center">
-        <h1 className="text-4xl md:text-5xl font-black tracking-tight">Blink</h1>
-        <p className="mt-4 text-gray-400 text-lg max-w-2xl mx-auto leading-relaxed">
+      <motion.section
+        className="max-w-4xl mx-auto px-6 pt-16 pb-12 text-center"
+        initial="hidden"
+        animate="visible"
+        variants={staggerContainer}
+      >
+        <motion.h1 variants={fadeUp} custom={0} className="text-4xl md:text-5xl font-black tracking-tight">Blink</motion.h1>
+        <motion.p variants={fadeUp} custom={1} className="mt-4 text-gray-400 text-lg max-w-2xl mx-auto leading-relaxed">
           Blink is a complete AI development platform for building, iterating, and deploying web applications using natural language, with real code, enhanced security, and enterprise governance.
-        </p>
-        <p className="mt-6 text-gray-500 text-sm max-w-2xl mx-auto leading-relaxed">
+        </motion.p>
+        <motion.p variants={fadeUp} custom={2} className="mt-6 text-gray-500 text-sm max-w-2xl mx-auto leading-relaxed">
           Blink lets individuals and teams create professional-quality web applications using natural language. You describe what you want to build, and Blink generates a working application — frontend, backend, database, authentication, and integrations — all built on editable code. The platform supports the entire modern product development lifecycle, from initial exploration and prototyping through to deployment and ongoing operations.
-        </p>
-      </section>
+        </motion.p>
+      </motion.section>
 
       {/* Section 2 — Why use Blink? */}
       <section className="max-w-5xl mx-auto px-6 pb-16">
-        <h2 className="text-3xl font-black text-center mb-10">Why use Blink?</h2>
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {WHY_CARDS.map((c) => (
-            <div key={c.title} className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+        <motion.h2 initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-60px" }} transition={{ duration: 0.5 }} className="text-3xl font-black text-center mb-10">Why use Blink?</motion.h2>
+        <motion.div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5" initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} variants={staggerContainer}>
+          {WHY_CARDS.map((c, i) => (
+            <motion.div key={c.title} variants={fadeUp} custom={i} whileHover={{ y: -4, transition: { duration: 0.2 } }} className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
               <c.icon size={28} className="text-blue-400 mb-4" />
               <h3 className="text-base font-bold text-white mb-2">{c.title}</h3>
               <p className="text-sm text-gray-400 leading-relaxed">{c.desc}</p>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </section>
 
       {/* Section 3 — Who is Blink for? */}
       <section className="max-w-5xl mx-auto px-6 pb-16">
-        <h2 className="text-3xl font-black text-center mb-10">Who is Blink for?</h2>
-        <div className="grid md:grid-cols-2 gap-5">
-          {WHO_CARDS.map((c) => (
-            <div key={c.title} className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+        <motion.h2 initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-60px" }} transition={{ duration: 0.5 }} className="text-3xl font-black text-center mb-10">Who is Blink for?</motion.h2>
+        <motion.div className="grid md:grid-cols-2 gap-5" initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} variants={staggerContainer}>
+          {WHO_CARDS.map((c, i) => (
+            <motion.div key={c.title} variants={fadeUp} custom={i} whileHover={{ y: -4, transition: { duration: 0.2 } }} className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
               <c.icon size={28} className="text-blue-400 mb-4" />
               <h3 className="text-base font-bold text-white mb-3">{c.title}</h3>
               <ul className="space-y-2">
@@ -95,30 +111,30 @@ export default function AboutPage() {
                   </li>
                 ))}
               </ul>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </section>
 
       {/* Section 4 — What can you build? */}
       <section className="max-w-5xl mx-auto px-6 pb-16">
-        <h2 className="text-3xl font-black text-center mb-10">What can you build?</h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {BUILD_ITEMS.map((b) => (
-            <div key={b.label} className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 flex items-center gap-4">
+        <motion.h2 initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-60px" }} transition={{ duration: 0.5 }} className="text-3xl font-black text-center mb-10">What can you build?</motion.h2>
+        <motion.div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4" initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} variants={staggerContainer}>
+          {BUILD_ITEMS.map((b, i) => (
+            <motion.div key={b.label} variants={fadeUp} custom={i} whileHover={{ scale: 1.03, transition: { duration: 0.2 } }} className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 flex items-center gap-4">
               <b.icon size={22} className="text-blue-400 shrink-0" />
               <span className="text-sm font-semibold text-gray-300">{b.label}</span>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </section>
 
       {/* Section 5 — Workflow */}
       <section className="max-w-4xl mx-auto px-6 pb-16">
-        <h2 className="text-3xl font-black text-center mb-10">How Blink fits your workflow</h2>
+        <motion.h2 initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-60px" }} transition={{ duration: 0.5 }} className="text-3xl font-black text-center mb-10">How Blink fits your workflow</motion.h2>
         <div className="space-y-5">
-          {WORKFLOW_STEPS.map((s) => (
-            <div key={s.step} className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 flex items-start gap-5">
+          {WORKFLOW_STEPS.map((s, i) => (
+            <motion.div key={s.step} initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true, margin: "-40px" }} transition={{ delay: i * 0.12, duration: 0.5, ease: "easeOut" }} className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 flex items-start gap-5">
               <div className="w-10 h-10 rounded-xl bg-blue-600/20 flex items-center justify-center shrink-0">
                 <span className="text-blue-400 font-black text-lg">{s.step}</span>
               </div>
@@ -126,28 +142,28 @@ export default function AboutPage() {
                 <h3 className="text-base font-bold text-white mb-1">{s.title}</h3>
                 <p className="text-sm text-gray-400 leading-relaxed">{s.desc}</p>
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
       </section>
 
       {/* Section 6 — Security */}
-      <section className="max-w-4xl mx-auto px-6 pb-16">
-        <h2 className="text-3xl font-black text-center mb-6">Security, privacy & compliance</h2>
-        <p className="text-center text-gray-400 text-sm max-w-xl mx-auto mb-8 leading-relaxed">
+      <motion.section className="max-w-4xl mx-auto px-6 pb-16" initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} variants={staggerContainer}>
+        <motion.h2 variants={fadeUp} custom={0} className="text-3xl font-black text-center mb-6">Security, privacy & compliance</motion.h2>
+        <motion.p variants={fadeUp} custom={1} className="text-center text-gray-400 text-sm max-w-xl mx-auto mb-8 leading-relaxed">
           Blink is designed to meet enterprise security and compliance requirements. The platform integrates security, privacy, and governance features from the ground up.
-        </p>
-        <div className="flex justify-center gap-3 mb-8">
+        </motion.p>
+        <motion.div variants={fadeUp} custom={2} className="flex justify-center gap-3 mb-8">
           {["ISO 27001", "GDPR", "SOC 2"].map((badge) => (
             <span key={badge} className="px-4 py-2 text-xs font-bold bg-blue-600/20 text-blue-400 rounded-lg border border-blue-500/30">
               {badge}
             </span>
           ))}
-        </div>
-        <p className="text-center text-gray-500 text-sm max-w-lg mx-auto leading-relaxed">
+        </motion.div>
+        <motion.p variants={fadeUp} custom={3} className="text-center text-gray-500 text-sm max-w-lg mx-auto leading-relaxed">
           Blink adapts to your way of working, rather than requiring changes to your workflow.
-        </p>
-      </section>
+        </motion.p>
+      </motion.section>
 
       {/* Footer */}
       <footer className="border-t border-white/10 py-8 text-center text-sm text-gray-500">

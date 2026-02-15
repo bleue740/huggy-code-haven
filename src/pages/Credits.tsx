@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React from "react";
 import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
 import { Zap, Info } from "lucide-react";
 import {
   Table,
@@ -14,6 +15,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 24 },
+  visible: (i: number) => ({ opacity: 1, y: 0, transition: { delay: i * 0.08, duration: 0.5, ease: [0, 0, 0.2, 1] as const } }),
+};
+const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.08 } } };
 
 /* ── Credit bar demo data ─────────────────────────────── */
 const CREDIT_BAR_SEGMENTS = [
@@ -97,7 +104,7 @@ function CreditBar() {
 /* ── Main page ────────────────────────────────────────── */
 export default function CreditsPage() {
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white font-['Inter',sans-serif]">
+    <main className="min-h-screen bg-[#0a0a0a] text-white font-['Inter',sans-serif] overflow-hidden">
       {/* Header */}
       <header className="border-b border-white/10 px-6 md:px-8 py-4 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3">
@@ -125,30 +132,30 @@ export default function CreditsPage() {
       {/* Content */}
       <div className="max-w-3xl mx-auto px-6 py-16 space-y-16">
         {/* ── Section 1: Introduction ── */}
-        <section>
-          <h1 className="text-4xl font-black tracking-tight">Crédits</h1>
-          <p className="mt-4 text-gray-400 leading-relaxed">
+        <motion.section initial="hidden" animate="visible" variants={stagger}>
+          <motion.h1 variants={fadeUp} custom={0} className="text-4xl font-black tracking-tight">Crédits</motion.h1>
+          <motion.p variants={fadeUp} custom={1} className="mt-4 text-gray-400 leading-relaxed">
             L'envoi de messages pour générer un résultat dans Blink nécessite des crédits.
             Le coût dépend de la complexité du message. Votre espace de travail bénéficie
             de crédits provenant de votre forfait, d'allocations quotidiennes et de
             recharges ponctuelles facultatives. Cette section explique le fonctionnement
             des crédits, leur utilisation et comment en obtenir davantage en cas de besoin.
-          </p>
-        </section>
+          </motion.p>
+        </motion.section>
 
         {/* ── Section 2: Viewing credits ── */}
-        <section>
-          <h2 className="text-2xl font-bold">Affichage des crédits</h2>
-          <p className="mt-3 text-gray-400 leading-relaxed">
+        <motion.section initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} variants={stagger}>
+          <motion.h2 variants={fadeUp} custom={0} className="text-2xl font-bold">Affichage des crédits</motion.h2>
+          <motion.p variants={fadeUp} custom={1} className="mt-3 text-gray-400 leading-relaxed">
             Pour consulter votre solde de crédits, sélectionnez le nom de votre espace de
             travail sur le tableau de bord principal ou le nom du projet dans l'éditeur.
             Vous verrez alors le nombre de crédits restants pour cette période de
             facturation, ainsi que la barre de crédits.
-          </p>
+          </motion.p>
 
-          <CreditBar />
+          <motion.div variants={fadeUp} custom={2}><CreditBar /></motion.div>
 
-          <div className="mt-6 space-y-3">
+          <motion.div variants={fadeUp} custom={3} className="mt-6 space-y-3">
             <div className="flex items-start gap-3 p-4 rounded-xl bg-white/[0.03] border border-white/10">
               <div className="w-3 h-3 rounded-full bg-gray-600 mt-1 shrink-0" />
               <div>
@@ -169,24 +176,24 @@ export default function CreditsPage() {
                 </p>
               </div>
             </div>
-          </div>
-        </section>
+          </motion.div>
+        </motion.section>
 
         {/* ── Section 3: Credit usage ── */}
-        <section>
-          <h2 className="text-2xl font-bold">Utilisation des crédits</h2>
-          <p className="mt-3 text-gray-400 leading-relaxed">
+        <motion.section initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} variants={stagger}>
+          <motion.h2 variants={fadeUp} custom={0} className="text-2xl font-bold">Utilisation des crédits</motion.h2>
+          <motion.p variants={fadeUp} custom={1} className="mt-3 text-gray-400 leading-relaxed">
             Blink utilise un système de crédits basé sur l'utilisation : l'envoi de
             messages déduit des crédits. Le coût d'un message dépend de sa complexité afin
             que vous ne payiez que ce que vous consommez réellement.
-          </p>
-          <p className="mt-2 text-gray-400 leading-relaxed">
+          </motion.p>
+          <motion.p variants={fadeUp} custom={2} className="mt-2 text-gray-400 leading-relaxed">
             De nombreux messages coûtent moins d'un crédit, tandis que les plus complexes
             peuvent coûter davantage. Cette approche permet des modifications plus précises
             et une plus grande efficacité par message, rendant ainsi Blink plus abordable.
-          </p>
+          </motion.p>
 
-          <div className="mt-6 rounded-xl border border-white/10 overflow-hidden">
+          <motion.div variants={fadeUp} custom={3} className="mt-6 rounded-xl border border-white/10 overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow className="border-white/10 hover:bg-transparent">
@@ -213,15 +220,15 @@ export default function CreditsPage() {
                 ))}
               </TableBody>
             </Table>
-          </div>
-        </section>
+          </motion.div>
+        </motion.section>
 
         {/* ── Section 4: Credit sources ── */}
-        <section>
-          <h2 className="text-2xl font-bold">Sources de crédits</h2>
-          <p className="mt-3 text-gray-400 leading-relaxed">
+        <motion.section initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-60px" }} variants={stagger}>
+          <motion.h2 variants={fadeUp} custom={0} className="text-2xl font-bold">Sources de crédits</motion.h2>
+          <motion.p variants={fadeUp} custom={1} className="mt-3 text-gray-400 leading-relaxed">
             Vos crédits proviennent de trois sources distinctes :
-          </p>
+          </motion.p>
           <div className="mt-6 grid gap-4">
             {[
               {
@@ -239,11 +246,8 @@ export default function CreditsPage() {
                 desc: "Besoin de plus de crédits ? Achetez des recharges à tout moment sans changer de forfait. Les crédits achetés n'expirent pas.",
                 color: "bg-cyan-400",
               },
-            ].map((source) => (
-              <div
-                key={source.title}
-                className="flex items-start gap-4 p-5 rounded-xl bg-white/[0.03] border border-white/10"
-              >
+            ].map((source, i) => (
+              <motion.div key={source.title} variants={fadeUp} custom={i + 2} whileHover={{ y: -3, transition: { duration: 0.2 } }} className="flex items-start gap-4 p-5 rounded-xl bg-white/[0.03] border border-white/10">
                 <div className={`w-3 h-3 rounded-full ${source.color} mt-1.5 shrink-0`} />
                 <div>
                   <h3 className="font-semibold text-white">{source.title}</h3>
@@ -251,20 +255,20 @@ export default function CreditsPage() {
                     {source.desc}
                   </p>
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
-        </section>
+        </motion.section>
 
         {/* ── CTA ── */}
-        <section className="text-center pb-8">
+        <motion.section initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5 }} className="text-center pb-8">
           <Link
             to="/pricing"
             className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-500 transition-colors"
           >
             Voir les plans & tarifs
           </Link>
-        </section>
+        </motion.section>
       </div>
 
       {/* Footer */}
