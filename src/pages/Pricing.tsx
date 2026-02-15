@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { motion } from "framer-motion";
 import { Check, Zap, Loader2, GraduationCap, Shield, ChevronRight, Gift } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -297,7 +298,12 @@ export default function PricingPage() {
       </header>
 
       {/* Hero */}
-      <section className="max-w-4xl mx-auto px-6 pt-16 pb-12 text-center">
+      <motion.section
+        className="max-w-4xl mx-auto px-6 pt-16 pb-12 text-center"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
         <h1 className="text-4xl md:text-5xl font-black tracking-tight text-white">
           Pricing that scales with you
         </h1>
@@ -305,13 +311,21 @@ export default function PricingPage() {
           Start for free, upgrade when you're ready. No surprises, cancel
           anytime.
         </p>
-      </section>
+      </motion.section>
 
       {/* Plans grid — 3 columns */}
-      <section className="max-w-5xl mx-auto px-6 pb-12 grid md:grid-cols-3 gap-5">
+      <motion.section
+        className="max-w-5xl mx-auto px-6 pb-12 grid md:grid-cols-3 gap-5"
+        initial="hidden"
+        animate="visible"
+        variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.1 } } }}
+      >
         {PLANS.map((plan) => (
-          <PlanCard
+          <motion.div
             key={plan.id}
+            variants={{ hidden: { opacity: 0, y: 24 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5 } } }}
+          >
+          <PlanCard
             plan={plan}
             isAnnual={planAnnual[plan.id] ?? false}
             selectedCredits={planCredits[plan.id] ?? 100}
@@ -327,8 +341,9 @@ export default function PricingPage() {
             }
             onSelect={() => handleSelectPlan(plan.id, plan.ctaAction)}
           />
+          </motion.div>
         ))}
-      </section>
+      </motion.section>
 
       {/* Bottom sections */}
       <section className="max-w-5xl mx-auto px-6 space-y-4 pb-16">
