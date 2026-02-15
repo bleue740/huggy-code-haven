@@ -1,33 +1,69 @@
 
-# Plan: Rendre le Preview Public
 
-## Objectif
-Modifier la route `/preview` pour qu'elle retourne une URL publique (accessible depuis Internet) au lieu de `localhost`.
+# Premium Generation Overlay + Smart Activation
 
-## Ce qui change
+## Problem
+1. The preview overlay animation (GeneratingOverlay) is too basic — floating code cards with a simple orb feel generic
+2. The overlay appears during ALL AI interactions, including simple conversations where no code is being generated
 
-### 1. `server/index.js`
-Un seul changement: remplacer `http://localhost:${port}` par une URL basee sur la variable d'environnement `PUBLIC_URL`.
+## Solution
 
+### 1. Smart Activation: Only show overlay during code generation
+
+Update `CodePreview` to accept a new prop `isBuilding` (true only when the orchestrator is in building/planning phase, not during simple conversation). The `GeneratingOverlay` will only render when actual code generation is happening.
+
+In `App.tsx`, pass `isBuilding` based on `_generationPhase` being one of `thinking`, `planning`, or `building` (not `undefined` which means conversational mode).
+
+### 2. Premium Overlay Redesign
+
+Replace the current basic overlay with a cinematic, Lovable-grade experience:
+
+- **Animated particle grid**: A subtle dot-grid background with particles that pulse outward from center, creating a "neural network" feel
+- **Morphing orb**: Replace the static pulsing circles with a gradient orb that uses CSS animations to morph between shapes (blob effect) with a blue-to-purple gradient
+- **Code rain effect**: Instead of static floating cards, show thin vertical streams of code characters (matrix-style but subtle and elegant) fading in/out
+- **Phase-aware center display**: The center text adapts based on the current generation phase with smooth crossfade transitions
+- **Glassmorphic status card**: A frosted-glass card in the center showing the current phase icon, status text, and an animated progress ring (SVG circle with stroke-dasharray animation)
+- **Radial glow pulse**: A large, soft radial gradient that slowly breathes behind the orb
+
+### Technical Details
+
+**Files to modify:**
+- `src/app-builder/components/GeneratingOverlay.tsx` — Complete rewrite with premium animations
+- `src/app-builder/components/CodePreview.tsx` — Add `isBuilding` prop, pass it to overlay instead of `isGenerating`
+- `src/app-builder/App.tsx` — Compute `isBuilding` from `_generationPhase` state; pass to `CodePreview`
+
+**New overlay structure:**
 ```text
-// Avant
-res.json({ url: `http://localhost:${port}` });
-
-// Apres  
-const publicBaseUrl = process.env.PUBLIC_URL || `http://localhost:${port}`;
-res.json({ url: `${publicBaseUrl}:${port}` });
++------------------------------------------+
+|  [particle grid background]              |
+|                                          |
+|     [code rain streams - subtle]         |
+|                                          |
+|        +-------------------+             |
+|        | [morphing orb]    |             |
+|        | [radial glow]     |             |
+|        +-------------------+             |
+|                                          |
+|     +-------------------------+          |
+|     | [glass card]            |          |
+|     |  Phase icon + text      |          |
+|     |  Progress ring (SVG)    |          |
+|     |  Phase dots             |          |
+|     +-------------------------+          |
+|                                          |
++------------------------------------------+
 ```
 
-Le fallback sur `localhost` permet au serveur de fonctionner meme sans la variable configuree.
+**Animation techniques (CSS only, no libraries):**
+- `@keyframes blob` for morphing orb shape
+- `@keyframes code-rain` for vertical code streams
+- `@keyframes breathe` for radial glow
+- `@keyframes grid-pulse` for particle grid dots
+- SVG `stroke-dashoffset` transition for progress ring
+- `transition` on text opacity for smooth phase crossfade
 
-## Ce que tu dois faire manuellement sur Railway
-Apres le push, ajouter une variable d'environnement dans Railway:
-- **Key**: `PUBLIC_URL`
-- **Value**: ton URL Railway (ex: `https://huggy-code-haven.up.railway.app`)
+**Activation logic in App.tsx:**
+- `isBuilding = state._generationPhase && state._generationPhase !== 'preview_ready' && state._generationPhase !== 'error'`
+- Pass `isBuilding` to `CodePreview` instead of `isGenerating`
+- Conversational replies already clear `_generationPhase` to `undefined`, so the overlay naturally hides
 
-## Limitation importante
-Railway ne permet pas d'exposer plusieurs ports sur un meme service. Le port dynamique (5000-5999) ne sera pas accessible publiquement via Railway tel quel. Pour un vrai preview public, il faudra a terme:
-- soit utiliser un VPS (Hetzner/DigitalOcean) qui supporte Docker + ports multiples
-- soit servir le preview directement depuis le serveur Express (sans Docker) sur une sous-route comme `/preview/demo`
-
-Pour l'instant, on met en place la mecanique avec `PUBLIC_URL` pour que la structure soit prete.
