@@ -29,6 +29,7 @@ interface TopNavProps {
   onShowCollaboration?: () => void;
   onGitHubSync?: () => void;
   onSharePreview?: () => void;
+  onRenameProject?: (name: string) => void;
   isCodeView?: boolean;
   isGenerating?: boolean;
   isSharingPreview?: boolean;
@@ -46,6 +47,7 @@ export const TopNav: React.FC<TopNavProps> = ({
   onShowCollaboration,
   onGitHubSync,
   onSharePreview,
+  onRenameProject,
   isCodeView,
   isGenerating,
   isSharingPreview,
@@ -54,8 +56,22 @@ export const TopNav: React.FC<TopNavProps> = ({
 }) => {
   const [showPublishMenu, setShowPublishMenu] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editName, setEditName] = useState(projectName);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const publishRef = useRef<HTMLDivElement>(null);
   const shareRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setEditName(projectName);
+  }, [projectName]);
+
+  useEffect(() => {
+    if (isEditingName && nameInputRef.current) {
+      nameInputRef.current.focus();
+      nameInputRef.current.select();
+    }
+  }, [isEditingName]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -119,11 +135,41 @@ export const TopNav: React.FC<TopNavProps> = ({
         />
       </div>
 
-      {/* Zone centre - barre URL avec nom du projet */}
       <div className="flex-1 flex justify-center px-4 max-w-xl">
-        <div className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg h-8 flex items-center px-3 gap-2">
+        <div
+          className="w-full bg-[#1a1a1a] border border-[#333] rounded-lg h-8 flex items-center px-3 gap-2 cursor-text"
+          onClick={() => setIsEditingName(true)}
+        >
           <Globe size={12} className="text-neutral-500 shrink-0" />
-          <span className="text-xs text-neutral-400 truncate">{projectName}</span>
+          {isEditingName ? (
+            <input
+              ref={nameInputRef}
+              value={editName}
+              onChange={e => setEditName(e.target.value)}
+              onBlur={() => {
+                setIsEditingName(false);
+                if (editName.trim() && editName.trim() !== projectName) {
+                  onRenameProject?.(editName.trim());
+                }
+              }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  setIsEditingName(false);
+                  if (editName.trim() && editName.trim() !== projectName) {
+                    onRenameProject?.(editName.trim());
+                  }
+                }
+                if (e.key === 'Escape') {
+                  setEditName(projectName);
+                  setIsEditingName(false);
+                }
+              }}
+              className="flex-1 bg-transparent text-xs text-white outline-none border-none"
+              spellCheck={false}
+            />
+          ) : (
+            <span className="text-xs text-neutral-400 truncate">{projectName}</span>
+          )}
         </div>
       </div>
 
