@@ -491,21 +491,35 @@ serve(async (req: Request) => {
       );
     }
 
-    // Deduct credit before streaming — use service role client to bypass RLS
-    const newCredits = currentCredits - creditCost;
-    const newLifetime = (creditRow?.lifetime_used ?? 0) + creditCost;
+    // Deduct credit via atomic DB function (row-level lock + audit trail)
     const adminClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
-    const { error: deductError } = await adminClient
-      .from("users_credits")
-      .update({ credits: newCredits, lifetime_used: newLifetime })
-      .eq("user_id", userId);
+    const { data: deductResult, error: deductError } = await adminClient.rpc("deduct_credits", {
+      p_user_id: userId,
+      p_amount: creditCost,
+      p_description: `AI chat (${complexity}) — ${model}`,
+      p_metadata: JSON.stringify({ complexity, model, provider, chat_mode: chatMode }),
+    });
+    
+    let newCredits = currentCredits - creditCost;
     if (deductError) {
       console.error("[ai-chat] Credit deduction FAILED:", deductError);
     } else {
-      console.log(`[ai-chat] Credit deducted: ${currentCredits} -> ${newCredits}`);
+      const result = deductResult as any;
+      if (result?.success) {
+        newCredits = result.remaining;
+        console.log(`[ai-chat] Credit deducted: ${currentCredits} -> ${newCredits}`);
+      } else {
+        console.error("[ai-chat] Deduction rejected:", result?.error);
+        if (result?.error === 'insufficient_credits') {
+          return new Response(
+            JSON.stringify({ error: "no_credits", message: "Crédits insuffisants." }),
+            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+      }
     }
 
     // Prepare the response with backend hints header
