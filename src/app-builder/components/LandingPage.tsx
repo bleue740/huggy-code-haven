@@ -207,6 +207,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
             <button onClick={() => scrollTo('features')} className="text-sm font-semibold text-neutral-400 hover:text-white transition-colors">Features</button>
             <button onClick={() => scrollTo('how-it-works')} className="text-sm font-semibold text-neutral-400 hover:text-white transition-colors">How it works</button>
             <button onClick={() => scrollTo('community')} className="text-sm font-semibold text-neutral-400 hover:text-white transition-colors">Community</button>
+            <Link to="/about" className="text-sm font-semibold text-neutral-400 hover:text-white transition-colors">About</Link>
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -235,6 +236,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
             <button onClick={() => scrollTo('features')} className="block text-2xl font-black text-white">Features</button>
             <button onClick={() => scrollTo('how-it-works')} className="block text-2xl font-black text-white">How it works</button>
             <button onClick={() => scrollTo('community')} className="block text-2xl font-black text-white">Community</button>
+            <Link to="/about" className="block text-2xl font-black text-white" onClick={() => setIsMenuOpen(false)}>About</Link>
             <Link to="/auth" className="block text-2xl font-black text-neutral-400" onClick={() => setIsMenuOpen(false)}>Sign in</Link>
           </div>
           <div className="mt-12">
@@ -460,7 +462,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
             <div>
               <h4 className="text-sm font-black text-white uppercase tracking-wider mb-4">Company</h4>
               <ul className="space-y-2 text-sm text-neutral-400">
-                <li><span className="cursor-default">About</span></li>
+                <li><Link to="/about" className="hover:text-white transition-colors">About</Link></li>
                 <li><span className="cursor-default">Contact</span></li>
               </ul>
             </div>
