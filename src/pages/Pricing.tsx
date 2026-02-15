@@ -337,9 +337,15 @@ export default function PricingPage() {
 
       {/* FAQ */}
       <section className="max-w-3xl mx-auto px-6 pb-24">
-        <h2 className="text-3xl font-black text-center mb-10 text-white">
+        <h2 className="text-3xl font-black text-center mb-4 text-white">
           Frequently asked questions
         </h2>
+        <p className="text-center text-gray-400 mb-10">
+          Want to know how credits work?{" "}
+          <Link to="/credits" className="text-blue-400 hover:text-blue-300 underline underline-offset-4">
+            Learn about credits
+          </Link>
+        </p>
         <Accordion type="single" collapsible className="w-full">
           {FAQ_ITEMS.map((item, i) => (
             <AccordionItem
