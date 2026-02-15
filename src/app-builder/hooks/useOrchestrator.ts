@@ -20,6 +20,7 @@ interface OrchestratorCallbacks {
   onError: (error: string, code?: number) => void;
   onPlanReady: (intent: string, steps: Array<{ id: number; action: string; target: string; description: string }>) => void;
   onFileGenerated?: (path: string) => void;
+  onPhase?: (phase: string, message: string) => void;
 }
 
 interface ChatMessage {
@@ -118,6 +119,7 @@ export function useOrchestrator() {
                     phase: event.phase as ConversationPhase,
                     message: event.message,
                   });
+                  callbacks.onPhase?.(event.phase, event.message || "");
                   break;
 
                 case "plan":

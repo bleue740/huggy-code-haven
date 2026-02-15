@@ -354,7 +354,7 @@ const App: React.FC = () => {
   const handleStopGenerating = useCallback(() => {
     stopStreaming();
     stopOrchestrator();
-    setState(prev => ({ ...prev, isGenerating: false, aiStatusText: null, _generationPhase: undefined, _planItems: [], _buildLogs: [], _thinkingLines: [] } as any));
+    setState(prev => ({ ...prev, isGenerating: false, aiStatusText: null, _generationPhase: undefined, _pipelineProgress: 0, _planItems: [], _buildLogs: [], _thinkingLines: [] } as any));
   }, [stopStreaming, stopOrchestrator]);
 
   const handleSendMessage = useCallback(async (customPrompt?: string) => {
@@ -372,9 +372,10 @@ const App: React.FC = () => {
       history: [...prev.history, userMessage],
       currentInput: customPrompt ? prev.currentInput : '',
       generationSteps: [],
-      // Phase display state
-      _generationPhase: 'thinking',
-      _thinkingLines: ['Analyzing requirements…', 'Identifying core features…'],
+      // Phase display — no fake pre-set; wait for real SSE events
+      _generationPhase: undefined,
+      _pipelineProgress: 0,
+      _thinkingLines: [],
       _planItems: [],
       _buildLogs: [],
     } as any));
@@ -430,12 +431,34 @@ const App: React.FC = () => {
 
     // ── AGENT MODE: Use Orchestrator Pipeline ──
     await sendOrchestrator(chatMessages, vfsRef.current, ctxRef.current, {
+      onPhase: (phase, message) => {
+        // Map real server phases to UI state + progress
+        const phaseMap: Record<string, { uiPhase: string; progress: number }> = {
+          planning: { uiPhase: 'thinking', progress: 10 },
+          generating: { uiPhase: 'building', progress: 30 },
+          validating: { uiPhase: 'building', progress: 85 },
+          fixing: { uiPhase: 'building', progress: 88 },
+          complete: { uiPhase: 'preview_ready', progress: 100 },
+          error: { uiPhase: 'error', progress: 0 },
+        };
+        const mapped = phaseMap[phase] || { uiPhase: phase, progress: (state as any)._pipelineProgress || 0 };
+        setState(prev => ({
+          ...prev,
+          _generationPhase: mapped.uiPhase,
+          _pipelineProgress: mapped.progress,
+          aiStatusText: message || null,
+        } as any));
+      },
+
       onPlanReady: (intent, steps) => {
         setState(prev => ({
           ...prev,
           _generationPhase: 'planning',
+          _pipelineProgress: 20,
           _thinkingLines: [],
           _planItems: steps.map(s => ({ label: `${s.target}: ${s.description}`, done: false })),
+          _totalExpectedFiles: steps.filter(s => s.action !== 'delete').length,
+          _filesGeneratedCount: 0,
         } as any));
 
         // After a short pause, transition to building
@@ -443,6 +466,7 @@ const App: React.FC = () => {
           setState(prev => ({
             ...prev,
             _generationPhase: 'building',
+            _pipelineProgress: 30,
             _buildLogs: steps.map((s, i) => ({
               id: `build_${i}`,
               text: `${s.action === 'create' ? 'Creating' : s.action === 'modify' ? 'Updating' : 'Removing'} ${s.target}…`,
@@ -453,20 +477,22 @@ const App: React.FC = () => {
       },
 
       onFileGenerated: (path) => {
-        // Progressively mark build logs as done
         setState(prev => {
           const logs = ((prev as any)._buildLogs || []).map((l: any) =>
             !l.done && l.text.toLowerCase().includes(path.toLowerCase().replace('.tsx', '').replace('.ts', ''))
               ? { ...l, done: true }
               : l
           );
-          // If no specific match, mark the first undone log
           const anyMarked = logs.some((l: any, i: number) => l.done && !((prev as any)._buildLogs || [])[i]?.done);
           if (!anyMarked) {
             const firstUndone = logs.findIndex((l: any) => !l.done);
             if (firstUndone >= 0) logs[firstUndone] = { ...logs[firstUndone], done: true };
           }
-          return { ...prev, _buildLogs: logs } as any;
+          // Compute real progress: 30% (building start) + up to 50% based on files generated
+          const newCount = ((prev as any)._filesGeneratedCount || 0) + 1;
+          const total = (prev as any)._totalExpectedFiles || 1;
+          const fileProgress = 30 + Math.round((newCount / total) * 50);
+          return { ...prev, _buildLogs: logs, _filesGeneratedCount: newCount, _pipelineProgress: Math.min(fileProgress, 80) } as any;
         });
       },
 
@@ -494,6 +520,7 @@ const App: React.FC = () => {
             aiStatusText: null,
             generationSteps: [],
             _generationPhase: 'preview_ready',
+            _pipelineProgress: 100,
             _buildLogs: doneLogs,
             history: [...prev.history, {
               id: `orch_${Date.now()}`, role: 'assistant' as const,
@@ -534,14 +561,14 @@ const App: React.FC = () => {
         fetchSuggestions();
 
         // Clear phase display after delay
-        setTimeout(() => setState(prev => ({ ...prev, generationSteps: [], _generationPhase: undefined, _planItems: [], _buildLogs: [], _thinkingLines: [] } as any)), 4000);
+        setTimeout(() => setState(prev => ({ ...prev, generationSteps: [], _generationPhase: undefined, _pipelineProgress: 0, _planItems: [], _buildLogs: [], _thinkingLines: [] } as any)), 4000);
       },
 
       onConversationalReply: (reply) => {
         setRetryCount(0);
         setState(prev => ({
           ...prev, isGenerating: false, aiStatusText: null, generationSteps: [],
-          _generationPhase: undefined, _planItems: [], _buildLogs: [], _thinkingLines: [],
+          _generationPhase: undefined, _pipelineProgress: 0, _planItems: [], _buildLogs: [], _thinkingLines: [],
           history: [...prev.history, { id: `conv_${Date.now()}`, role: 'assistant', content: reply, timestamp: Date.now() }],
         } as any));
         persistMessage(state.projectId, 'assistant', reply, false, 0, 'agent');
@@ -590,24 +617,22 @@ const App: React.FC = () => {
       return;
     }
 
-    setState(prev => ({ ...prev, isDeploying: true, deploymentProgress: 0 }));
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += Math.random() * 12;
-      if (progress < 85) {
-        setState(prev => ({ ...prev, deploymentProgress: Math.min(progress, 85) }));
-      }
-    }, 300);
+    // Step 1: Start — real deterministic progress
+    setState(prev => ({ ...prev, isDeploying: true, deploymentProgress: 10 }));
 
     try {
+      // Step 2: Auth check
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData.user?.id;
       if (!userId) throw new Error('Non authentifié');
+      setState(prev => ({ ...prev, deploymentProgress: 30 }));
 
+      // Step 3: Serialize files
       const code = serializeFiles(state.files);
       const slug = `blink-${state.projectId.slice(0, 8)}`;
+      setState(prev => ({ ...prev, deploymentProgress: 50 }));
 
-      // Upsert deployment with the current code
+      // Step 4: Upsert deployment in database
       const { data: deployment, error } = await supabase
         .from('deployments')
         .upsert(
@@ -624,8 +649,9 @@ const App: React.FC = () => {
         .single();
 
       if (error) throw error;
+      setState(prev => ({ ...prev, deploymentProgress: 90 }));
 
-      clearInterval(interval);
+      // Step 5: Done
       const deployUrl = `/p/${(deployment as any).id}`;
       setState(prev => ({
         ...prev,
@@ -641,7 +667,6 @@ const App: React.FC = () => {
         },
       });
     } catch (e: any) {
-      clearInterval(interval);
       console.error('Publish error:', e);
       setState(prev => ({ ...prev, isDeploying: false, deploymentProgress: 0 }));
       toast.error('Erreur de déploiement', { description: e?.message });
@@ -1015,6 +1040,7 @@ const App: React.FC = () => {
             files={state.files}
             isGenerating={state.isGenerating}
             isBuilding={!!(state as any)._generationPhase && (state as any)._generationPhase !== 'preview_ready' && (state as any)._generationPhase !== 'error'}
+            pipelineProgress={(state as any)._pipelineProgress || 0}
             generationStatus={state.aiStatusText ?? undefined}
             supabaseUrl={state.supabaseUrl}
             supabaseAnonKey={state.supabaseAnonKey}

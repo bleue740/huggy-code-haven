@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 interface GeneratingOverlayProps {
   isVisible: boolean;
   statusText?: string;
+  /** Real pipeline progress 0-100, driven by SSE events */
+  progress?: number;
 }
 
 const PHASES = [
@@ -130,43 +132,34 @@ const SparkleEffect: React.FC<{ active: boolean }> = ({ active }) => {
   );
 };
 
+/** Map real progress to phase index */
+function progressToPhaseIndex(progress: number): number {
+  if (progress < 15) return 0; // Analyzing
+  if (progress < 40) return 1; // Designing
+  if (progress < 80) return 2; // Generating
+  return 3; // Optimizing
+}
+
 export const GeneratingOverlay: React.FC<GeneratingOverlayProps> = ({
   isVisible,
   statusText,
+  progress: externalProgress,
 }) => {
-  const [phaseIndex, setPhaseIndex] = useState(0);
-  const [progress, setProgress] = useState(0);
   const [showSparkles, setShowSparkles] = useState(false);
-  const [previewReady, setPreviewReady] = useState(false);
+
+  // Use real progress from props (0-100), default to 5 when visible but no data yet
+  const progress = externalProgress ?? (isVisible ? 5 : 0);
+  const phaseIndex = progressToPhaseIndex(progress);
 
   useEffect(() => {
     if (!isVisible) {
-      setPhaseIndex(0);
-      setProgress(0);
-      setPreviewReady(false);
       setShowSparkles(false);
       return;
     }
-    const timer = setInterval(() => {
-      setPhaseIndex(prev => {
-        const next = Math.min(prev + 1, PHASES.length - 1);
-        if (next === PHASES.length - 1 && !previewReady) {
-          setPreviewReady(true);
-          setShowSparkles(true);
-        }
-        return next;
-      });
-    }, 3500);
-    return () => clearInterval(timer);
-  }, [isVisible, previewReady]);
-
-  useEffect(() => {
-    if (!isVisible) return;
-    const timer = setInterval(() => {
-      setProgress(prev => Math.min(prev + Math.random() * 6 + 1.5, 95));
-    }, 500);
-    return () => clearInterval(timer);
-  }, [isVisible]);
+    if (progress >= 95 && !showSparkles) {
+      setShowSparkles(true);
+    }
+  }, [isVisible, progress, showSparkles]);
 
   if (!isVisible) return null;
 
@@ -189,7 +182,7 @@ export const GeneratingOverlay: React.FC<GeneratingOverlayProps> = ({
         />
       </div>
 
-      {/* Code Rain – slower, more cinematic */}
+      {/* Code Rain */}
       <div className="absolute inset-0 overflow-hidden">
         {Array.from({ length: RAIN_COLUMNS }).map((_, i) => (
           <CodeRainColumn key={i} index={i} />
@@ -212,7 +205,7 @@ export const GeneratingOverlay: React.FC<GeneratingOverlayProps> = ({
         }}
       />
 
-      {/* Sparkle Confetti on last phase */}
+      {/* Sparkle Confetti on completion */}
       <SparkleEffect active={showSparkles} />
 
       {/* Center Content */}
@@ -248,7 +241,7 @@ export const GeneratingOverlay: React.FC<GeneratingOverlayProps> = ({
             {statusText || currentPhase.text}
           </h3>
           <p className="text-white/25 text-xs font-medium">
-            {Math.round(progress)}% complete
+            {Math.round(progress)}%
           </p>
 
           {/* Phase Dots */}
@@ -296,8 +289,8 @@ export const GeneratingOverlay: React.FC<GeneratingOverlayProps> = ({
         }
         @keyframes sparkle-burst {
           0% { transform: scale(0) translate(0, 0); opacity: 1; }
-          30% { transform: scale(1.2) translate(calc((var(--x, 0) - 0.5) * 120px), calc((var(--y, 0) - 0.5) * 120px)); opacity: 1; }
-          100% { transform: scale(0) translate(calc((var(--x, 0) - 0.5) * 200px), calc((var(--y, 0) - 0.5) * 200px)); opacity: 0; }
+          30% { transform: scale(1.2); opacity: 1; }
+          100% { transform: scale(0); opacity: 0; }
         }
       `}</style>
     </div>
