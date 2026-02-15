@@ -217,7 +217,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
     return (
       <div
         ref={ref}
-        className={`flex flex-col border-r border-[#1a1a1a] bg-[#0a0a0a] text-neutral-400 text-sm h-full relative transition-all duration-300 ${isCollapsed ? 'w-[64px]' : 'w-[380px]'}`}
+        className={`flex flex-col border-r border-gray-200 dark:border-[#1a1a1a] bg-gray-50 dark:bg-[#0a0a0a] text-gray-500 dark:text-neutral-400 text-sm h-full relative transition-all duration-300 ${isCollapsed ? 'w-[64px]' : 'w-[380px]'}`}
       >
         <div className={`p-4 flex items-center shrink-0 overflow-visible ${isCollapsed ? 'flex-col gap-4' : 'justify-between'}`}>
           {!isCollapsed && (
