@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-chat`;
 
@@ -127,7 +128,10 @@ export function useAIChat() {
               const parsed = JSON.parse(jsonStr);
               // Check for credit cost events
               if (parsed.type === 'credit_cost') {
-                console.log(`[credits] Cost: ${parsed.cost}, Remaining: ${parsed.remaining}`);
+                toast.info(`${parsed.cost} crédit${parsed.cost > 1 ? 's' : ''} déduit${parsed.cost > 1 ? 's' : ''}`, {
+                  description: `Solde restant : ${Number(parsed.remaining).toFixed(2)} crédits`,
+                  duration: 4000,
+                });
                 continue;
               }
               // Check for backend hint events
