@@ -149,14 +149,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
     { num: 2, icon: <Sparkles size={24} />, title: 'AI builds it', desc: 'Watch as real React code is generated in seconds.' },
     { num: 3, icon: <Rocket size={24} />, title: 'Deploy instantly', desc: 'Publish your app live with one click.' },
   ];
-
-  const plans = [
-    { name: 'Free', price: '$0', perks: ['5 daily credits (up to 30/mo)', 'Public projects', '5 blink.app domains'], highlight: false },
-    { name: 'Pro', price: '$25', perks: ['100 monthly credits', 'Custom domains', 'Remove Blink badge'], highlight: true, badge: 'Popular' },
-    { name: 'Business', price: '$50', perks: ['Team workspace', 'SSO', 'Role-based access'], highlight: false },
-    { name: 'Enterprise', price: 'Custom', perks: ['Dedicated support', 'SCIM', 'Publishing controls'], highlight: false },
-  ];
-
   const [dynamicStats, setDynamicStats] = useState([
     { value: '—', label: 'Apps built' },
     { value: '—', label: 'Deployments' },
@@ -214,7 +206,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
           <div className="hidden lg:flex items-center gap-8">
             <button onClick={() => scrollTo('features')} className="text-sm font-semibold text-neutral-400 hover:text-white transition-colors">Features</button>
             <button onClick={() => scrollTo('how-it-works')} className="text-sm font-semibold text-neutral-400 hover:text-white transition-colors">How it works</button>
-            <button onClick={() => scrollTo('pricing')} className="text-sm font-semibold text-neutral-400 hover:text-white transition-colors">Pricing</button>
+            <button onClick={() => scrollTo('community')} className="text-sm font-semibold text-neutral-400 hover:text-white transition-colors">Community</button>
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -242,7 +234,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
           <div className="space-y-6">
             <button onClick={() => scrollTo('features')} className="block text-2xl font-black text-white">Features</button>
             <button onClick={() => scrollTo('how-it-works')} className="block text-2xl font-black text-white">How it works</button>
-            <button onClick={() => scrollTo('pricing')} className="block text-2xl font-black text-white">Pricing</button>
+            <button onClick={() => scrollTo('community')} className="block text-2xl font-black text-white">Community</button>
             <Link to="/auth" className="block text-2xl font-black text-neutral-400" onClick={() => setIsMenuOpen(false)}>Sign in</Link>
           </div>
           <div className="mt-12">
@@ -386,50 +378,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
         </div>
       </section>
 
-      {/* Pricing Preview */}
-      <section id="pricing" className="max-w-5xl mx-auto px-6 py-24">
-        <AnimatedSection>
-          <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-4">Simple pricing</h2>
-            <p className="text-neutral-400 text-lg max-w-2xl mx-auto">Start for free, upgrade when you're ready.</p>
-          </div>
-        </AnimatedSection>
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
-          {plans.map((p, i) => (
-            <AnimatedSection key={i} delay={i * 100}>
-              <div className={`relative rounded-3xl border p-6 bg-[#111] flex flex-col ${p.highlight ? 'border-blue-500 shadow-lg shadow-blue-500/10' : 'border-white/5'}`}>
-                {(p as any).badge && (
-                  <span className="absolute -top-3 left-5 bg-blue-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full">
-                    {(p as any).badge}
-                  </span>
-                )}
-                <div className="text-sm font-bold text-neutral-500 uppercase tracking-wider">{p.name}</div>
-                <div className="mt-3 text-3xl font-black text-white">
-                  {p.price === 'Custom' ? 'Sur devis' : <>{p.price}<span className="text-sm font-bold text-neutral-500">/mo</span></>}
-                </div>
-                <ul className="mt-5 space-y-2.5 text-sm text-neutral-400 flex-1">
-                  {p.perks.map((perk) => (
-                    <li key={perk} className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-                      {perk}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  to="/pricing"
-                  className={`mt-6 block text-center py-2.5 rounded-2xl font-bold text-sm transition-all ${
-                    p.highlight
-                      ? 'bg-blue-600 text-white hover:bg-blue-500'
-                      : 'bg-white/5 text-white hover:bg-white/10'
-                  }`}
-                >
-                  {p.name === 'Enterprise' ? 'Contact' : `Choose ${p.name}`}
-                </Link>
-              </div>
-            </AnimatedSection>
-          ))}
-        </div>
-      </section>
 
       {/* Community Showcase */}
       <section id="community" className="max-w-6xl mx-auto px-6 py-24">
@@ -506,7 +454,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
               <h4 className="text-sm font-black text-white uppercase tracking-wider mb-4">Product</h4>
               <ul className="space-y-2 text-sm text-neutral-400">
                 <li><button onClick={() => scrollTo('features')} className="hover:text-white transition-colors">Features</button></li>
-                <li><Link to="/pricing" className="hover:text-white transition-colors">Pricing</Link></li>
+                <li><Link to="/credits" className="hover:text-white transition-colors">Credits</Link></li>
               </ul>
             </div>
             <div>
