@@ -19,6 +19,7 @@ interface OrchestratorCallbacks {
   onConversationalReply: (reply: string) => void;
   onError: (error: string, code?: number) => void;
   onPlanReady: (intent: string, steps: Array<{ id: number; action: string; target: string; description: string }>) => void;
+  onFileGenerated?: (path: string) => void;
 }
 
 interface ChatMessage {
@@ -128,6 +129,7 @@ export function useOrchestrator() {
 
                 case "file_generated":
                   dispatch({ type: "FILE_GENERATED", path: event.path });
+                  callbacks.onFileGenerated?.(event.path);
                   break;
 
                 case "validation":

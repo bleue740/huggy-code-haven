@@ -285,8 +285,8 @@ async function callAgent<T>(
   if (!resp.ok) {
     const errText = await resp.text();
     console.error(`Agent call failed (${resp.status}):`, errText);
-    if (resp.status === 429) throw new Error("Rate limit exceeded — réessayez dans quelques secondes.");
-    if (resp.status === 402) throw new Error("Crédits AI épuisés — rechargez votre workspace.");
+    if (resp.status === 429) throw new Error("Rate limit exceeded — please try again shortly.");
+    if (resp.status === 402) throw new Error("AI credits exhausted — top up your workspace.");
     throw new Error(`Agent call failed: ${resp.status}`);
   }
 
@@ -397,7 +397,7 @@ serve(async (req: Request) => {
     const currentCredits = creditRow?.credits ?? 0;
     if (currentCredits < 1) {
       return new Response(
-        JSON.stringify({ error: "no_credits", message: "Crédits épuisés." }),
+        JSON.stringify({ error: "no_credits", message: "Credits exhausted." }),
         { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -426,7 +426,7 @@ serve(async (req: Request) => {
         await stream.sendEvent({
           type: "phase",
           phase: "planning" as AgentPhase,
-          message: "🧠 Analyse de l'architecture…",
+          message: "Analyzing architecture…",
         });
 
         const conversationHistory = messages
@@ -487,7 +487,7 @@ ${projectContext ? projectContext.slice(0, 12000) : "Empty project — only App.
           await stream.sendEvent({
             type: "result",
             conversational: true,
-            reply: plan.reply || plan.intent || "Je ne suis pas sûr de comprendre. Pouvez-vous reformuler ?",
+            reply: plan.reply || plan.intent || "I'm not sure I understand. Could you rephrase?",
             files: [],
             deletedFiles: [],
           });
@@ -504,7 +504,7 @@ ${projectContext ? projectContext.slice(0, 12000) : "Empty project — only App.
         await stream.sendEvent({
           type: "phase",
           phase: "generating" as AgentPhase,
-          message: `⚡ Génération du code (${complexity === "complex" ? "mode avancé" : "mode rapide"})…`,
+          message: `Building your application (${complexity === "complex" ? "advanced mode" : "fast mode"})…`,
         });
 
         const generatorInput = `## Execution Plan
@@ -546,7 +546,7 @@ ${plan.steps.map(s => `- [${s.priority || "normal"}] ${s.action} ${s.path || s.t
         await stream.sendEvent({
           type: "phase",
           phase: "validating" as AgentPhase,
-          message: "🔍 Validation du code…",
+          message: "Validating generated code…",
         });
 
         const allFiles = generated.files.map(f => `--- ${f.path} ---\n${f.content}`).join("\n\n");
@@ -590,7 +590,7 @@ ${plan.steps.filter(s => s.action === "create").map(s => s.target).join(", ") ||
             await stream.sendEvent({
               type: "phase",
               phase: "fixing" as AgentPhase,
-              message: `🔧 Correction passe ${pass}/${MAX_FIX_PASSES} — ${currentErrors.length} erreur(s)…`,
+              message: `Auto-fixing pass ${pass}/${MAX_FIX_PASSES} — ${currentErrors.length} error(s)…`,
             });
 
             const currentFilesStr = finalFiles.map(f => `--- ${f.path} ---\n${f.content}`).join("\n\n");

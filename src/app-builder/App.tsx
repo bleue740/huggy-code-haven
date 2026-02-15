@@ -109,7 +109,7 @@ const App: React.FC = () => {
     history: [{
       id: '1',
       role: 'assistant',
-      content: "Je suis prêt. Décrivez-moi l'application que vous voulez construire — je vais générer du vrai code React multi-fichiers.",
+      content: "Describe the application you want to build. I'll design, plan, and generate production-ready code for you.",
       timestamp: Date.now(),
     }],
     suggestions: [],
@@ -207,7 +207,7 @@ const App: React.FC = () => {
 
         let loadedHistory: Message[] = [{
           id: '1', role: 'assistant',
-          content: "Je suis prêt. Décrivez-moi l'application que vous voulez construire — je vais générer du vrai code React multi-fichiers.",
+          content: "Describe the application you want to build. I'll design, plan, and generate production-ready code for you.",
           timestamp: Date.now(),
         }];
         try {
@@ -354,7 +354,7 @@ const App: React.FC = () => {
   const handleStopGenerating = useCallback(() => {
     stopStreaming();
     stopOrchestrator();
-    setState(prev => ({ ...prev, isGenerating: false, aiStatusText: null }));
+    setState(prev => ({ ...prev, isGenerating: false, aiStatusText: null, _generationPhase: undefined, _planItems: [], _buildLogs: [], _thinkingLines: [] } as any));
   }, [stopStreaming, stopOrchestrator]);
 
   const handleSendMessage = useCallback(async (customPrompt?: string) => {
@@ -368,17 +368,16 @@ const App: React.FC = () => {
     setState(prev => ({
       ...prev,
       isGenerating: true,
-      aiStatusText: "🧠 Planification…",
+      aiStatusText: null,
       history: [...prev.history, userMessage],
       currentInput: customPrompt ? prev.currentInput : '',
-      generationSteps: [{
-        id: `step_planning_${now}`,
-        type: 'thinking',
-        label: 'Planification de l\'architecture…',
-        status: 'active',
-        startedAt: now,
-      }],
-    }));
+      generationSteps: [],
+      // Phase display state
+      _generationPhase: 'thinking',
+      _thinkingLines: ['Analyzing requirements…', 'Identifying core features…'],
+      _planItems: [],
+      _buildLogs: [],
+    } as any));
 
     // Persist user message
     const currentMode = state.chatMode || 'agent';
@@ -432,19 +431,42 @@ const App: React.FC = () => {
     // ── AGENT MODE: Use Orchestrator Pipeline ──
     await sendOrchestrator(chatMessages, vfsRef.current, ctxRef.current, {
       onPlanReady: (intent, steps) => {
-        setState(prev => {
-          const genSteps: GenerationStep[] = [
-            { id: `step_plan_done_${Date.now()}`, type: 'thinking', label: `Plan: ${intent}`, status: 'done', startedAt: now, completedAt: Date.now() },
-            ...steps.map((s, i) => ({
-              id: `step_gen_${i}_${Date.now()}`,
-              type: 'editing' as const,
-              label: `${s.action} ${s.target}`,
-              fileName: s.target,
-              status: 'active' as const,
-              startedAt: Date.now(),
+        setState(prev => ({
+          ...prev,
+          _generationPhase: 'planning',
+          _thinkingLines: [],
+          _planItems: steps.map(s => ({ label: `${s.target}: ${s.description}`, done: false })),
+        } as any));
+
+        // After a short pause, transition to building
+        setTimeout(() => {
+          setState(prev => ({
+            ...prev,
+            _generationPhase: 'building',
+            _buildLogs: steps.map((s, i) => ({
+              id: `build_${i}`,
+              text: `${s.action === 'create' ? 'Creating' : s.action === 'modify' ? 'Updating' : 'Removing'} ${s.target}…`,
+              done: false,
             })),
-          ];
-          return { ...prev, aiStatusText: "⚡ Génération du code…", generationSteps: genSteps };
+          } as any));
+        }, 1200);
+      },
+
+      onFileGenerated: (path) => {
+        // Progressively mark build logs as done
+        setState(prev => {
+          const logs = ((prev as any)._buildLogs || []).map((l: any) =>
+            !l.done && l.text.toLowerCase().includes(path.toLowerCase().replace('.tsx', '').replace('.ts', ''))
+              ? { ...l, done: true }
+              : l
+          );
+          // If no specific match, mark the first undone log
+          const anyMarked = logs.some((l: any, i: number) => l.done && !((prev as any)._buildLogs || [])[i]?.done);
+          if (!anyMarked) {
+            const firstUndone = logs.findIndex((l: any) => !l.done);
+            if (firstUndone >= 0) logs[firstUndone] = { ...logs[firstUndone], done: true };
+          }
+          return { ...prev, _buildLogs: logs } as any;
         });
       },
 
@@ -461,14 +483,8 @@ const App: React.FC = () => {
             if (d !== 'App.tsx') delete newFiles[d];
           }
 
-          const steps = (prev.generationSteps || []).map(s =>
-            s.status === 'active' ? { ...s, status: 'done' as const, completedAt: Date.now() } : s
-          );
-          steps.push({
-            id: `step_applied_${Date.now()}`, type: 'edited',
-            label: `${files.length} fichier(s) appliqué(s)`, status: 'done',
-            startedAt: Date.now(), completedAt: Date.now(),
-          });
+          // Mark all build logs as done
+          const doneLogs = ((prev as any)._buildLogs || []).map((l: any) => ({ ...l, done: true }));
 
           return {
             ...prev,
@@ -476,16 +492,18 @@ const App: React.FC = () => {
             activeFile: files.find(f => f.path === 'App.tsx') ? 'App.tsx' : files[0]?.path || prev.activeFile,
             isGenerating: false,
             aiStatusText: null,
-            generationSteps: steps,
+            generationSteps: [],
+            _generationPhase: 'preview_ready',
+            _buildLogs: doneLogs,
             history: [...prev.history, {
               id: `orch_${Date.now()}`, role: 'assistant' as const,
-              content: `✅ ${files.length} fichier(s) généré(s) et validé(s) par le pipeline agent.\n\nFichiers: ${files.map(f => f.path).join(', ')}`,
+              content: `Your application is ready.\n\n${files.length} file(s) generated and validated: ${files.map(f => '`' + f.path + '`').join(', ')}`,
               timestamp: Date.now(), codeApplied: true, codeLineCount: totalLines,
             }],
-          };
+          } as any;
         });
 
-        toast.success(`✨ ${files.length} fichier(s) — pipeline agent terminé !`);
+        toast.success(`Your app is ready — ${files.length} file(s) applied.`);
 
         // Save snapshot
         (async () => {
@@ -515,16 +533,17 @@ const App: React.FC = () => {
         refetchCredits();
         fetchSuggestions();
 
-        // Clear steps after delay
-        setTimeout(() => setState(prev => ({ ...prev, generationSteps: [] })), 3000);
+        // Clear phase display after delay
+        setTimeout(() => setState(prev => ({ ...prev, generationSteps: [], _generationPhase: undefined, _planItems: [], _buildLogs: [], _thinkingLines: [] } as any)), 4000);
       },
 
       onConversationalReply: (reply) => {
         setRetryCount(0);
         setState(prev => ({
           ...prev, isGenerating: false, aiStatusText: null, generationSteps: [],
+          _generationPhase: undefined, _planItems: [], _buildLogs: [], _thinkingLines: [],
           history: [...prev.history, { id: `conv_${Date.now()}`, role: 'assistant', content: reply, timestamp: Date.now() }],
-        }));
+        } as any));
         persistMessage(state.projectId, 'assistant', reply, false, 0, 'agent');
         refetchCredits();
       },

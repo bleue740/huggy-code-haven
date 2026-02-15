@@ -15,6 +15,7 @@ import { ChatMessage } from './ChatMessage';
 import { FileTree } from './FileTree';
 import { CodeEditor } from './CodeEditor';
 import { GenerationSteps } from './GenerationSteps';
+import { GenerationPhaseDisplay, type PhaseType, type PlanItem, type BuildLog } from './GenerationPhaseDisplay';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { useNavigate } from 'react-router-dom';
 
@@ -444,38 +445,24 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
               {state.isGenerating && (
                 <div className="group animate-in slide-in-from-bottom-2 duration-300">
                   <div className="flex items-start gap-3">
-                    <div className={`shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-white shadow-lg ${
-                      (state.chatMode || 'agent') === 'plan'
-                        ? 'bg-gradient-to-br from-purple-500 to-purple-600 shadow-purple-500/20'
-                        : 'bg-gradient-to-br from-blue-500 to-blue-600 shadow-blue-500/20'
-                    }`}>
+                    <div className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-white shadow-lg bg-gradient-to-br from-blue-500 to-blue-600 shadow-blue-500/20">
                       <Bot size={14} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-2">
-                        <span className={`text-[10px] font-bold uppercase tracking-tight ${
-                          (state.chatMode || 'agent') === 'plan' ? 'text-purple-400' : 'text-blue-400'
-                        }`}>
-                          {(state.chatMode || 'agent') === 'plan' ? 'BLINK · PLAN' : 'BLINK'}
-                        </span>
-                        <span className={`text-[9px] font-mono font-bold ml-auto ${
-                          (state.chatMode || 'agent') === 'plan' ? 'text-purple-400' : 'text-blue-400'
-                        }`}>{elapsedSeconds}s</span>
+                        <span className="text-[10px] font-bold uppercase tracking-tight text-blue-400">BLINK</span>
                       </div>
 
-                      {/* Generation Steps */}
-                      {(state.generationSteps?.length ?? 0) > 0 ? (
-                        <GenerationSteps steps={state.generationSteps || []} elapsedSeconds={elapsedSeconds} />
-                      ) : (
-                        <div className="relative bg-gradient-to-br from-[#1a1a1a] to-[#151515] border border-[#333] rounded-xl p-4 shadow-xl overflow-hidden">
-                          <div className="relative flex items-center gap-3">
-                            <TypingDots />
-                            <span className="text-[13px] text-neutral-200 font-medium">
-                              {state.aiStatusText || ((state.chatMode || 'agent') === 'plan' ? 'Réflexion…' : 'Thinking...')}
-                            </span>
-                          </div>
-                        </div>
-                      )}
+                      {/* New 4-phase display */}
+                      <GenerationPhaseDisplay
+                        phase={(state as any)._generationPhase || 'thinking'}
+                        thinkingLines={(state as any)._thinkingLines}
+                        planItems={(state as any)._planItems}
+                        buildLogs={(state as any)._buildLogs}
+                        errorMessage={undefined}
+                        elapsedSeconds={elapsedSeconds}
+                        onStop={onStop}
+                      />
 
                       {onStop && (
                         <div className="flex justify-end mt-3">
