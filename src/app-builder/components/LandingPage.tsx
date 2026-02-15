@@ -454,14 +454,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
               <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider mb-4">Company</h4>
               <ul className="space-y-2 text-sm text-gray-500 dark:text-neutral-400">
                 <li><Link to="/about" className="hover:text-gray-900 dark:hover:text-white transition-colors">About</Link></li>
-                <li><span className="cursor-default">Contact</span></li>
+                <li><Link to="/contact" className="hover:text-gray-900 dark:hover:text-white transition-colors">Contact</Link></li>
               </ul>
             </div>
             <div>
               <h4 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider mb-4">Legal</h4>
               <ul className="space-y-2 text-sm text-gray-500 dark:text-neutral-400">
-                <li><span className="cursor-default">Terms</span></li>
-                <li><span className="cursor-default">Privacy</span></li>
+                <li><Link to="/terms" className="hover:text-gray-900 dark:hover:text-white transition-colors">Terms</Link></li>
+                <li><Link to="/privacy" className="hover:text-gray-900 dark:hover:text-white transition-colors">Privacy</Link></li>
+                <li><Link to="/legal" className="hover:text-gray-900 dark:hover:text-white transition-colors">Legal Notice</Link></li>
               </ul>
             </div>
           </div>
