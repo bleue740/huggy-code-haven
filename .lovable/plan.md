@@ -1,94 +1,122 @@
 
 
-# Pricing Page & Landing Pricing: Alignement Lovable.dev + Stripe Integration
+# Clonage exact du pricing Lovable.dev pour Blink
 
 ## Objectif
 
-Reproduire le modele de pricing de Lovable.dev avec 4 plans (Free, Pro, Business, Enterprise), des fonctionnalites realistes alignees sur Blink, un toggle annuel/mensuel fonctionnel, et une integration Stripe reelle pour les paiements. Unifier les deux endroits ou le pricing apparait (landing page + page /pricing).
+Reproduire pixel-perfect le pricing de Lovable.dev : memes prix, memes features, memes interactions (toggle annuel par plan, selecteur de credits, top-up), adapte au branding Blink.
 
-## Ce qui change
+## Changements detailles
 
-### 1. Activer Stripe
+### 1. Refonte de `src/config/plans.ts`
 
-Utiliser l'outil Stripe de Lovable pour connecter un compte Stripe au projet. Cela permettra de creer des produits, prix, et sessions de checkout reels.
+Remplacer les plans actuels par les plans exacts de Lovable.dev :
 
-### 2. Creer une edge function `create-checkout`
+**Free** - $0/mois
+- 5 daily credits (up to 30/month)
+- Public projects
+- Unlimited collaborators
+- 5 blink.app domains
+- Cloud
 
-Une edge function qui :
-- Recoit le `planId` et `billingInterval` (monthly/yearly)
-- Verifie l'authentification de l'utilisateur
-- Cree ou recupere un Stripe Customer lie au user
-- Cree une Checkout Session Stripe avec le bon price ID
-- Retourne l'URL de checkout pour redirection
+**Pro** - $25/mois (toggle annuel par plan, pas global)
+- 100 monthly credits (selecteur: 100, 200, 500)
+- 5 daily credits (up to 150/month)
+- Usage-based Cloud + AI
+- Credit rollovers
+- On-demand credit top-ups
+- Unlimited blink.app domains
+- Custom domains
+- Remove the Blink badge
+- User roles & permissions
 
-### 3. Creer une edge function `stripe-webhook`
+**Business** - $50/mois (toggle annuel par plan)
+- 100 monthly credits (selecteur: 100, 200, 500)
+- Internal publish
+- SSO
+- Team workspace
+- Personal projects
+- Design templates
+- Role-based access
+- Security center
 
-Recoit les evenements Stripe (`checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted`) et met a jour la table `subscriptions` en consequence.
+**Enterprise** - Custom
+- Dedicated support
+- Onboarding services
+- Design systems
+- SCIM
+- Support for custom connectors
+- Publishing controls
+- Sharing controls
+- Audit logs (coming soon!)
 
-### 4. Refactorer les plans dans un fichier partage
+Ajouter une configuration de credit tiers :
 
-Creer `src/config/plans.ts` avec les 4 plans et leurs features, utilise a la fois par la landing page et la page /pricing. Les plans seront :
+```text
+Credit tiers pour Pro et Business:
+- 100 credits/month -> prix de base
+- 200 credits/month -> +$15/mois
+- 500 credits/month -> +$40/mois
+```
 
-- **Free** : 5 credits quotidiens (max 30/mois), projets publics, 1 domaine blink.app, Cloud
-- **Pro** ($25/mois ou $20/mois annuel) : 100 credits/mois, 5 credits quotidiens (max 150/mois), domaines illimites, domaines personnalises, export ZIP, retrait du badge
-- **Business** ($50/mois ou $40/mois annuel) : 100 credits/mois, publish interne, SSO, workspace equipe, templates de design, controle d'acces par roles, centre de securite
-- **Enterprise** (sur devis) : support dedie, onboarding, systemes de design, SCIM, controles de publication
+Ajouter les FAQ alignees sur Lovable :
+- What is Blink and how does it work?
+- What does the free plan include?
+- What is a credit?
+- Who owns the projects and code?
+- How much does it cost to use?
+- Do you offer a student discount?
 
-### 5. Refactorer `src/pages/Pricing.tsx`
+### 2. Refonte de `src/pages/Pricing.tsx`
 
-- Layout en grille 4 colonnes comme Lovable.dev (fond clair/neutre, pas dark)
-- Chaque plan : nom, description, prix barre + prix promo si annuel, toggle annuel par plan, bouton CTA
-- Pro et Business : selecteur de credits (dropdown) avec prix ajustes
-- Enterprise : bouton "Book a demo" qui redirige vers un formulaire de contact
-- Free : bouton "Get Started" qui redirige vers /auth
-- Pro/Business : bouton "Get Started" qui appelle `create-checkout` et redirige vers Stripe
-- Section FAQ en bas (accordeon)
-- Section "Student discount" avec lien
+Reproduire le layout exact de Lovable.dev :
 
-### 6. Mettre a jour la landing page (`LandingPage.tsx`)
+- **Header** : branding Blink + Sign in
+- **Titre** : "Des plans pour chaque ambition" (ou titre equivalent)
+- **Grille 4 colonnes** fond clair, cartes blanches avec bordures subtiles
+- **Toggle annuel** : un switch par plan (Pro et Business seulement), pas un toggle global. Quand annuel est actif, afficher le prix barre + "first month, then $X/mo"
+- **Selecteur de credits** : dropdown sous le bouton CTA pour Pro et Business (100 / 200 / 500 credits par mois), le prix s'ajuste dynamiquement
+- **Boutons CTA** : Free -> "Get Started" (auth), Pro/Business -> "Get Started" (checkout placeholder), Enterprise -> "Book a demo" (mailto)
+- **Section Student Discount** avec lien
+- **Section FAQ** en accordeon
 
-Remplacer les 3 plans inline par les 4 plans du fichier partage `plans.ts`. Garder le design compact (cartes) mais avec les bons prix et features. Les boutons "Choose X" redirigent vers `/pricing` pour les plans payants.
+### 3. Mise a jour de `src/app-builder/components/LandingPage.tsx`
 
-### 7. Coherence dans le SaaS
+Mettre a jour le tableau `plans` (lignes 153-158) pour correspondre aux vrais plans :
 
-- Le header de la page /pricing utilise le meme branding Blink
-- Les boutons d'upgrade dans l'app (sidebar, modales) pointent vers `/pricing`
-- La table `subscriptions` est deja prete avec les champs `stripe_customer_id`, `stripe_subscription_id`, `plan`, `status`, `current_period_end`
+- Free: $0, features exactes
+- Pro: $25 (highlight, badge "Popular"), features exactes
+- Business: $50, features exactes
+- Enterprise: Custom, features exactes
+
+Changer les labels en anglais pour correspondre a Lovable.
+
+## Fichiers modifies
+
+- `src/config/plans.ts` : refonte complete avec plans exacts, credit tiers, FAQ
+- `src/pages/Pricing.tsx` : refonte complete avec toggle par plan, selecteur de credits, layout Lovable
+- `src/app-builder/components/LandingPage.tsx` : mise a jour du tableau plans (lignes 153-158)
 
 ## Details techniques
 
-**Fichiers a creer :**
-- `src/config/plans.ts` — configuration centralisee des plans
-- `supabase/functions/create-checkout/index.ts` — creation de session Stripe
-- `supabase/functions/stripe-webhook/index.ts` — webhook Stripe
-
-**Fichiers a modifier :**
-- `src/pages/Pricing.tsx` — refonte complete alignee sur Lovable.dev
-- `src/app-builder/components/LandingPage.tsx` — mise a jour des plans inline (lignes 153-157)
-- `src/App.tsx` — aucun changement necessaire (route /pricing existe deja)
-
-**Architecture du checkout :**
+**Credit tier pricing :**
 
 ```text
-User clique "Get Started" (Pro/Business)
-       |
-       v
-Frontend appelle create-checkout edge function
-       |
-       v
-Edge function cree Stripe Checkout Session
-       |
-       v
-User redirige vers Stripe hosted checkout
-       |
-       v
-Stripe webhook -> met a jour subscriptions table
-       |
-       v
-User revient sur /app avec plan actif
+Tier       | Base   | +100cr | +400cr
+Pro        | $25    | $40    | $65
+Business   | $50    | $65    | $90
 ```
 
-**Prerequis :**
-- Activation de Stripe via l'outil Lovable (cle secrete)
-- Creation des produits/prix dans Stripe via l'edge function ou manuellement
+**Toggle annuel par plan :**
+Chaque plan Pro/Business a son propre switch "Annual". Quand actif :
+- Prix barre (mensuel) + prix reduit affiche
+- Texte "first month, then $X/mo"
+
+**Selecteur de credits :**
+Un composant Select sous le bouton CTA de Pro et Business avec les options :
+- 100 credits / month
+- 200 credits / month  
+- 500 credits / month
+
+Le prix affiche s'ajuste en temps reel.
 
