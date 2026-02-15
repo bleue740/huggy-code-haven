@@ -114,16 +114,13 @@ export default function CreditsPage() {
           <span className="text-lg font-bold tracking-tight text-white">Blink</span>
         </Link>
         <div className="flex items-center gap-4">
-          <Link
-            to="/pricing"
-            className="text-sm font-medium text-gray-400 hover:text-white transition-colors"
-          >
+          <Link to="/pricing" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">
             Pricing
           </Link>
-          <Link
-            to="/auth"
-            className="text-sm font-semibold text-gray-400 hover:text-white transition-colors"
-          >
+          <Link to="/about" className="text-sm font-medium text-gray-400 hover:text-white transition-colors hidden sm:inline-block">
+            About
+          </Link>
+          <Link to="/auth" className="text-sm font-semibold text-gray-400 hover:text-white transition-colors">
             Sign in
           </Link>
         </div>
@@ -193,7 +190,7 @@ export default function CreditsPage() {
             et une plus grande efficacité par message, rendant ainsi Blink plus abordable.
           </motion.p>
 
-          <motion.div variants={fadeUp} custom={3} className="mt-6 rounded-xl border border-white/10 overflow-hidden">
+          <motion.div variants={fadeUp} custom={3} className="mt-6 rounded-xl border border-white/10 overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="border-white/10 hover:bg-transparent">
