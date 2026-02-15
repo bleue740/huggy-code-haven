@@ -13,6 +13,8 @@ import { useAIChat, extractCodeFromResponse, extractMultiFileFromResponse } from
 import { useOrchestrator } from './hooks/useOrchestrator';
 import { VirtualFS } from './engine/VirtualFS';
 import { ProjectContext } from './engine/ProjectContext';
+import { useYjsCollaboration } from './hooks/useYjsCollaboration';
+import { CollabIndicator } from './components/CollabIndicator';
 import { getPhaseLabel, isConversationActive } from './engine/ConversationStateMachine';
 import { AppState, Message, AISuggestion, SecurityResult, BackendNeed, GenerationStep } from './types';
 import { analyzeCodeSecurity } from './utils/securityAnalyzer';
@@ -135,6 +137,35 @@ const App: React.FC = () => {
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showCollabPanel, setShowCollabPanel] = useState(false);
   const [isSharingPreview, setIsSharingPreview] = useState(false);
+
+  // Yjs collaboration
+  const {
+    isConnected: collabConnected,
+    connectedUsers: collabUsers,
+    collabExtension,
+    syncInitialContent,
+    observeFile,
+  } = useYjsCollaboration(state.projectId, state.activeFile);
+
+  // Sync file content into Yjs when files change
+  useEffect(() => {
+    if (!state.projectId) return;
+    Object.entries(state.files).forEach(([name, content]) => {
+      syncInitialContent(name, content);
+    });
+  }, [state.projectId, syncInitialContent]);
+
+  // Observe Yjs changes and sync back to state
+  useEffect(() => {
+    if (!state.projectId || !state.activeFile) return;
+    const unsub = observeFile(state.activeFile, (content) => {
+      setState(prev => {
+        if (prev.files[prev.activeFile] === content) return prev;
+        return { ...prev, files: { ...prev.files, [prev.activeFile]: content } };
+      });
+    });
+    return unsub;
+  }, [state.projectId, state.activeFile, observeFile]);
 
   useEffect(() => {
     if (!creditsLoading) {
@@ -936,24 +967,30 @@ const App: React.FC = () => {
           onRedo={handleRedo}
           canUndo={canUndo}
           canRedo={canRedo}
+          collabExtension={collabExtension}
         />
         <div className="flex-1 flex flex-col min-w-0">
-          <TopNav
-            onPublish={handlePublish}
-            onUpgrade={handleUpgrade}
-            onRunSecurity={handleRunSecurity}
-            onExportZip={handleExportZip}
-            onToggleCodeView={() => setState(prev => ({ ...prev, isCodeView: !prev.isCodeView }))}
-            onShowVersionHistory={handleShowVersionHistory}
-            onShowCollaboration={() => setShowCollabPanel(true)}
-            onGitHubSync={() => setShowGitHubModal(true)}
-            onSharePreview={handleSharePreview}
-            isCodeView={state.isCodeView}
-            isGenerating={state.isGenerating}
-            isSharingPreview={isSharingPreview}
-            projectName={state.projectName}
-            deployedUrl={state.deployedUrl}
-          />
+          <div className="flex items-center">
+            <TopNav
+              onPublish={handlePublish}
+              onUpgrade={handleUpgrade}
+              onRunSecurity={handleRunSecurity}
+              onExportZip={handleExportZip}
+              onToggleCodeView={() => setState(prev => ({ ...prev, isCodeView: !prev.isCodeView }))}
+              onShowVersionHistory={handleShowVersionHistory}
+              onShowCollaboration={() => setShowCollabPanel(true)}
+              onGitHubSync={() => setShowGitHubModal(true)}
+              onSharePreview={handleSharePreview}
+              isCodeView={state.isCodeView}
+              isGenerating={state.isGenerating}
+              isSharingPreview={isSharingPreview}
+              projectName={state.projectName}
+              deployedUrl={state.deployedUrl}
+            />
+            <div className="pr-3">
+              <CollabIndicator isConnected={collabConnected} connectedUsers={collabUsers} />
+            </div>
+          </div>
           <CodePreview
             code={concatenatedCode}
             files={state.files}
