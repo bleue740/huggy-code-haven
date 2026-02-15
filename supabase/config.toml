@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.daily-credits-cron]
 verify_jwt = false
+
+[functions.topup-credits]
+verify_jwt = false

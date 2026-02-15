@@ -14,6 +14,7 @@ import CreditsPage from "./pages/Credits";
 import PublishedDeploymentPage from "./pages/PublishedDeployment";
 import SettingsPage from "./pages/Settings";
 import AboutPage from "./pages/About";
+import BillingPage from "./pages/Billing";
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,7 @@ function AnimatedRoutes() {
         <Route path="/credits" element={<CreditsPage />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/account/billing" element={<BillingPage />} />
         <Route path="/p/:deploymentId" element={<PublishedDeploymentPage />} />
         <Route path="/app" element={<Index />} />
         <Route path="/" element={<Index />} />
