@@ -24,6 +24,7 @@ export type Database = {
           id: string
           project_id: string
           role: string
+          snapshot_id: string | null
           user_id: string
         }
         Insert: {
@@ -35,6 +36,7 @@ export type Database = {
           id?: string
           project_id: string
           role: string
+          snapshot_id?: string | null
           user_id: string
         }
         Update: {
@@ -46,6 +48,7 @@ export type Database = {
           id?: string
           project_id?: string
           role?: string
+          snapshot_id?: string | null
           user_id?: string
         }
         Relationships: [
@@ -54,6 +57,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "project_snapshots"
             referencedColumns: ["id"]
           },
         ]

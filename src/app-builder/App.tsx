@@ -380,16 +380,42 @@ const App: React.FC = () => {
 
         toast.success(`Your app is ready — ${files.length} file(s) applied.`);
 
-        // Save snapshot
+        // Save snapshot and link to message
         (async () => {
           try {
             const { data: userData } = await supabase.auth.getUser();
             if (userData.user?.id && state.projectId) {
-              await supabase.from("project_snapshots" as any).insert({
+              const newFiles: Record<string, string> = { ...state.files };
+              for (const f of files) newFiles[f.path] = f.content;
+              for (const d of deletedFiles) { if (d !== "App.tsx") delete newFiles[d]; }
+
+              const { data: snapshot } = await supabase.from("project_snapshots").insert({
                 project_id: state.projectId, user_id: userData.user.id,
                 label: `Agent: ${files.map((f) => f.path).join(", ")}`,
-                files_snapshot: state.files,
-              } as any);
+                files_snapshot: newFiles,
+              } as any).select('id').single();
+
+              // Attach snapshotId to the last message in state
+              if (snapshot?.id) {
+                setState((prev) => {
+                  const lastMsg = prev.history[prev.history.length - 1];
+                  if (lastMsg?.codeApplied && !lastMsg.snapshotId) {
+                    return {
+                      ...prev,
+                      history: prev.history.map((m, i) =>
+                        i === prev.history.length - 1 ? { ...m, snapshotId: snapshot.id } : m
+                      ),
+                    };
+                  }
+                  return prev;
+                });
+
+                // Also persist snapshot_id in chat_messages
+                persistMessage(state.projectId, "assistant",
+                  `Agent pipeline: ${files.map((f) => f.path).join(", ")}`,
+                  true, totalLines, "agent"
+                );
+              }
             }
           } catch { /* ignore */ }
         })();
@@ -397,7 +423,7 @@ const App: React.FC = () => {
         // Push undo history
         fileHistory.pushSnapshot(state.files);
 
-        persistMessage(state.projectId, "assistant", `Agent pipeline: ${files.map((f) => f.path).join(", ")}`, true, totalLines, "agent");
+        // persistMessage is now called inside the snapshot save block above
         refetchCredits();
         fetchSuggestions();
 

@@ -18,6 +18,8 @@ import { GenerationSteps } from './GenerationSteps';
 import { GenerationPhaseDisplay, type PhaseType, type PlanItem, type BuildLog } from './GenerationPhaseDisplay';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import {
   Conversation,
   ConversationContent,
@@ -31,6 +33,13 @@ import {
   CheckpointIcon,
   CheckpointTrigger,
 } from '@/components/ai-elements/checkpoint';
+import {
+  Confirmation,
+  ConfirmationTitle,
+  ConfirmationRequest,
+  ConfirmationActions,
+  ConfirmationAction,
+} from '@/components/ai-elements/confirmation';
 interface SidebarProps {
   state: AppState;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
@@ -67,20 +76,7 @@ const getSuggestionIcon = (icon: string) => {
   }
 };
 
-const TypingDots = () => (
-  <span className="inline-flex gap-[2px]">
-    <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-[bounce_1s_ease-in-out_infinite]" style={{ animationDelay: '0ms' }} />
-    <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-[bounce_1s_ease-in-out_infinite]" style={{ animationDelay: '150ms' }} />
-    <span className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-[bounce_1s_ease-in-out_infinite]" style={{ animationDelay: '300ms' }} />
-  </span>
-);
-
-const ShimmerLine = ({ width = 'w-full', delay = 0 }: { width?: string; delay?: number }) => (
-  <div
-    className={`h-3 ${width} rounded bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 dark:from-[#1a1a1a] dark:via-[#333] dark:to-[#1a1a1a] bg-[length:200%_100%] animate-shimmer`}
-    style={{ animationDelay: `${delay}ms` }}
-  />
-);
+// TypingDots and ShimmerLine removed — replaced by Shimmer from ai-elements
 
 export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
   ({ state, setState, onSend, onStop, onScreenshotRequest, onToggleVisualEdit, onShowHistory, onNewChat, onNewProject, onRenameProject, onBackToLanding, onConnectSupabase, onEnableFirecrawl, onDismissBackendHints, onApprovePlan, onUndo, onRedo, canUndo, canRedo, collabExtension, onRestoreSnapshot }, ref) => {
@@ -96,6 +92,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
     const [showProjectMenu, setShowProjectMenu] = useState(false);
     const [isRenaming, setIsRenaming] = useState(false);
     const [renameValue, setRenameValue] = useState('');
+    const [pendingDeleteFile, setPendingDeleteFile] = useState<string | null>(null);
     const chatInputRef = useRef<HTMLTextAreaElement>(null);
     const attachMenuRef = useRef<HTMLDivElement>(null);
     const projectMenuRef = useRef<HTMLDivElement>(null);
@@ -168,12 +165,22 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
 
     const handleDeleteFile = useCallback((name: string) => {
       if (name === 'App.tsx') return;
+      setPendingDeleteFile(name);
+    }, []);
+
+    const confirmDeleteFile = useCallback(() => {
+      if (!pendingDeleteFile) return;
       setState(prev => {
         const newFiles = { ...prev.files };
-        delete newFiles[name];
-        return { ...prev, files: newFiles, activeFile: prev.activeFile === name ? 'App.tsx' : prev.activeFile };
+        delete newFiles[pendingDeleteFile];
+        return { ...prev, files: newFiles, activeFile: prev.activeFile === pendingDeleteFile ? 'App.tsx' : prev.activeFile };
       });
-    }, [setState]);
+      setPendingDeleteFile(null);
+    }, [pendingDeleteFile, setState]);
+
+    const cancelDeleteFile = useCallback(() => {
+      setPendingDeleteFile(null);
+    }, []);
 
     const handleSelectFile = useCallback((name: string) => {
       setState(prev => ({ ...prev, activeFile: name }));
@@ -364,6 +371,20 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                 <span className="text-[10px] text-gray-400 dark:text-neutral-600 font-mono">{state.activeFile}</span>
               </div>
               <FileTree files={state.files} activeFile={state.activeFile} onSelectFile={handleSelectFile} onCreateFile={handleCreateFile} onDeleteFile={handleDeleteFile} />
+              {/* Confirmation for file deletion */}
+              {pendingDeleteFile && (
+                <Confirmation state="approval-requested" approval={{ id: `delete-${pendingDeleteFile}` }}>
+                  <ConfirmationTitle>
+                    Delete <code className="font-mono text-xs bg-muted px-1 rounded">{pendingDeleteFile}</code>? This cannot be undone.
+                  </ConfirmationTitle>
+                  <ConfirmationRequest>
+                    <ConfirmationActions>
+                      <ConfirmationAction variant="destructive" onClick={confirmDeleteFile}>Delete</ConfirmationAction>
+                      <ConfirmationAction variant="outline" onClick={cancelDeleteFile}>Cancel</ConfirmationAction>
+                    </ConfirmationActions>
+                  </ConfirmationRequest>
+                </Confirmation>
+              )}
               <div className="flex-1 overflow-hidden">
                 <CodeEditor value={state.files[state.activeFile] ?? ''} onChange={handleCodeChange} collabExtension={collabExtension} />
               </div>
@@ -427,16 +448,28 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                           <MessageContent>{msg.content}</MessageContent>
                         )}
                       </Message>
-                      {/* Checkpoint after code-applied messages */}
                       {msg.codeApplied && onRestoreSnapshot && (
                         <Checkpoint>
                           <CheckpointIcon />
                           <CheckpointTrigger
                             tooltip="Restore workspace and chat to this point"
-                            onClick={() => {
-                              // Build files snapshot from history up to this point
-                              const snapshotFiles = { ...state.files };
-                              onRestoreSnapshot(snapshotFiles);
+                            onClick={async () => {
+                              // Load snapshot from DB if snapshotId is available
+                              if (msg.snapshotId) {
+                                try {
+                                  const { data } = await supabase
+                                    .from('project_snapshots')
+                                    .select('files_snapshot')
+                                    .eq('id', msg.snapshotId)
+                                    .single();
+                                  if (data?.files_snapshot) {
+                                    onRestoreSnapshot(data.files_snapshot as Record<string, string>);
+                                    toast.success('Checkpoint restored from snapshot');
+                                    return;
+                                  }
+                                } catch { /* fallback to current files */ }
+                              }
+                              onRestoreSnapshot({ ...state.files });
                             }}
                           >
                             Restore checkpoint

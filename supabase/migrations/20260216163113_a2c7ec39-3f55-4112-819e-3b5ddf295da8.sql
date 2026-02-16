@@ -1,0 +1,1 @@
+ALTER TABLE chat_messages ADD COLUMN snapshot_id uuid REFERENCES project_snapshots(id);
