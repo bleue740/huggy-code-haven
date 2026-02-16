@@ -183,7 +183,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
       </div>
 
       {/* Navbar */}
-      <nav className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between sticky top-0 bg-white/80 dark:bg-[#050505]/80 backdrop-blur-md z-50 border-b border-gray-200/50 dark:border-white/5 transition-colors">
+      <header className="sticky top-0 z-50 bg-white/80 dark:bg-[#050505]/80 backdrop-blur-md border-b border-gray-200/50 dark:border-white/5 transition-colors">
+      <nav className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
         <div className="flex items-center gap-12">
           <div className="text-2xl font-black tracking-tighter flex items-center gap-2 cursor-pointer group">
             <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
@@ -215,6 +216,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onStart, isAuthenticat
           </button>
         </div>
       </nav>
+      </header>
 
       {/* Mobile Menu Overlay */}
       {isMenuOpen && (
