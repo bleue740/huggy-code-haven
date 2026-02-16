@@ -29,18 +29,22 @@ const FRAMER_MOTION_CDN = "https://unpkg.com/framer-motion@11.18.0/dist/framer-m
 const REACT_ROUTER_CDN = "https://unpkg.com/react-router-dom@6.30.1/dist/umd/react-router-dom.production.min.js";
 const DATE_FNS_CDN = "https://unpkg.com/date-fns@3.6.0/cdn.min.js";
 
-// Build separate <script> tags per file: components first, App.tsx last
 function buildMultiScriptTags(files?: Record<string, string>, fallbackCode?: string): string {
   if (!files || Object.keys(files).length <= 1) {
     const code = files?.['App.tsx'] || fallbackCode || '';
-    return `<script type="text/babel" data-type="module">\n    ${code}\n  </script>`;
+    return `<script type="text/babel" data-type="module">
+    ${code}
+  </script>`;
   }
   const entries = Object.entries(files);
   const appEntry = entries.find(([n]) => n === 'App.tsx');
   const others = entries.filter(([n]) => n !== 'App.tsx').sort(([a], [b]) => a.localeCompare(b));
   const ordered = [...others, ...(appEntry ? [appEntry] : [])];
   return ordered.map(([name, code]) =>
-    `<!-- ${name} -->\n  <script type="text/babel" data-type="module">\n    ${code}\n  </script>`
+    `<!-- ${name} -->
+  <script type="text/babel" data-type="module">
+    ${code}
+  </script>`
   ).join('\n  ');
 }
 
@@ -123,16 +127,13 @@ function buildIframeHtml(tsxCode: string, supabaseUrl?: string | null, supabaseA
   <script src="${RECHARTS_CDN}"></script>
   <script src="${LUCIDE_CDN}"></script>
   <script>
-    // Expose lucide-react as 'lucide' global for generated code compatibility
     if (window.LucideReact) window.lucide = window.LucideReact;
   </script>
   <script src="${FRAMER_MOTION_CDN}"></script>
   <script src="${DATE_FNS_CDN}"></script>
   <script src="${REACT_ROUTER_CDN}"></script>
   <script>
-    // Expose framer-motion globals
     if (window.Motion) window.motion = window.Motion;
-    // Expose react-router-dom globals
     if (window.ReactRouterDOM) window.ReactRouter = window.ReactRouterDOM;
   </script>
   ${supabaseScript}
@@ -158,7 +159,6 @@ function buildIframeHtml(tsxCode: string, supabaseUrl?: string | null, supabaseA
       if (root) {
         root.innerHTML = '<div class="error-container"><strong>Erreur de rendu:</strong>\\n\\n' + errMsg + '</div>';
       }
-      // Phase 1: Send runtime error to parent for auto-correction
       try {
         window.parent.postMessage({ type: 'runtime_error', error: errMsg }, '*');
       } catch(ex) {}
@@ -205,7 +205,6 @@ export const CodePreview: React.FC<CodePreviewProps> = ({ code, files, isGenerat
 
   const effectiveCode = code?.trim() || DEFAULT_CODE;
 
-  // Detect npm packages needed from user code
   const npmPackages = useMemo(() => extractAllImports(files || {}), [files]);
 
   const iframeSrcDoc = useMemo(() => {
@@ -222,12 +221,12 @@ export const CodePreview: React.FC<CodePreviewProps> = ({ code, files, isGenerat
 
   return (
     <div
-      className={`flex-1 bg-[#050505] p-4 flex flex-col items-center overflow-hidden relative transition-all duration-500 ${
+      className={`flex-1 bg-gray-100 dark:bg-[#050505] p-4 flex flex-col items-center overflow-hidden relative transition-all duration-500 ${
         isFullscreen ? "fixed inset-0 z-[1000] p-0" : ""
       }`}
     >
       {!isFullscreen && (
-        <div className="flex items-center gap-2 mb-4 bg-[#111] p-1.5 rounded-2xl border border-[#1a1a1a] shrink-0 shadow-2xl">
+        <div className="flex items-center gap-2 mb-4 bg-white dark:bg-[#111] p-1.5 rounded-2xl border border-gray-200 dark:border-[#1a1a1a] shrink-0 shadow-2xl">
           <DeviceButton
             active={deviceMode === "desktop"}
             onClick={() => setDeviceMode("desktop")}
@@ -246,10 +245,10 @@ export const CodePreview: React.FC<CodePreviewProps> = ({ code, files, isGenerat
             icon={<Smartphone size={16} />}
             label="Mobile"
           />
-          <div className="w-[1px] h-4 bg-[#1a1a1a] mx-1" />
+          <div className="w-[1px] h-4 bg-gray-200 dark:bg-[#1a1a1a] mx-1" />
           <button
             onClick={() => setIsFullscreen(true)}
-            className="p-2 text-neutral-500 hover:text-white hover:bg-white/5 rounded-lg transition-all"
+            className="p-2 text-gray-400 dark:text-neutral-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-all"
             title="Fullscreen Preview"
           >
             <Maximize2 size={16} />
@@ -267,7 +266,7 @@ export const CodePreview: React.FC<CodePreviewProps> = ({ code, files, isGenerat
       )}
 
       <div
-        className={`bg-[#050505] relative overflow-hidden flex flex-col border border-[#1a1a1a] transition-all duration-700 ease-in-out shadow-[0_0_100px_rgba(0,0,0,0.8)] ${
+        className={`bg-white dark:bg-[#050505] relative overflow-hidden flex flex-col border border-gray-200 dark:border-[#1a1a1a] transition-all duration-700 ease-in-out shadow-[0_0_100px_rgba(0,0,0,0.1)] dark:shadow-[0_0_100px_rgba(0,0,0,0.8)] ${
           isFullscreen ? "w-full h-full" : "rounded-2xl"
         }`}
         style={{
@@ -275,13 +274,13 @@ export const CodePreview: React.FC<CodePreviewProps> = ({ code, files, isGenerat
           height: isFullscreen ? "100%" : currentConfig.height,
         }}
       >
-        <div className="h-11 bg-[#111] border-b border-[#1a1a1a] flex items-center px-4 gap-3 shrink-0">
+        <div className="h-11 bg-gray-50 dark:bg-[#111] border-b border-gray-200 dark:border-[#1a1a1a] flex items-center px-4 gap-3 shrink-0">
           <div className="flex gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-[#333]" />
-            <div className="w-3 h-3 rounded-full bg-[#333]" />
-            <div className="w-3 h-3 rounded-full bg-[#333]" />
+            <div className="w-3 h-3 rounded-full bg-gray-300 dark:bg-[#333]" />
+            <div className="w-3 h-3 rounded-full bg-gray-300 dark:bg-[#333]" />
+            <div className="w-3 h-3 rounded-full bg-gray-300 dark:bg-[#333]" />
           </div>
-          <div className="flex-1 mx-6 bg-[#0a0a0a]/60 rounded-md h-7 border border-[#1a1a1a] flex items-center px-3 text-[11px] text-neutral-500 font-medium overflow-hidden whitespace-nowrap">
+          <div className="flex-1 mx-6 bg-gray-100 dark:bg-[#0a0a0a]/60 rounded-md h-7 border border-gray-200 dark:border-[#1a1a1a] flex items-center px-3 text-[11px] text-gray-500 dark:text-neutral-500 font-medium overflow-hidden whitespace-nowrap">
             blink.cloud/preview
           </div>
           <div className="flex items-center gap-2">
@@ -301,7 +300,7 @@ export const CodePreview: React.FC<CodePreviewProps> = ({ code, files, isGenerat
           <iframe
             key={effectiveCode}
             srcDoc={iframeSrcDoc}
-            className="w-full h-full border-none bg-[#050505]"
+            className="w-full h-full border-none bg-white dark:bg-[#050505]"
             sandbox="allow-scripts allow-same-origin"
             title="Code Preview"
           />
@@ -328,7 +327,7 @@ const DeviceButton = ({
     className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
       active
         ? "bg-blue-600 text-white shadow-lg"
-        : "text-neutral-500 hover:text-white hover:bg-white/5"
+        : "text-gray-500 dark:text-neutral-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5"
     }`}
     title={label}
   >
