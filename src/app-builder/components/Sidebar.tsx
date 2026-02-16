@@ -224,7 +224,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
             <div className="relative" ref={projectMenuRef}>
               <button
                 onClick={() => setShowProjectMenu(!showProjectMenu)}
-                className="flex items-center gap-2 text-white font-medium p-1.5 rounded-lg hover:bg-white/5 transition-colors shrink-0 cursor-pointer"
+                className="flex items-center gap-2 text-gray-900 dark:text-white font-medium p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors shrink-0 cursor-pointer"
               >
                 <div className="w-5 h-5 bg-gradient-to-br from-blue-400 to-blue-600 rounded-md" />
                 <span className="truncate max-w-[140px]">{state.projectName || 'Blink AI'}</span>
@@ -374,7 +374,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                 </button>
               )}
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-[10px] uppercase font-bold tracking-widest text-neutral-600">Active Session</span>
+                <span className="text-[10px] uppercase font-bold tracking-widest text-gray-400 dark:text-neutral-600">Active Session</span>
                 <div className="flex items-center gap-1">
                   {(canUndo || canRedo) && (
                     <div className="flex items-center bg-gray-200/60 dark:bg-black/40 rounded-lg px-1 py-0.5 mr-1">
