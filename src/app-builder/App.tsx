@@ -552,6 +552,7 @@ const App: React.FC = () => {
         canUndo={fileHistory.canUndo}
         canRedo={fileHistory.canRedo}
         collabExtension={collabExtension}
+        onRestoreSnapshot={handleRestoreSnapshot}
       />
       <div className="flex-1 flex flex-col min-w-0">
         <div className="flex items-center">

@@ -26,7 +26,11 @@ import {
   ConversationDownload,
 } from '@/components/ai-elements/conversation';
 import { Message, MessageContent } from '@/components/ai-elements/message';
-
+import {
+  Checkpoint,
+  CheckpointIcon,
+  CheckpointTrigger,
+} from '@/components/ai-elements/checkpoint';
 interface SidebarProps {
   state: AppState;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
@@ -48,6 +52,7 @@ interface SidebarProps {
   canUndo?: boolean;
   canRedo?: boolean;
   collabExtension?: Extension[];
+  onRestoreSnapshot?: (files: Record<string, string>) => void;
 }
 
 const MAX_CHARS = 10000;
@@ -78,7 +83,7 @@ const ShimmerLine = ({ width = 'w-full', delay = 0 }: { width?: string; delay?: 
 );
 
 export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
-  ({ state, setState, onSend, onStop, onScreenshotRequest, onToggleVisualEdit, onShowHistory, onNewChat, onNewProject, onRenameProject, onBackToLanding, onConnectSupabase, onEnableFirecrawl, onDismissBackendHints, onApprovePlan, onUndo, onRedo, canUndo, canRedo, collabExtension }, ref) => {
+  ({ state, setState, onSend, onStop, onScreenshotRequest, onToggleVisualEdit, onShowHistory, onNewChat, onNewProject, onRenameProject, onBackToLanding, onConnectSupabase, onEnableFirecrawl, onDismissBackendHints, onApprovePlan, onUndo, onRedo, canUndo, canRedo, collabExtension, onRestoreSnapshot }, ref) => {
     const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
     const [, ] = useState(false); // kept for hook ordering
@@ -413,14 +418,32 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                     description="Describe the application you want to build."
                   />
                 ) : (
-                  state.history.map((msg) => (
-                    <Message key={msg.id} from={msg.role}>
-                      {msg.role === 'assistant' ? (
-                        <ChatMessage message={msg} onApprovePlan={onApprovePlan} />
-                      ) : (
-                        <MessageContent>{msg.content}</MessageContent>
+                  state.history.map((msg, idx) => (
+                    <React.Fragment key={msg.id}>
+                      <Message from={msg.role}>
+                        {msg.role === 'assistant' ? (
+                          <ChatMessage message={msg} onApprovePlan={onApprovePlan} />
+                        ) : (
+                          <MessageContent>{msg.content}</MessageContent>
+                        )}
+                      </Message>
+                      {/* Checkpoint after code-applied messages */}
+                      {msg.codeApplied && onRestoreSnapshot && (
+                        <Checkpoint>
+                          <CheckpointIcon />
+                          <CheckpointTrigger
+                            tooltip="Restore workspace and chat to this point"
+                            onClick={() => {
+                              // Build files snapshot from history up to this point
+                              const snapshotFiles = { ...state.files };
+                              onRestoreSnapshot(snapshotFiles);
+                            }}
+                          >
+                            Restore checkpoint
+                          </CheckpointTrigger>
+                        </Checkpoint>
                       )}
-                    </Message>
+                    </React.Fragment>
                   ))
                 )}
 
