@@ -5,6 +5,7 @@ export interface Message {
   timestamp: number;
   codeApplied?: boolean;
   codeLineCount?: number;
+  snapshotId?: string;
 }
 
 export interface AISuggestion {
