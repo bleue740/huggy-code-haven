@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Extension } from '@codemirror/state';
 import {
-  ChevronDown, Layout, Plus, ArrowUp, ArrowDown,
+  ChevronDown, Layout, Plus, ArrowUp,
   Code2, MessageSquare, Sparkles, Terminal, User, Bot,
   PanelLeftClose, PanelLeftOpen, MessageSquarePlus,
   Table, CircleDashed, Square, Undo2, Redo2, FileCode2,
@@ -18,6 +18,14 @@ import { GenerationSteps } from './GenerationSteps';
 import { GenerationPhaseDisplay, type PhaseType, type PlanItem, type BuildLog } from './GenerationPhaseDisplay';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { useNavigate } from 'react-router-dom';
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
+  ConversationDownload,
+} from '@/components/ai-elements/conversation';
+import { Message, MessageContent } from '@/components/ai-elements/message';
 
 interface SidebarProps {
   state: AppState;
@@ -73,7 +81,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
   ({ state, setState, onSend, onStop, onScreenshotRequest, onToggleVisualEdit, onShowHistory, onNewChat, onNewProject, onRenameProject, onBackToLanding, onConnectSupabase, onEnableFirecrawl, onDismissBackendHints, onApprovePlan, onUndo, onRedo, canUndo, canRedo, collabExtension }, ref) => {
     const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
-    const [showScrollBottom, setShowScrollBottom] = useState(false);
+    const [, ] = useState(false); // kept for hook ordering
     const [inputHistory, setInputHistory] = useState<string[]>([]);
     const [inputHistoryIndex, setInputHistoryIndex] = useState(-1);
     const [stashedCurrentInput, setStashedCurrentInput] = useState('');
@@ -83,8 +91,6 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
     const [showProjectMenu, setShowProjectMenu] = useState(false);
     const [isRenaming, setIsRenaming] = useState(false);
     const [renameValue, setRenameValue] = useState('');
-    const chatEndRef = useRef<HTMLDivElement>(null);
-    const chatContainerRef = useRef<HTMLDivElement>(null);
     const chatInputRef = useRef<HTMLTextAreaElement>(null);
     const attachMenuRef = useRef<HTMLDivElement>(null);
     const projectMenuRef = useRef<HTMLDivElement>(null);
@@ -136,11 +142,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
       chatInputRef.current.style.height = `${Math.min(chatInputRef.current.scrollHeight, 240)}px`;
     }, [state.currentInput, isCollapsed]);
 
-    useEffect(() => {
-      if (!isCodeView && !isCollapsed) {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }
-    }, [state.history, isCodeView, isCollapsed]);
+    // Auto-scroll now handled by ConversationContent component
 
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -176,12 +178,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
       setState(prev => ({ ...prev, files: { ...prev.files, [prev.activeFile]: value } }));
     }, [setState]);
 
-    const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-      const t = e.currentTarget;
-      setShowScrollBottom(t.scrollHeight - t.scrollTop > t.clientHeight + 100);
-    };
-
-    const scrollToBottom = () => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Scroll handling is now managed by Conversation component
 
     const handleSendClick = useCallback(() => {
       const trimmed = state.currentInput.trim();
@@ -367,127 +364,104 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
               </div>
             </div>
           ) : (
-            <div ref={chatContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-2 space-y-6 scrollbar-thin animate-in fade-in duration-200 relative">
-              {showScrollBottom && (
-                <button onClick={scrollToBottom} className="fixed bottom-32 left-[190px] -translate-x-1/2 bg-blue-600 text-white p-2 rounded-full shadow-2xl hover:bg-blue-700 transition-all animate-bounce z-50 border border-white/20">
-                  <ArrowDown size={16} />
-                </button>
-              )}
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-[10px] uppercase font-bold tracking-widest text-gray-400 dark:text-neutral-600">Active Session</span>
-                <div className="flex items-center gap-1">
-                  {(canUndo || canRedo) && (
-                    <div className="flex items-center bg-gray-200/60 dark:bg-black/40 rounded-lg px-1 py-0.5 mr-1">
-                      <button onClick={onUndo} disabled={!canUndo} className="p-1 text-gray-400 dark:text-neutral-500 hover:text-gray-900 dark:hover:text-white disabled:opacity-20 transition-colors" title="Undo (fichiers)">
-                        <Undo2 size={11} />
-                      </button>
-                      <button onClick={onRedo} disabled={!canRedo} className="p-1 text-gray-400 dark:text-neutral-500 hover:text-gray-900 dark:hover:text-white disabled:opacity-20 transition-colors" title="Redo (fichiers)">
-                        <Redo2 size={11} />
-                      </button>
-                    </div>
-                  )}
-                  <button onClick={() => setIsCodeView(true)} className="flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 font-bold transition-colors group">
-                    <Code2 size={12} className="group-hover:scale-110 transition-transform" /> View Code
-                  </button>
-                </div>
-              </div>
-
-              {!state.isGenerating && state.suggestions.length > 0 && (
-                <div className="animate-in fade-in slide-in-from-top-2 duration-500">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Sparkles size={12} className="text-blue-400" />
-                    <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Suggested</span>
-                  </div>
-                  <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
-                    {state.suggestions.map((s) => (
-                      <button key={s.id} onClick={() => handleSuggestionClick(s)} className="shrink-0 w-36 bg-gray-100 dark:bg-[#1a1a1a] border border-gray-200 dark:border-[#333] hover:border-blue-500/50 rounded-xl p-3 text-left transition-all hover:bg-gray-200 dark:hover:bg-[#222] group">
-                        <div className="w-6 h-6 rounded-lg bg-gray-200/60 dark:bg-black/40 flex items-center justify-center mb-2">{getSuggestionIcon(s.icon)}</div>
-                        <div className="text-[11px] font-bold text-gray-900 dark:text-white mb-1 truncate">{s.label}</div>
-                        <div className="text-[9px] text-gray-500 dark:text-neutral-500 line-clamp-2 leading-tight">{s.description}</div>
-                      </button>
-                    ))}
+            <Conversation className="flex-1 overflow-hidden animate-in fade-in duration-200">
+              <ConversationContent className="px-4 py-2 space-y-6">
+                {/* Header bar */}
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground">Active Session</span>
+                  <div className="flex items-center gap-1">
+                    {(canUndo || canRedo) && (
+                      <div className="flex items-center bg-muted rounded-lg px-1 py-0.5 mr-1">
+                        <button onClick={onUndo} disabled={!canUndo} className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-20 transition-colors" title="Undo (fichiers)">
+                          <Undo2 size={11} />
+                        </button>
+                        <button onClick={onRedo} disabled={!canRedo} className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-20 transition-colors" title="Redo (fichiers)">
+                          <Redo2 size={11} />
+                        </button>
+                      </div>
+                    )}
+                    <button onClick={() => setIsCodeView(true)} className="flex items-center gap-1 text-[10px] text-primary hover:text-primary/80 font-bold transition-colors group">
+                      <Code2 size={12} className="group-hover:scale-110 transition-transform" /> View Code
+                    </button>
                   </div>
                 </div>
-              )}
 
-              {state.history.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full py-20 text-center">
-                  <div className="w-16 h-16 bg-gray-100 dark:bg-[#1a1a1a] rounded-2xl flex items-center justify-center mb-4 text-gray-300 dark:text-neutral-700">
-                    <MessageSquarePlus size={32} />
-                  </div>
-                  <h3 className="text-gray-900 dark:text-white font-bold text-sm mb-1">Start a new conversation!</h3>
-                </div>
-              ) : (
-                state.history.map((msg) => (
-                  <div key={msg.id} className="group animate-in slide-in-from-bottom-2 duration-300">
-                    <div className="flex items-start gap-3">
-                      <div className={`shrink-0 w-6 h-6 rounded-md flex items-center justify-center ${msg.role === 'assistant' ? 'bg-blue-600/20 text-blue-400' : 'bg-gray-200 dark:bg-neutral-800 text-gray-500 dark:text-neutral-400'}`}>
-                        {msg.role === 'assistant' ? <Bot size={14} /> : <User size={14} />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[10px] font-bold text-gray-400 dark:text-neutral-500 uppercase tracking-tight">{msg.role === 'assistant' ? 'BLINK' : 'YOU'}</span>
-                          <span className="text-[9px] text-gray-400 dark:text-neutral-600 font-mono">{formatTime(msg.timestamp)}</span>
-                        </div>
-                        {msg.role === 'assistant' ? (
-                          <ChatMessage message={msg} onApprovePlan={onApprovePlan} />
-                        ) : (
-                          <div className="text-[13px] leading-relaxed text-gray-600 dark:text-neutral-400">{msg.content}</div>
-                        )}
-                      </div>
+                {/* Suggestions */}
+                {!state.isGenerating && state.suggestions.length > 0 && (
+                  <div className="animate-in fade-in slide-in-from-top-2 duration-500">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Sparkles size={12} className="text-primary" />
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Suggested</span>
+                    </div>
+                    <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none">
+                      {state.suggestions.map((s) => (
+                        <button key={s.id} onClick={() => handleSuggestionClick(s)} className="shrink-0 w-36 bg-muted border border-border hover:border-primary/50 rounded-xl p-3 text-left transition-all hover:bg-muted/80 group">
+                          <div className="w-6 h-6 rounded-lg bg-muted-foreground/10 flex items-center justify-center mb-2">{getSuggestionIcon(s.icon)}</div>
+                          <div className="text-[11px] font-bold text-foreground mb-1 truncate">{s.label}</div>
+                          <div className="text-[9px] text-muted-foreground line-clamp-2 leading-tight">{s.description}</div>
+                        </button>
+                      ))}
                     </div>
                   </div>
-                ))
-              )}
+                )}
 
-              {/* Backend Connect Card - shown when AI detects backend needs */}
-              {(state.backendHints?.length ?? 0) > 0 && !state.isGenerating && (
-                <BackendConnectCard
-                  needs={state.backendHints!}
-                  onConnectSupabase={() => onConnectSupabase?.()}
-                  onEnableFirecrawl={() => onEnableFirecrawl?.()}
-                  onDismiss={() => onDismissBackendHints?.()}
-                  supabaseConnected={!!state.supabaseUrl}
-                  firecrawlEnabled={state.firecrawlEnabled}
-                />
-              )}
-
-              {state.isGenerating && (
-                <div className="group animate-in slide-in-from-bottom-2 duration-300">
-                  <div className="flex items-start gap-3">
-                    <div className="shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-white shadow-lg bg-gradient-to-br from-blue-500 to-blue-600 shadow-blue-500/20">
-                      <Bot size={14} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-[10px] font-bold uppercase tracking-tight text-blue-400">BLINK</span>
-                      </div>
-
-                      {/* New 4-phase display */}
-                      <GenerationPhaseDisplay
-                        phase={(state as any)._generationPhase || 'thinking'}
-                        thinkingLines={(state as any)._thinkingLines}
-                        planItems={(state as any)._planItems}
-                        buildLogs={(state as any)._buildLogs}
-                        errorMessage={undefined}
-                        elapsedSeconds={elapsedSeconds}
-                        onStop={onStop}
-                      />
-
-                      {onStop && (
-                        <div className="flex justify-end mt-3">
-                          <button onClick={onStop} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-semibold bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 transition-all hover:scale-[1.02]">
-                            <Square size={12} /> Stop
-                          </button>
-                        </div>
+                {/* Messages */}
+                {state.history.length === 0 ? (
+                  <ConversationEmptyState
+                    icon={<MessageSquarePlus size={32} />}
+                    title="Start a new conversation!"
+                    description="Describe the application you want to build."
+                  />
+                ) : (
+                  state.history.map((msg) => (
+                    <Message key={msg.id} from={msg.role}>
+                      {msg.role === 'assistant' ? (
+                        <ChatMessage message={msg} onApprovePlan={onApprovePlan} />
+                      ) : (
+                        <MessageContent>{msg.content}</MessageContent>
                       )}
-                    </div>
-                  </div>
-                </div>
-              )}
+                    </Message>
+                  ))
+                )}
 
-              <div ref={chatEndRef} />
-            </div>
+                {/* Backend Connect Card */}
+                {(state.backendHints?.length ?? 0) > 0 && !state.isGenerating && (
+                  <BackendConnectCard
+                    needs={state.backendHints!}
+                    onConnectSupabase={() => onConnectSupabase?.()}
+                    onEnableFirecrawl={() => onEnableFirecrawl?.()}
+                    onDismiss={() => onDismissBackendHints?.()}
+                    supabaseConnected={!!state.supabaseUrl}
+                    firecrawlEnabled={state.firecrawlEnabled}
+                  />
+                )}
+
+                {/* Generating state */}
+                {state.isGenerating && (
+                  <Message from="assistant">
+                    <GenerationPhaseDisplay
+                      phase={(state as any)._generationPhase || 'thinking'}
+                      thinkingLines={(state as any)._thinkingLines}
+                      planItems={(state as any)._planItems}
+                      buildLogs={(state as any)._buildLogs}
+                      errorMessage={undefined}
+                      elapsedSeconds={elapsedSeconds}
+                      onStop={onStop}
+                    />
+                    {onStop && (
+                      <div className="flex justify-end mt-3">
+                        <button onClick={onStop} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-semibold bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/20 transition-all hover:scale-[1.02]">
+                          <Square size={12} /> Stop
+                        </button>
+                      </div>
+                    )}
+                  </Message>
+                )}
+              </ConversationContent>
+
+              <ConversationScrollButton />
+              <ConversationDownload messages={state.history.map(m => ({ content: m.content, role: m.role }))} />
+            </Conversation>
           )}
         </div>
 
