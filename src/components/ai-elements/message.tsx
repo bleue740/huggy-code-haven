@@ -1,6 +1,12 @@
-import React from "react";
-import { Bot, User } from "lucide-react";
+import React, { useState } from "react";
+import { Bot, User, Copy, RefreshCw, ThumbsUp, ThumbsDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 /* ------------------------------------------------------------------ */
 /*  Message                                                            */
@@ -74,3 +80,96 @@ export const MessageContent: React.FC<MessageContentProps> = ({
     {children}
   </div>
 );
+
+/* ------------------------------------------------------------------ */
+/*  MessageActions                                                     */
+/* ------------------------------------------------------------------ */
+
+export interface MessageActionsProps {
+  content: string;
+  onRegenerate?: () => void;
+  onFeedback?: (type: "up" | "down") => void;
+  className?: string;
+}
+
+export const MessageActions: React.FC<MessageActionsProps> = ({
+  content,
+  onRegenerate,
+  onFeedback,
+  className,
+}) => {
+  const [copied, setCopied] = useState(false);
+  const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* ignore */ }
+  };
+
+  const handleFeedback = (type: "up" | "down") => {
+    setFeedback(type);
+    onFeedback?.(type);
+  };
+
+  const actions = [
+    {
+      key: "copy",
+      tooltip: copied ? "Copied!" : "Copy",
+      icon: copied ? <Check size={13} /> : <Copy size={13} />,
+      onClick: handleCopy,
+      active: copied,
+    },
+    ...(onRegenerate
+      ? [{ key: "regen", tooltip: "Regenerate", icon: <RefreshCw size={13} />, onClick: onRegenerate, active: false }]
+      : []),
+    {
+      key: "up",
+      tooltip: "Helpful",
+      icon: <ThumbsUp size={13} />,
+      onClick: () => handleFeedback("up"),
+      active: feedback === "up",
+    },
+    {
+      key: "down",
+      tooltip: "Not helpful",
+      icon: <ThumbsDown size={13} />,
+      onClick: () => handleFeedback("down"),
+      active: feedback === "down",
+    },
+  ];
+
+  return (
+    <TooltipProvider delayDuration={300}>
+      <div
+        className={cn(
+          "flex items-center gap-0.5 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200",
+          className
+        )}
+      >
+        {actions.map((a) => (
+          <Tooltip key={a.key}>
+            <TooltipTrigger asChild>
+              <button
+                onClick={a.onClick}
+                className={cn(
+                  "p-1.5 rounded-md transition-colors",
+                  a.active
+                    ? "text-primary bg-primary/10"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                )}
+              >
+                {a.icon}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="text-xs">
+              {a.tooltip}
+            </TooltipContent>
+          </Tooltip>
+        ))}
+      </div>
+    </TooltipProvider>
+  );
+};

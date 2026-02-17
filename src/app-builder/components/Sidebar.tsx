@@ -27,7 +27,7 @@ import {
   ConversationScrollButton,
   ConversationDownload,
 } from '@/components/ai-elements/conversation';
-import { Message, MessageContent } from '@/components/ai-elements/message';
+import { Message, MessageContent, MessageActions } from '@/components/ai-elements/message';
 import {
   Checkpoint,
   CheckpointIcon,
@@ -443,7 +443,14 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                     <React.Fragment key={msg.id}>
                       <Message from={msg.role}>
                         {msg.role === 'assistant' ? (
-                          <ChatMessage message={msg} onApprovePlan={onApprovePlan} />
+                          <>
+                            <ChatMessage message={msg} onApprovePlan={onApprovePlan} />
+                            <MessageActions
+                              content={msg.content}
+                              onRegenerate={idx === state.history.length - 1 ? () => onSend(state.history.filter(m => m.role === 'user').pop()?.content) : undefined}
+                              onFeedback={(type) => console.log(`Feedback ${type} for message ${msg.id}`)}
+                            />
+                          </>
                         ) : (
                           <MessageContent>{msg.content}</MessageContent>
                         )}
