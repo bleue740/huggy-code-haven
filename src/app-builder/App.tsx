@@ -595,6 +595,9 @@ const App: React.FC = () => {
             onRenameProject={project.handleRenameProject}
             isCodeView={state.isCodeView}
             isGenerating={state.isGenerating}
+            isDeploying={state.isDeploying}
+            deploymentProgress={state.deploymentProgress}
+            deployStatusText={state.deployStatusText}
             isSharingPreview={isSharingPreview}
             projectName={state.projectName}
             deployedUrl={state.deployedUrl}

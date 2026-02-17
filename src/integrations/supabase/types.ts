@@ -153,6 +153,7 @@ export type Database = {
       }
       deployments: {
         Row: {
+          build_url: string | null
           created_at: string
           custom_domain: string | null
           id: string
@@ -163,6 +164,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          build_url?: string | null
           created_at?: string
           custom_domain?: string | null
           id?: string
@@ -173,6 +175,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          build_url?: string | null
           created_at?: string
           custom_domain?: string | null
           id?: string

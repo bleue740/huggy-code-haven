@@ -20,6 +20,9 @@ interface TopNavProps {
   onRenameProject?: (name: string) => void;
   isCodeView?: boolean;
   isGenerating?: boolean;
+  isDeploying?: boolean;
+  deploymentProgress?: number;
+  deployStatusText?: string | null;
   isSharingPreview?: boolean;
   projectName?: string;
   deployedUrl?: string | null;
@@ -28,8 +31,8 @@ interface TopNavProps {
 export const TopNav: React.FC<TopNavProps> = ({
   onPublish, onUpgrade, onRunSecurity, onExportZip, onToggleCodeView,
   onShowVersionHistory, onShowCollaboration, onGitHubSync, onSharePreview,
-  onRenameProject, isCodeView, isGenerating, isSharingPreview,
-  projectName = 'New Project', deployedUrl,
+  onRenameProject, isCodeView, isGenerating, isDeploying, deploymentProgress,
+  deployStatusText, isSharingPreview, projectName = 'New Project', deployedUrl,
 }) => {
   const [showPublishMenu, setShowPublishMenu] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
@@ -152,14 +155,22 @@ export const TopNav: React.FC<TopNavProps> = ({
         {/* Publish dropdown */}
         <div ref={publishRef} className="relative">
           <button
-            onClick={() => { setShowPublishMenu(!showPublishMenu); setShowShareMenu(false); }}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-blue-500/20 active:scale-95"
+            onClick={() => { if (isDeploying) return; setShowPublishMenu(!showPublishMenu); setShowShareMenu(false); }}
+            disabled={isDeploying}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors shadow-lg active:scale-95 ${isDeploying ? 'bg-amber-500 shadow-amber-500/20 cursor-wait' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'} text-white`}
           >
-            Publish <ChevronDown size={14} />
+            {isDeploying ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                {deployStatusText || `Building ${deploymentProgress || 0}%`}
+              </>
+            ) : (
+              <>Publish <ChevronDown size={14} /></>
+            )}
           </button>
-          {showPublishMenu && (
+          {showPublishMenu && !isDeploying && (
             <div className="absolute right-0 top-full mt-1 w-64 bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-[#333] rounded-xl shadow-2xl z-50 py-1 animate-in fade-in zoom-in-95 duration-150">
-              <DropdownItem icon={<Cloud size={14} />} label="Deploy to Cloud" description="Publish your app live" onClick={() => { onPublish?.(); setShowPublishMenu(false); }} />
+              <DropdownItem icon={<Cloud size={14} />} label="Deploy to Cloud" description="Build & publish your app live" onClick={() => { onPublish?.(); setShowPublishMenu(false); }} />
               <DropdownItem icon={<ShieldCheck size={14} />} label="Run Security Scan" description="Check for vulnerabilities" onClick={() => { onRunSecurity?.(); setShowPublishMenu(false); }} />
               <DropdownItem icon={<Download size={14} />} label="Download ZIP" description="Export your code as ZIP" onClick={() => { onExportZip?.(); setShowPublishMenu(false); }} />
               <div className="h-px bg-gray-200 dark:bg-[#333] mx-2 my-1" />

@@ -71,6 +71,7 @@ export interface AppState {
   isDeploying?: boolean;
   deploymentProgress?: number;
   deployedUrl?: string | null;
+  deployStatusText?: string | null;
   customDomain?: string | null;
   deploymentHistory?: { id: string; url: string; created_at: string }[];
   projectName?: string;
