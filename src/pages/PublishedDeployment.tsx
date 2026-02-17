@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
+// CDN URLs for legacy iframe fallback
 const REACT_CDN = "https://unpkg.com/react@18.3.1/umd/react.production.min.js";
 const REACT_DOM_CDN = "https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js";
 const TAILWIND_CDN = "https://cdn.tailwindcss.com";
@@ -12,6 +13,7 @@ const FRAMER_MOTION_CDN = "https://unpkg.com/framer-motion@11.18.0/dist/framer-m
 const REACT_ROUTER_CDN = "https://unpkg.com/react-router-dom@6.30.1/dist/umd/react-router-dom.production.min.js";
 const DATE_FNS_CDN = "https://unpkg.com/date-fns@3.6.0/cdn.min.js";
 
+// --- Legacy iframe helpers ---
 function buildMultiScriptTags(files?: Record<string, string>, fallbackCode?: string): string {
   if (!files || Object.keys(files).length <= 1) {
     const code = files?.['App.tsx'] || fallbackCode || '';
@@ -33,57 +35,24 @@ function buildPublishedHtml(files: Record<string, string> | null, fallbackCode: 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${title}</title>
-  <meta name="description" content="App built with Blink AI" />
   <script src="${TAILWIND_CDN}"><\/script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            border: '#1a1a1a',
-            background: '#050505',
-            foreground: '#f5f5f5',
-            primary: { DEFAULT: '#2563eb', foreground: '#ffffff' },
-            muted: { DEFAULT: '#171717', foreground: '#a3a3a3' },
-            card: { DEFAULT: '#111111', foreground: '#f5f5f5' },
-            accent: { DEFAULT: '#1d4ed8', foreground: '#ffffff' },
-          }
-        }
-      }
-    };
-  <\/script>
+  <script>tailwind.config={darkMode:'class',theme:{extend:{colors:{border:'#1a1a1a',background:'#050505',foreground:'#f5f5f5',primary:{DEFAULT:'#2563eb',foreground:'#ffffff'},muted:{DEFAULT:'#171717',foreground:'#a3a3a3'},card:{DEFAULT:'#111111',foreground:'#f5f5f5'},accent:{DEFAULT:'#1d4ed8',foreground:'#ffffff'}}}}};<\/script>
   <script src="${REACT_CDN}"><\/script>
   <script src="${REACT_DOM_CDN}"><\/script>
   <script src="${RECHARTS_CDN}"><\/script>
   <script src="${LUCIDE_CDN}"><\/script>
-  <script>if (window.LucideReact) window.lucide = window.LucideReact;<\/script>
+  <script>if(window.LucideReact)window.lucide=window.LucideReact;<\/script>
   <script src="${FRAMER_MOTION_CDN}"><\/script>
   <script src="${DATE_FNS_CDN}"><\/script>
   <script src="${REACT_ROUTER_CDN}"><\/script>
-  <script>
-    if (window.Motion) window.motion = window.Motion;
-    if (window.ReactRouterDOM) window.ReactRouter = window.ReactRouterDOM;
-  <\/script>
+  <script>if(window.Motion)window.motion=window.Motion;if(window.ReactRouterDOM)window.ReactRouter=window.ReactRouterDOM;<\/script>
   <script src="${BABEL_CDN}"><\/script>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #050505; color: #f5f5f5; font-family: 'Inter', system-ui, -apple-system, sans-serif; min-height: 100vh; }
-    #root { min-height: 100vh; }
-    .error-container { padding: 2rem; color: #ef4444; font-family: monospace; font-size: 13px; white-space: pre-wrap; background: #1a0000; min-height: 100vh; }
-  </style>
+  <style>*{margin:0;padding:0;box-sizing:border-box}body{background:#050505;color:#f5f5f5;font-family:'Inter',system-ui,sans-serif;min-height:100vh}#root{min-height:100vh}.error-container{padding:2rem;color:#ef4444;font-family:monospace;font-size:13px;white-space:pre-wrap;background:#1a0000;min-height:100vh}</style>
 </head>
 <body>
   <div id="root"></div>
   ${buildMultiScriptTags(files, fallbackCode)}
-  <script>
-    window.addEventListener('error', function(e) {
-      var root = document.getElementById('root');
-      if (root) {
-        root.innerHTML = '<div class="error-container"><strong>Error:</strong>\\n\\n' + (e.message || 'Unknown error') + '</div>';
-      }
-    });
-  <\/script>
+  <script>window.addEventListener('error',function(e){var r=document.getElementById('root');if(r)r.innerHTML='<div class="error-container"><strong>Error:</strong>\\n\\n'+(e.message||'Unknown error')+'</div>';});<\/script>
 </body>
 </html>`;
 }
@@ -105,8 +74,10 @@ function extractFilesAndCode(snapshot: any): { files: Record<string, string> | n
   return { files: null, code: '' };
 }
 
+// --- Main component ---
 export default function PublishedDeploymentPage() {
   const { deploymentId } = useParams();
+  const [buildUrl, setBuildUrl] = useState<string | null>(null);
   const [filesData, setFilesData] = useState<{ files: Record<string, string> | null; code: string } | null>(null);
   const [projectName, setProjectName] = useState("Blink App");
   const [error, setError] = useState<string | null>(null);
@@ -121,13 +92,13 @@ export default function PublishedDeploymentPage() {
         if (!deploymentId) throw new Error("Missing deployment id");
         const { data, error } = await supabase
           .from("deployments")
-          .select("id, slug, schema_snapshot, project_id")
+          .select("id, slug, schema_snapshot, project_id, build_url")
           .eq("id", deploymentId)
           .maybeSingle();
         if (error) throw error;
         if (!data) throw new Error("Deployment not found");
 
-        // Try to get project name
+        // Get project name
         if ((data as any).project_id) {
           const { data: proj } = await supabase
             .from("projects")
@@ -137,6 +108,15 @@ export default function PublishedDeploymentPage() {
           if (proj && mounted) setProjectName((proj as any).name || "Blink App");
         }
 
+        // If build_url exists, redirect to the static build
+        const dbBuildUrl = (data as any).build_url;
+        if (dbBuildUrl && mounted) {
+          setBuildUrl(dbBuildUrl);
+          setIsLoading(false);
+          return;
+        }
+
+        // Legacy fallback: use iframe with Babel
         const extracted = extractFilesAndCode((data as any).schema_snapshot);
         if (!extracted.files && !extracted.code) throw new Error("No code found in deployment");
         if (mounted) setFilesData(extracted);
@@ -165,7 +145,7 @@ export default function PublishedDeploymentPage() {
     );
   }
 
-  if (error || !iframeSrcDoc) {
+  if (error) {
     return (
       <main className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-6">
         <div className="text-center max-w-md">
@@ -173,7 +153,47 @@ export default function PublishedDeploymentPage() {
             <span className="text-3xl">🔗</span>
           </div>
           <h1 className="text-2xl font-black mb-2">Preview introuvable</h1>
-          <p className="text-sm text-neutral-500 mb-6">{error || "Ce lien de preview n'existe pas ou a expiré."}</p>
+          <p className="text-sm text-neutral-500 mb-6">{error}</p>
+          <a href="/" className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-colors">
+            Retour à l'accueil
+          </a>
+        </div>
+      </main>
+    );
+  }
+
+  // New build: redirect to static URL
+  if (buildUrl) {
+    return (
+      <div className="h-screen w-full flex flex-col bg-[#050505]">
+        <div className="h-10 bg-[#0a0a0a] border-b border-[#1a1a1a] flex items-center justify-between px-4 shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 bg-blue-600 rounded-md flex items-center justify-center">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </div>
+            <span className="text-xs font-bold text-neutral-400">{projectName}</span>
+            <span className="text-[10px] text-green-400 px-2 py-0.5 bg-green-400/10 rounded-full font-medium">Live Build</span>
+          </div>
+          <a href="/" className="text-[10px] font-bold text-neutral-500 hover:text-white transition-colors uppercase tracking-widest">
+            Built with Blink AI
+          </a>
+        </div>
+        <iframe
+          src={buildUrl}
+          className="flex-1 w-full border-none"
+          title={projectName}
+        />
+      </div>
+    );
+  }
+
+  // Legacy fallback: iframe with Babel transpilation
+  if (!iframeSrcDoc) {
+    return (
+      <main className="min-h-screen bg-[#050505] text-white flex items-center justify-center p-6">
+        <div className="text-center max-w-md">
+          <h1 className="text-2xl font-black mb-2">Preview introuvable</h1>
+          <p className="text-sm text-neutral-500 mb-6">Ce lien de preview n'existe pas ou a expiré.</p>
           <a href="/" className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-colors">
             Retour à l'accueil
           </a>
@@ -184,19 +204,15 @@ export default function PublishedDeploymentPage() {
 
   return (
     <div className="h-screen w-full flex flex-col bg-[#050505]">
-      {/* Minimal top bar */}
       <div className="h-10 bg-[#0a0a0a] border-b border-[#1a1a1a] flex items-center justify-between px-4 shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-5 h-5 bg-blue-600 rounded-md flex items-center justify-center">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
           </div>
           <span className="text-xs font-bold text-neutral-400">{projectName}</span>
-          <span className="text-[10px] text-neutral-600 px-2 py-0.5 bg-neutral-800 rounded-full font-medium">Preview</span>
+          <span className="text-[10px] text-neutral-600 px-2 py-0.5 bg-neutral-800 rounded-full font-medium">Legacy Preview</span>
         </div>
-        <a
-          href="/"
-          className="text-[10px] font-bold text-neutral-500 hover:text-white transition-colors uppercase tracking-widest"
-        >
+        <a href="/" className="text-[10px] font-bold text-neutral-500 hover:text-white transition-colors uppercase tracking-widest">
           Built with Blink AI
         </a>
       </div>

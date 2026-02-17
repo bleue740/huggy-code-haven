@@ -16,53 +16,48 @@ export function usePublish(
       return;
     }
 
-    setState((prev) => ({ ...prev, isDeploying: true, deploymentProgress: 10 }));
+    setState((prev) => ({ ...prev, isDeploying: true, deploymentProgress: 5 }));
 
     try {
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData.user?.id;
       if (!userId) throw new Error("Non authentifié");
-      setState((prev) => ({ ...prev, deploymentProgress: 30 }));
 
-      const code = serializeFiles(state.files);
-      const slug = `blink-${state.projectId!.slice(0, 8)}`;
-      setState((prev) => ({ ...prev, deploymentProgress: 50 }));
+      setState((prev) => ({ ...prev, deploymentProgress: 15, deployStatusText: "Transpilation en cours..." }));
 
-      const { data: deployment, error } = await supabase
-        .from("deployments")
-        .upsert(
-          {
-            user_id: userId,
-            project_id: state.projectId,
-            slug,
-            schema_snapshot: { code, files: state.files } as any,
-            url: `/published/${slug}`,
-          } as any,
-          { onConflict: "project_id" },
-        )
-        .select("id, slug, url")
-        .single();
+      // Call the build-project edge function
+      const { data, error } = await supabase.functions.invoke("build-project", {
+        body: {
+          files: state.files,
+          projectId: state.projectId,
+          projectName: state.projectName || "Blink App",
+        },
+      });
 
       if (error) throw error;
-      setState((prev) => ({ ...prev, deploymentProgress: 90 }));
+      if (data?.error) throw new Error(data.error);
 
-      const deployUrl = `/p/${(deployment as any).id}`;
+      setState((prev) => ({ ...prev, deploymentProgress: 90, deployStatusText: "Finalisation..." }));
+
+      const buildUrl = data.buildUrl;
       setState((prev) => ({
         ...prev,
         isDeploying: false,
         deploymentProgress: 100,
-        deployedUrl: deployUrl,
+        deployedUrl: buildUrl,
+        deployStatusText: null,
       }));
+
       toast.success("🚀 Projet déployé !", {
         description: "Votre app est maintenant en ligne.",
-        action: { label: "Ouvrir", onClick: () => window.open(deployUrl, "_blank") },
+        action: { label: "Ouvrir", onClick: () => window.open(buildUrl, "_blank") },
       });
     } catch (e: any) {
       console.error("Publish error:", e);
-      setState((prev) => ({ ...prev, isDeploying: false, deploymentProgress: 0 }));
+      setState((prev) => ({ ...prev, isDeploying: false, deploymentProgress: 0, deployStatusText: null }));
       toast.error("Erreur de déploiement", { description: e?.message });
     }
-  }, [state.projectId, state.files, setState]);
+  }, [state.projectId, state.files, state.projectName, setState]);
 
   const handleSharePreview = useCallback(async () => {
     if (!state.projectId) {
@@ -75,38 +70,32 @@ export function usePublish(
       const userId = userData.user?.id;
       if (!userId) throw new Error("Non authentifié");
 
-      const slug = `blink-${state.projectId!.slice(0, 8)}`;
-      const { data: deployment, error } = await supabase
-        .from("deployments")
-        .upsert(
-          {
-            user_id: userId,
-            project_id: state.projectId,
-            slug,
-            schema_snapshot: { code: serializeFiles(state.files), files: state.files } as any,
-            url: `/p/preview`,
-          } as any,
-          { onConflict: "project_id" },
-        )
-        .select("id")
-        .single();
+      // Use the build edge function for share too
+      const { data, error } = await supabase.functions.invoke("build-project", {
+        body: {
+          files: state.files,
+          projectId: state.projectId,
+          projectName: state.projectName || "Blink App",
+        },
+      });
 
       if (error) throw error;
-      const deployUrl = `/p/${(deployment as any).id}`;
-      setState((prev) => ({ ...prev, deployedUrl: deployUrl }));
+      if (data?.error) throw new Error(data.error);
 
-      const fullUrl = `${window.location.origin}${deployUrl}`;
-      await navigator.clipboard.writeText(fullUrl);
+      const buildUrl = data.buildUrl;
+      setState((prev) => ({ ...prev, deployedUrl: buildUrl }));
+
+      await navigator.clipboard.writeText(buildUrl);
       toast.success("🔗 Lien public généré et copié !", {
-        description: fullUrl,
-        action: { label: "Ouvrir", onClick: () => window.open(deployUrl, "_blank") },
+        description: buildUrl,
+        action: { label: "Ouvrir", onClick: () => window.open(buildUrl, "_blank") },
       });
     } catch (e: any) {
       toast.error("Erreur lors de la génération du lien", { description: e?.message });
     } finally {
       setIsSharingPreview(false);
     }
-  }, [state.projectId, state.files, setState]);
+  }, [state.projectId, state.files, state.projectName, setState]);
 
   return { handlePublish, handleSharePreview, isSharingPreview };
 }
