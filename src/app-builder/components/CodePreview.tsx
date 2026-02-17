@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Monitor, Tablet, Smartphone, Maximize2, Minimize2 } from "lucide-react";
+import { Monitor, Tablet, Smartphone, Maximize2, Minimize2, Zap, RefreshCw } from "lucide-react";
 import { CONSOLE_CAPTURE_SCRIPT } from "../hooks/useConsoleCapture";
 import { GeneratingOverlay } from "./GeneratingOverlay";
 import { extractAllImports, generateDynamicLoaderScript } from "../utils/npmResolver";
@@ -14,6 +14,10 @@ interface CodePreviewProps {
   supabaseUrl?: string | null;
   supabaseAnonKey?: string | null;
   firecrawlEnabled?: boolean;
+  // Vite dev server
+  devServerUrl?: string | null;
+  isDevServerStarting?: boolean;
+  onStartDevServer?: () => void;
 }
 
 type DeviceMode = "desktop" | "tablet" | "mobile";
@@ -199,17 +203,25 @@ const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(React.createElement(App));
 `;
 
-export const CodePreview: React.FC<CodePreviewProps> = ({ code, files, isGenerating, isBuilding, pipelineProgress, generationStatus, supabaseUrl, supabaseAnonKey, firecrawlEnabled }) => {
+export const CodePreview: React.FC<CodePreviewProps> = ({
+  code, files, isGenerating, isBuilding, pipelineProgress, generationStatus,
+  supabaseUrl, supabaseAnonKey, firecrawlEnabled,
+  devServerUrl, isDevServerStarting, onStartDevServer,
+}) => {
   const [deviceMode, setDeviceMode] = useState<DeviceMode>("desktop");
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [iframeKey, setIframeKey] = useState(0);
 
   const effectiveCode = code?.trim() || DEFAULT_CODE;
-
   const npmPackages = useMemo(() => extractAllImports(files || {}), [files]);
 
+  // Only build srcDoc when NOT using dev server
   const iframeSrcDoc = useMemo(() => {
+    if (devServerUrl) return null; // Don't build srcDoc when using Vite
     return buildIframeHtml(effectiveCode, supabaseUrl, supabaseAnonKey, firecrawlEnabled, files, npmPackages);
-  }, [effectiveCode, supabaseUrl, supabaseAnonKey, firecrawlEnabled, files, npmPackages]);
+  }, [effectiveCode, supabaseUrl, supabaseAnonKey, firecrawlEnabled, files, npmPackages, devServerUrl]);
+
+  const isUsingVite = !!devServerUrl;
 
   const deviceConfig = {
     desktop: { width: "100%", height: "100%" },
@@ -227,25 +239,40 @@ export const CodePreview: React.FC<CodePreviewProps> = ({ code, files, isGenerat
     >
       {!isFullscreen && (
         <div className="flex items-center gap-2 mb-4 bg-white dark:bg-[#111] p-1.5 rounded-2xl border border-gray-200 dark:border-[#1a1a1a] shrink-0 shadow-2xl">
-          <DeviceButton
-            active={deviceMode === "desktop"}
-            onClick={() => setDeviceMode("desktop")}
-            icon={<Monitor size={16} />}
-            label="Desktop"
-          />
-          <DeviceButton
-            active={deviceMode === "tablet"}
-            onClick={() => setDeviceMode("tablet")}
-            icon={<Tablet size={16} />}
-            label="Tablet"
-          />
-          <DeviceButton
-            active={deviceMode === "mobile"}
-            onClick={() => setDeviceMode("mobile")}
-            icon={<Smartphone size={16} />}
-            label="Mobile"
-          />
+          <DeviceButton active={deviceMode === "desktop"} onClick={() => setDeviceMode("desktop")} icon={<Monitor size={16} />} label="Desktop" />
+          <DeviceButton active={deviceMode === "tablet"} onClick={() => setDeviceMode("tablet")} icon={<Tablet size={16} />} label="Tablet" />
+          <DeviceButton active={deviceMode === "mobile"} onClick={() => setDeviceMode("mobile")} icon={<Smartphone size={16} />} label="Mobile" />
           <div className="w-[1px] h-4 bg-gray-200 dark:bg-[#1a1a1a] mx-1" />
+
+          {/* Vite dev server toggle */}
+          {onStartDevServer && !isUsingVite && (
+            <button
+              onClick={onStartDevServer}
+              disabled={isDevServerStarting}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-bold text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-all disabled:opacity-50"
+              title="Start Vite dev server with HMR"
+            >
+              <Zap size={14} />
+              {isDevServerStarting ? "Starting…" : "Vite HMR"}
+            </button>
+          )}
+
+          {isUsingVite && (
+            <>
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-500/10 rounded-lg">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                <span className="text-[10px] font-bold text-green-500">VITE HMR</span>
+              </div>
+              <button
+                onClick={() => setIframeKey(k => k + 1)}
+                className="p-1.5 text-gray-400 dark:text-neutral-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-all"
+                title="Refresh preview"
+              >
+                <RefreshCw size={14} />
+              </button>
+            </>
+          )}
+
           <button
             onClick={() => setIsFullscreen(true)}
             className="p-2 text-gray-400 dark:text-neutral-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-all"
@@ -281,7 +308,7 @@ export const CodePreview: React.FC<CodePreviewProps> = ({ code, files, isGenerat
             <div className="w-3 h-3 rounded-full bg-gray-300 dark:bg-[#333]" />
           </div>
           <div className="flex-1 mx-6 bg-gray-100 dark:bg-[#0a0a0a]/60 rounded-md h-7 border border-gray-200 dark:border-[#1a1a1a] flex items-center px-3 text-[11px] text-gray-500 dark:text-neutral-500 font-medium overflow-hidden whitespace-nowrap">
-            blink.cloud/preview
+            {isUsingVite ? devServerUrl : "blink.cloud/preview"}
           </div>
           <div className="flex items-center gap-2">
             {isGenerating && (
@@ -290,20 +317,29 @@ export const CodePreview: React.FC<CodePreviewProps> = ({ code, files, isGenerat
                 <span className="text-[10px] font-bold text-blue-500">GENERATING</span>
               </div>
             )}
-            <div className="text-[10px] font-bold text-blue-500 whitespace-nowrap">
-              LIVE REACT
+            <div className={`text-[10px] font-bold whitespace-nowrap ${isUsingVite ? 'text-green-500' : 'text-blue-500'}`}>
+              {isUsingVite ? "⚡ VITE DEV" : "LIVE REACT"}
             </div>
           </div>
         </div>
 
         <div className="relative flex-1 w-full">
-          <iframe
-            key={effectiveCode}
-            srcDoc={iframeSrcDoc}
-            className="w-full h-full border-none bg-white dark:bg-[#050505]"
-            sandbox="allow-scripts allow-same-origin"
-            title="Code Preview"
-          />
+          {isUsingVite ? (
+            <iframe
+              key={`vite-${iframeKey}`}
+              src={devServerUrl!}
+              className="w-full h-full border-none bg-white dark:bg-[#050505]"
+              title="Vite Dev Preview"
+            />
+          ) : (
+            <iframe
+              key={effectiveCode}
+              srcDoc={iframeSrcDoc!}
+              className="w-full h-full border-none bg-white dark:bg-[#050505]"
+              sandbox="allow-scripts allow-same-origin"
+              title="Code Preview"
+            />
+          )}
           <GeneratingOverlay isVisible={!!isBuilding} statusText={generationStatus} progress={pipelineProgress} />
         </div>
       </div>
@@ -312,15 +348,9 @@ export const CodePreview: React.FC<CodePreviewProps> = ({ code, files, isGenerat
 };
 
 const DeviceButton = ({
-  active,
-  onClick,
-  icon,
-  label,
+  active, onClick, icon, label,
 }: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
+  active: boolean; onClick: () => void; icon: React.ReactNode; label: string;
 }) => (
   <button
     onClick={onClick}
