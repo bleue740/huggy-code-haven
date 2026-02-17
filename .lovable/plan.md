@@ -1,96 +1,101 @@
 
-# Restructuration complete du systeme AI Chat
+# Build serveur containerise pour des vraies apps deployables
 
-## Objectif
-Connecter les Checkpoints aux snapshots persistants, ajouter la Confirmation pour les actions destructives, et integrer les nouveaux composants AI (Reasoning, Shimmer, Plan, Queue, StackTrace, MessageActions) de maniere coherente en eliminant les doublons.
+## Probleme actuel
 
-## Analyse des doublons identifies
+Aujourd'hui, les applications generees par Blink AI ne sont pas de "vraies" apps web :
+- Le code est transpile cote client via Babel dans une iframe
+- Les librairies sont chargees via CDN (React UMD, Tailwind CDN, etc.)
+- Le "deploiement" consiste a sauvegarder le code brut en base et le re-servir dans une iframe avec Babel
+- Pas de vrai bundling (Vite/esbuild), pas de fichiers statiques optimises
+- Les apps deployees ne fonctionnent pas comme des apps React classiques
 
-| Composant existant | Doublon/Remplacement |
-|---|---|
-| `GenerationPhaseDisplay` (thinking rotatif, ProgressBar, TypingDots) | Remplace par `Reasoning` + `Shimmer` pour le texte animé |
-| `PlanMessage` (markdown renderer custom) | Remplace par nouveau composant `Plan` (Card-based, streaming-aware) |
-| `Sidebar > ShimmerLine` (ligne 78) | Remplace par `Shimmer` |
-| `Sidebar > TypingDots` (ligne 70) | Deja duplique dans GenerationPhaseDisplay, supprime |
-| `ChatMessage > renderMarkdown` | Conserve (inline rendering specifique au chat) |
-| `conversation.tsx` (scroll custom) | Conserve tel quel (pas de dependance `use-stick-to-bottom`) |
+## Solution : Edge Function `build-project`
 
-## Plan d'implementation
+Creer une **edge function** qui prend les fichiers du projet, genere un vrai projet Vite complet, le build, et stocke le resultat (HTML/JS/CSS optimises) dans le storage pour servir des apps statiques reelles.
 
-### 1. Nouveaux composants AI Elements
+Le build se fait **sans Docker** (pas disponible dans les edge functions) en utilisant **esbuild** (disponible en Deno) pour transpiler et bundler le code.
 
-Creer les fichiers suivants dans `src/components/ai-elements/` :
+## Architecture
 
-- **`shimmer.tsx`** - Animation de texte shimmer (utilise `framer-motion` deja installe). Remplace `ShimmerLine` dans Sidebar.
-- **`reasoning.tsx`** - Affichage du raisonnement avec timer auto, collapsible, auto-close. Utilise `Collapsible` + `Shimmer`.
-- **`plan.tsx`** - Composant Plan structure (Card + streaming). Remplace `PlanMessage`.
-- **`stack-trace.tsx`** - Affichage des erreurs runtime parsees. Integre dans le flux d'erreur.
-
-Les composants `Context`, `ModelSelector`, `Queue` fournis par l'utilisateur ne seront **pas** integres car :
-- `Context` (token usage) depend de `tokenlens` et `ai` SDK non installe
-- `ModelSelector` est un composant de selection de modele non utilise dans le flux actuel
-- `Queue` est un pattern de file d'attente de messages non requis
-
-### 2. Checkpoints connectes aux snapshots persistants
-
-**Actuellement** : le Checkpoint dans Sidebar.tsx restaure simplement `state.files` (fichiers actuels, pas le snapshot du moment).
-
-**Correction** :
-- Modifier `App.tsx` : lors de chaque `codeApplied`, sauvegarder automatiquement un snapshot dans `project_snapshots` et stocker le `snapshot_id` dans le message.
-- Ajouter `snapshotId?: string` au type `Message` dans `types.ts`.
-- Modifier le Checkpoint dans `Sidebar.tsx` : au clic, charger le snapshot depuis la base de donnees via son ID et restaurer les fichiers.
-- Ajouter la persistence du snapshot ID dans `chat_messages` (nouvelle colonne `snapshot_id`).
-
-**Migration SQL** :
-```sql
-ALTER TABLE chat_messages ADD COLUMN snapshot_id uuid REFERENCES project_snapshots(id);
+```text
+Frontend (Publish button)
+    |
+    v
+Edge Function: build-project
+    |
+    ├── 1. Recevoir les fichiers du projet (Record<string, string>)
+    ├── 2. Generer le squelette Vite (index.html, main.tsx, vite.config, package.json, tailwind.config)
+    ├── 3. Transpiler chaque fichier TSX via esbuild (transform, pas bundle)
+    ├── 4. Injecter les imports React necessaires
+    ├── 5. Creer le bundle final (index.html autonome avec inline JS/CSS)
+    ├── 6. Uploader dans Supabase Storage bucket "deployments"
+    └── 7. Retourner l'URL publique du build
+        |
+        v
+Supabase Storage (bucket: deployments)
+    /builds/{projectId}/index.html   <-- App statique complete
+    /builds/{projectId}/assets/...   <-- JS/CSS bundles
+        |
+        v
+URL publique: https://{supabase-url}/storage/v1/object/public/deployments/builds/{projectId}/index.html
 ```
-
-### 3. Confirmation pour actions destructives
-
-Integrer le composant `Confirmation` dans le flux de suppression de fichiers :
-
-- Modifier `Sidebar.tsx > handleDeleteFile` : au lieu de supprimer directement, afficher une Confirmation inline.
-- Ajouter un state `pendingDeleteFile` pour tracker le fichier en attente de confirmation.
-- Afficher la Confirmation dans la zone du FileTree avec les boutons Approuver/Rejeter.
-
-### 4. Refactorisation de GenerationPhaseDisplay
-
-- Remplacer le bloc "Thinking" rotatif par le composant `Reasoning` (avec timer auto et auto-close).
-- Remplacer `ShimmerLine` / `TypingDots` par `Shimmer`.
-- Conserver `ChainOfThought` pour les etapes detaillees (Planning/Building).
-
-### 5. Remplacement de PlanMessage par Plan
-
-- Remplacer `PlanMessage.tsx` par une integration du nouveau composant `Plan`.
-- Le nouveau Plan utilise `Card` + `Collapsible` pour un rendu plus propre.
-- Conserver le bouton "Approuver et implementer" dans le `PlanFooter`.
-
-### 6. Integration StackTrace dans les erreurs
-
-- Ajouter `StackTrace` dans `GenerationPhaseDisplay` pour la phase `error`.
-- Parser automatiquement les messages d'erreur qui contiennent des stack traces.
 
 ## Details techniques
 
-### Fichiers crees
-- `src/components/ai-elements/shimmer.tsx`
-- `src/components/ai-elements/reasoning.tsx`
-- `src/components/ai-elements/plan.tsx`
-- `src/components/ai-elements/stack-trace.tsx`
+### 1. Creer le bucket Storage `deployments`
+- Bucket public pour servir les fichiers statiques
+- Politique RLS : insertion par utilisateur authentifie, lecture publique
 
-### Fichiers modifies
-- `src/app-builder/types.ts` - Ajout `snapshotId` au type Message
-- `src/app-builder/App.tsx` - Sauvegarde snapshot auto + chargement depuis DB
-- `src/app-builder/components/Sidebar.tsx` - Checkpoint persistant + Confirmation delete + suppression doublons
-- `src/app-builder/components/GenerationPhaseDisplay.tsx` - Integration Reasoning + Shimmer + StackTrace
-- `src/app-builder/components/PlanMessage.tsx` - Remplacement par composant Plan
-- `src/app-builder/components/ChatMessage.tsx` - Adaptation pour nouveau PlanMessage
+### 2. Edge Function `build-project`
 
-### Migration SQL
-- Ajout colonne `snapshot_id` sur `chat_messages`
+La fonction recoit les fichiers du projet et produit une app statique autonome :
 
-### Pas de nouvelle dependance
-- `framer-motion` deja installe (pour Shimmer)
-- `@radix-ui/react-use-controllable-state` deja installe (pour Reasoning)
-- `@radix-ui/react-collapsible` deja installe
+**Approche : Single-file HTML bundle**
+- Transpile chaque fichier `.tsx` en JavaScript via l'API `esbuild` de Deno
+- Concatene tout le JS transpile dans l'ordre correct (composants d'abord, App.tsx en dernier)
+- Genere un fichier `index.html` autonome avec :
+  - React 18 et ReactDOM via CDN (versions production minifiees)
+  - Tailwind CSS via CDN
+  - Le JS transpile inline dans une balise `<script>`
+  - Lucide, Recharts, Framer Motion en CDN production
+- Upload ce fichier dans Storage
+
+**Avantage par rapport a l'existant** : le code est **pre-transpile** (plus de Babel runtime), plus rapide, plus fiable, et servi depuis une vraie URL statique.
+
+**Phase 2 (evolutive)** : pour un vrai bundling Vite, il faudrait un serveur Node.js externe. Cette premiere phase pose les bases avec un build leger mais fonctionnel.
+
+### 3. Modifier `usePublish.ts`
+
+- Appeler la nouvelle edge function `build-project` au lieu de simplement sauvegarder le snapshot
+- Stocker l'URL du build dans la table `deployments` (colonne `url` existante)
+- Afficher la vraie URL publique du build
+
+### 4. Modifier `PublishedDeployment.tsx`
+
+- Detecter si le deploiement a une URL de build statique
+- Si oui, rediriger vers l'URL Storage au lieu de re-construire l'iframe avec Babel
+- Fallback sur l'ancien mode iframe pour les anciens deploiements
+
+### 5. Ajouter colonne `build_url` a `deployments`
+
+Pour distinguer les anciens deploiements (iframe/Babel) des nouveaux (build statique).
+
+### 6. Mettre a jour `TopNav.tsx` et le flux de publish
+
+- Ajouter un indicateur de progression du build ("Building...", "Uploading...", "Live!")
+- Afficher la vraie URL de production apres le build
+
+## Fichiers crees
+- `supabase/functions/build-project/index.ts` -- Edge function de build
+- Migration SQL pour le bucket storage + colonne `build_url`
+
+## Fichiers modifies
+- `src/app-builder/hooks/usePublish.ts` -- Appel a la nouvelle edge function
+- `src/pages/PublishedDeployment.tsx` -- Support du redirect vers build statique
+- `src/app-builder/components/TopNav.tsx` -- UX de build amelioree
+
+## Limites et evolution future
+- Phase 1 : build single-file HTML (transpilation esbuild, CDN pour libs). Fonctionnel et deployable immediatement.
+- Phase 2 : build multi-fichiers avec assets separes (JS chunks, CSS, images).
+- Phase 3 : vrai bundler Vite sur serveur Node.js externe pour support complet (HMR, code splitting, tree shaking).
