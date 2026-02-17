@@ -22,6 +22,7 @@ import { useYjsCollaboration } from "./hooks/useYjsCollaboration";
 import { useProject, DEFAULT_FILES, serializeFiles } from "./hooks/useProject";
 import { useFileHistory } from "./hooks/useFileHistory";
 import { usePublish } from "./hooks/usePublish";
+import { useDevServer } from "./hooks/useDevServer";
 
 import { VirtualFS } from "./engine/VirtualFS";
 import { ProjectContext } from "./engine/ProjectContext";
@@ -94,6 +95,10 @@ const App: React.FC = () => {
   const project = useProject(state, setState);
   const fileHistory = useFileHistory(DEFAULT_FILES);
   const { handlePublish, handleSharePreview, isSharingPreview } = usePublish(state, setState);
+  const {
+    devUrl, isStarting: isDevServerStarting, isConnected: isDevServerConnected,
+    startDevServer, isAvailable: isDevServerAvailable,
+  } = useDevServer(state.projectId, state.files);
 
   // Modal visibility state
   const [showFirecrawlModal, setShowFirecrawlModal] = useState(false);
@@ -616,6 +621,9 @@ const App: React.FC = () => {
           supabaseUrl={state.supabaseUrl}
           supabaseAnonKey={state.supabaseAnonKey}
           firecrawlEnabled={state.firecrawlEnabled}
+          devServerUrl={devUrl}
+          isDevServerStarting={isDevServerStarting}
+          onStartDevServer={isDevServerAvailable ? () => startDevServer(state.projectName) : undefined}
         />
         <ConsolePanel logs={consoleLogs} onClear={clearConsoleLogs} isOpen={consoleOpen} onToggle={() => setConsoleOpen(!consoleOpen)} />
       </div>
