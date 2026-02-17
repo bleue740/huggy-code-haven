@@ -447,8 +447,9 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                             <ChatMessage message={msg} onApprovePlan={onApprovePlan} />
                             <MessageActions
                               content={msg.content}
+                              messageId={msg.id}
+                              projectId={state.projectId}
                               onRegenerate={idx === state.history.length - 1 ? () => onSend(state.history.filter(m => m.role === 'user').pop()?.content) : undefined}
-                              onFeedback={(type) => console.log(`Feedback ${type} for message ${msg.id}`)}
                             />
                           </>
                         ) : (

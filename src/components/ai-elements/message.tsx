@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Bot, User, Copy, RefreshCw, ThumbsUp, ThumbsDown, Check } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import {
   Tooltip,
@@ -87,6 +88,8 @@ export const MessageContent: React.FC<MessageContentProps> = ({
 
 export interface MessageActionsProps {
   content: string;
+  messageId?: string;
+  projectId?: string;
   onRegenerate?: () => void;
   onFeedback?: (type: "up" | "down") => void;
   className?: string;
@@ -94,12 +97,33 @@ export interface MessageActionsProps {
 
 export const MessageActions: React.FC<MessageActionsProps> = ({
   content,
+  messageId,
+  projectId,
   onRegenerate,
   onFeedback,
   className,
 }) => {
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
+
+  // Load existing feedback from DB on mount
+  useEffect(() => {
+    if (!messageId) return;
+    const load = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from('message_feedback')
+        .select('feedback_type')
+        .eq('message_id', messageId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (data?.feedback_type) {
+        setFeedback(data.feedback_type as "up" | "down");
+      }
+    };
+    load();
+  }, [messageId]);
 
   const handleCopy = async () => {
     try {
@@ -109,9 +133,33 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
     } catch { /* ignore */ }
   };
 
-  const handleFeedback = (type: "up" | "down") => {
-    setFeedback(type);
+  const handleFeedback = async (type: "up" | "down") => {
+    const newType = feedback === type ? null : type;
+    setFeedback(newType);
     onFeedback?.(type);
+
+    if (!messageId || !projectId) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      if (newType === null) {
+        // Remove feedback
+        await supabase
+          .from('message_feedback')
+          .delete()
+          .eq('message_id', messageId)
+          .eq('user_id', user.id);
+      } else {
+        // Upsert feedback
+        await supabase
+          .from('message_feedback')
+          .upsert(
+            { user_id: user.id, message_id: messageId, project_id: projectId, feedback_type: newType },
+            { onConflict: 'user_id,message_id' }
+          );
+      }
+    } catch { /* silent */ }
   };
 
   const actions = [
