@@ -295,7 +295,7 @@ async function start() {
   });
 
   // Handle WebSocket upgrade for HMR
-  server.on("upgrade", (req, socket, head) => {
+  server.on("upgrade", async (req, socket, head) => {
     // Extract projectId from URL: /dev-hmr/:projectId or /dev/:projectId
     const hmrMatch = req.url.match(/^\/dev-hmr\/([^/]+)/);
     const devMatch = req.url.match(/^\/dev\/([^/]+)/);
@@ -312,8 +312,6 @@ async function start() {
       return;
     }
 
-    // Proxy WebSocket to the Vite dev server
-    const { createProxyMiddleware } = await import("http-proxy-middleware");
     // For raw WebSocket proxying, we use a simpler approach
     const net = await import("net");
     const client = net.connect(devServer.port, "127.0.0.1", () => {
