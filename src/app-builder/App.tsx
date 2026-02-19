@@ -374,27 +374,37 @@ const App: React.FC = () => {
           ...prev,
           _generationPhase: "planning",
           _pipelineProgress: 20,
-          _thinkingLines: [],
-          _planItems: steps.map((s) => ({ label: `${s.target}: ${s.description}`, done: false })),
+          _thinkingLines: prev._thinkingLines, // keep thinking text visible in Reasoning
+          _planItems: steps.map((s) => ({
+            label: s.path ? `${s.path}: ${s.description}` : `${s.target}: ${s.description}`,
+            done: false,
+            path: s.path || s.target,
+            priority: (s.priority as 'critical' | 'normal' | 'optional') || 'normal',
+          })),
           _totalExpectedFiles: steps.filter((s) => s.action !== "delete").length,
           _filesGeneratedCount: 0,
         }));
 
         setTimeout(() => {
           setState((prev) => {
+            // Don't override reading phase — it transitions to building on first file_generated
             if (prev._generationPhase === "reading") return prev;
+            const nonDeleteSteps = steps.filter(s => s.action !== "delete");
             return {
               ...prev,
               _generationPhase: "building",
               _pipelineProgress: 30,
-              _buildLogs: steps
-                .filter(s => s.action !== "delete")
-                .map((s, i) => ({
+              _buildLogs: [
+                // Keep read logs so the "Files read" collapsed section stays visible
+                ...(prev._buildLogs || []).filter(l => l.type === "read"),
+                ...nonDeleteSteps.map((s, i) => ({
                   id: `build_${i}`,
-                  text: `Writing ${s.target}…`,
+                  // Use real path if available, fallback to target
+                  text: `Writing ${s.path || s.target}…`,
                   done: false,
                   type: "build" as const,
                 })),
+              ],
             };
           });
         }, 1200);

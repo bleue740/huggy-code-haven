@@ -19,7 +19,7 @@ interface OrchestratorCallbacks {
   onConversationalReply: (reply: string) => void;
   onConversationalDelta?: (delta: string) => void; // streaming token-by-token
   onError: (error: string, code?: number) => void;
-  onPlanReady: (intent: string, steps: Array<{ id: number; action: string; target: string; description: string }>) => void;
+  onPlanReady: (intent: string, steps: Array<{ id: number; action: string; target: string; path?: string; description: string; priority?: string }>) => void;
   onFileGenerated?: (path: string, linesCount?: number) => void;
   onPhase?: (phase: string, message: string) => void;
   onThinkingDelta?: (delta: string) => void; // real-time thinking tokens
