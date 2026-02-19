@@ -626,6 +626,7 @@ const App: React.FC = () => {
         canRedo={fileHistory.canRedo}
         collabExtension={collabExtension}
         onRestoreSnapshot={handleRestoreSnapshot}
+        buildLogs={buildLogsAvailable ? buildLogs : []}
       />
       <div className="flex-1 flex flex-col min-w-0">
         <div className="flex items-center">

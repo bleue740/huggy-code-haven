@@ -16,6 +16,7 @@ import { FileTree } from './FileTree';
 import { CodeEditor } from './CodeEditor';
 import { GenerationSteps } from './GenerationSteps';
 import { GenerationPhaseDisplay, type PhaseType, type PlanItem, type BuildLog } from './GenerationPhaseDisplay';
+import { BuildProgress } from './BuildProgress';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -40,6 +41,9 @@ import {
   ConfirmationActions,
   ConfirmationAction,
 } from '@/components/ai-elements/confirmation';
+import type { BuildLogEntry } from '../hooks/useBuildLogs';
+import { useBuildPipeline } from '../hooks/useBuildPipeline';
+
 interface SidebarProps {
   state: AppState;
   setState: React.Dispatch<React.SetStateAction<AppState>>;
@@ -62,6 +66,8 @@ interface SidebarProps {
   canRedo?: boolean;
   collabExtension?: Extension[];
   onRestoreSnapshot?: (files: Record<string, string>) => void;
+  /** Live build logs streamed from Railway server via SSE */
+  buildLogs?: BuildLogEntry[];
 }
 
 const MAX_CHARS = 10000;
@@ -79,7 +85,7 @@ const getSuggestionIcon = (icon: string) => {
 // TypingDots and ShimmerLine removed — replaced by Shimmer from ai-elements
 
 export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
-  ({ state, setState, onSend, onStop, onScreenshotRequest, onToggleVisualEdit, onShowHistory, onNewChat, onNewProject, onRenameProject, onBackToLanding, onConnectSupabase, onEnableFirecrawl, onDismissBackendHints, onApprovePlan, onUndo, onRedo, canUndo, canRedo, collabExtension, onRestoreSnapshot }, ref) => {
+  ({ state, setState, onSend, onStop, onScreenshotRequest, onToggleVisualEdit, onShowHistory, onNewChat, onNewProject, onRenameProject, onBackToLanding, onConnectSupabase, onEnableFirecrawl, onDismissBackendHints, onApprovePlan, onUndo, onRedo, canUndo, canRedo, collabExtension, onRestoreSnapshot, buildLogs = [] }, ref) => {
     const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
     const [, ] = useState(false); // kept for hook ordering
@@ -99,6 +105,9 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
     const isCodeView = state.isCodeView;
     const isVisualEditMode = state.isVisualEditMode ?? false;
     const setIsCodeView = (val: boolean) => setState(prev => ({ ...prev, isCodeView: val }));
+
+    // Build pipeline derived from SSE logs
+    const buildPipeline = useBuildPipeline(buildLogs);
 
     const handleVoiceTranscript = useCallback((text: string) => {
       setState(prev => ({ ...prev, currentInput: text }));
@@ -503,6 +512,11 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                 {/* Generating state */}
                 {state.isGenerating && (
                   <Message from="assistant">
+                    {/* Build pipeline progress — shown when SSE logs from Railway are available */}
+                    <BuildProgress
+                      pipeline={buildPipeline}
+                      isVisible={buildLogs.length > 0}
+                    />
                     <GenerationPhaseDisplay
                       phase={(state as any)._generationPhase || 'thinking'}
                       thinkingLines={(state as any)._thinkingLines}
