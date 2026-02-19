@@ -382,38 +382,52 @@ const App: React.FC = () => {
 
         setTimeout(() => {
           setState((prev) => {
-            // If onFileRead already moved us to "reading", don't override with stale buildLogs
             if (prev._generationPhase === "reading") return prev;
             return {
               ...prev,
               _generationPhase: "building",
               _pipelineProgress: 30,
-              _buildLogs: steps.map((s, i) => ({
-                id: `build_${i}`,
-                text: `${s.action === "create" ? "Creating" : s.action === "modify" ? "Updating" : "Removing"} ${s.target}…`,
-                done: false,
-                type: "build" as const,
-              })),
+              _buildLogs: steps
+                .filter(s => s.action !== "delete")
+                .map((s, i) => ({
+                  id: `build_${i}`,
+                  text: `Writing ${s.target}…`,
+                  done: false,
+                  type: "build" as const,
+                })),
             };
           });
         }, 1200);
       },
 
-      onFileGenerated: (path) => {
+      onFileGenerated: (path, linesCount) => {
         setState((prev) => {
-          const logs: BuildLog[] = (prev._buildLogs || []).map((l) =>
-            !l.done && l.text.toLowerCase().includes(path.toLowerCase().replace(".tsx", "").replace(".ts", ""))
-              ? { ...l, done: true } : l,
-          );
+          const logs: BuildLog[] = (prev._buildLogs || []).map((l) => {
+            if (!l.done && l.text.toLowerCase().includes(path.toLowerCase().replace(".tsx", "").replace(".ts", ""))) {
+              return { ...l, done: true, linesCount };
+            }
+            return l;
+          });
           const anyMarked = logs.some((l, i) => l.done && !(prev._buildLogs || [])[i]?.done);
           if (!anyMarked) {
             const firstUndone = logs.findIndex((l) => !l.done);
-            if (firstUndone >= 0) logs[firstUndone] = { ...logs[firstUndone], done: true };
+            if (firstUndone >= 0) logs[firstUndone] = { ...logs[firstUndone], done: true, linesCount };
           }
           const newCount = (prev._filesGeneratedCount || 0) + 1;
           const total = prev._totalExpectedFiles || 1;
           const fileProgress = 30 + Math.round((newCount / total) * 50);
-          return { ...prev, _buildLogs: logs, _filesGeneratedCount: newCount, _pipelineProgress: Math.min(fileProgress, 80) };
+
+          // Transition from reading → building when first file arrives
+          const newPhase: AppState['_generationPhase'] =
+            prev._generationPhase === 'reading' ? 'building' : prev._generationPhase;
+
+          return {
+            ...prev,
+            _buildLogs: logs,
+            _filesGeneratedCount: newCount,
+            _pipelineProgress: Math.min(fileProgress, 80),
+            _generationPhase: newPhase,
+          };
         });
       },
 

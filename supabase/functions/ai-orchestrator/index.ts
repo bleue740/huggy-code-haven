@@ -505,16 +505,18 @@ serve(async (req: Request) => {
         });
 
         // Stream real thinking tokens before the planner JSON is ready
-        const THINKING_SYSTEM = `You are briefly thinking about a user's request. Output 1-2 short sentences about what they want to build. Be direct, no formatting, no markdown.`;
+        const THINKING_SYSTEM = `You are a senior software architect briefly thinking aloud about a user's request.
+Think about: what they want to build, the best technical approach, key components needed, and any trade-offs.
+Output 2-3 short, insightful sentences. Focus on architecture decisions and component strategy. No bullet points, no markdown, no formatting.`;
         try {
           await callAgentStreaming(
             THINKING_SYSTEM,
-            `User request: "${userPrompt.slice(0, 300)}"`,
+            `User request: "${userPrompt.slice(0, 400)}"\nProject context (brief): ${projectContext?.slice(0, 300) || "new project"}`,
             "google/gemini-2.5-flash-lite",
             async (chunk) => {
               await stream.sendEvent({ type: "thinking_delta", delta: chunk });
             },
-            60, // max 60 tokens — ultra fast ~300ms
+            120, // 120 tokens — ~600ms, enough for meaningful architectural reasoning
           );
         } catch { /* non-blocking — pipeline continues regardless */ }
 
