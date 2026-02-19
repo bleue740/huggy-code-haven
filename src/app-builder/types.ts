@@ -56,6 +56,7 @@ export type BackendNeed = 'database' | 'auth' | 'storage' | 'scraping';
 
 export type GenerationPhase =
   | 'thinking'
+  | 'reading'
   | 'planning'
   | 'building'
   | 'fixing'
@@ -66,6 +67,7 @@ export interface BuildLog {
   id: string;
   text: string;
   done: boolean;
+  type?: 'read' | 'build';
 }
 
 export interface PlanItem {

@@ -22,6 +22,8 @@ interface OrchestratorCallbacks {
   onPlanReady: (intent: string, steps: Array<{ id: number; action: string; target: string; description: string }>) => void;
   onFileGenerated?: (path: string) => void;
   onPhase?: (phase: string, message: string) => void;
+  onThinkingDelta?: (delta: string) => void; // real-time thinking tokens
+  onFileRead?: (path: string) => void;       // file being read before building
 }
 
 interface ChatMessage {
@@ -121,6 +123,14 @@ export function useOrchestrator() {
                     message: event.message,
                   });
                   callbacks.onPhase?.(event.phase, event.message || "");
+                  break;
+
+                case "thinking_delta":
+                  callbacks.onThinkingDelta?.(event.delta);
+                  break;
+
+                case "file_read":
+                  callbacks.onFileRead?.(event.path);
                   break;
 
                 case "intent_classified":

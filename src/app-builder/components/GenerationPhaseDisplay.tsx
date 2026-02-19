@@ -1,5 +1,5 @@
 import React from 'react';
-import { Brain, ListChecks, Hammer, Eye, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Brain, ListChecks, Hammer, Eye, CheckCircle2, AlertCircle, FileSearch, Check, Loader2 } from 'lucide-react';
 import {
   ChainOfThought,
   ChainOfThoughtHeader,
@@ -17,7 +17,7 @@ import {
   StackTraceCopyButton,
 } from '@/components/ai-elements/stack-trace';
 
-export type PhaseType = 'thinking' | 'planning' | 'building' | 'preview_ready' | 'error';
+export type PhaseType = 'thinking' | 'reading' | 'planning' | 'building' | 'fixing' | 'preview_ready' | 'error';
 
 export interface PlanItem {
   label: string;
@@ -28,6 +28,7 @@ export interface BuildLog {
   id: string;
   text: string;
   done: boolean;
+  type?: 'read' | 'build';
 }
 
 export interface PhaseDisplayProps {
@@ -51,8 +52,11 @@ export const GenerationPhaseDisplay: React.FC<PhaseDisplayProps> = ({
   errorMessage,
   elapsedSeconds,
 }) => {
-  const buildProgress = buildLogs
-    ? (buildLogs.filter(l => l.done).length / Math.max(buildLogs.length, 1)) * 100
+  const buildOnlyLogs = buildLogs?.filter(l => l.type !== 'read') ?? [];
+  const readLogs = buildLogs?.filter(l => l.type === 'read') ?? [];
+
+  const buildProgress = buildOnlyLogs.length > 0
+    ? (buildOnlyLogs.filter(l => l.done).length / buildOnlyLogs.length) * 100
     : 0;
 
   /* Build chain-of-thought steps from current state */
@@ -61,39 +65,43 @@ export const GenerationPhaseDisplay: React.FC<PhaseDisplayProps> = ({
   if (planItems && planItems.length > 0) {
     planItems.forEach(item => {
       cotSteps.push({
-        icon: ListChecks,
+        icon: item.done ? CheckCircle2 : ListChecks,
         label: item.label,
         status: item.done ? 'complete' : phase === 'planning' ? 'active' : 'pending',
       });
     });
   }
 
-  if (buildLogs && buildLogs.length > 0) {
-    buildLogs.forEach(log => {
+  if (buildOnlyLogs.length > 0) {
+    buildOnlyLogs.forEach(log => {
       cotSteps.push({
-        icon: Hammer,
+        icon: log.done ? CheckCircle2 : Loader2,
         label: log.text,
         status: log.done ? 'complete' : 'active',
       });
     });
   }
 
-  const showChainOfThought = cotSteps.length > 0 && (phase === 'planning' || phase === 'building');
+  const showChainOfThought = cotSteps.length > 0 && (phase === 'planning' || phase === 'building' || phase === 'reading' || phase === 'fixing');
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-3 duration-500 space-y-3">
       {/* Phase badge */}
       <div className="flex items-center gap-2">
         {phase === 'thinking' && <Brain size={14} className="text-primary animate-pulse" />}
+        {phase === 'reading' && <FileSearch size={14} className="text-blue-400 animate-pulse" />}
         {phase === 'planning' && <ListChecks size={14} className="text-emerald-500" />}
         {phase === 'building' && <Hammer size={14} className="text-orange-500 animate-pulse" />}
+        {phase === 'fixing' && <Loader2 size={14} className="text-yellow-500 animate-spin" />}
         {phase === 'preview_ready' && <Eye size={14} className="text-emerald-500" />}
         {phase === 'error' && <AlertCircle size={14} className="text-destructive" />}
 
         <span className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground">
           {phase === 'thinking' && 'Thinking'}
+          {phase === 'reading' && 'Reading Files'}
           {phase === 'planning' && 'Planning'}
           {phase === 'building' && 'Building'}
+          {phase === 'fixing' && 'Auto-fixing'}
           {phase === 'preview_ready' && 'Preview Ready'}
           {phase === 'error' && 'Error'}
         </span>
@@ -101,17 +109,37 @@ export const GenerationPhaseDisplay: React.FC<PhaseDisplayProps> = ({
         <span className="text-[9px] font-mono text-muted-foreground/60 ml-auto">{elapsedSeconds}s</span>
       </div>
 
-      {/* Reasoning — shown during thinking phase */}
+      {/* Reasoning — shown during thinking phase with real streamed content */}
       {phase === 'thinking' && (
         <Reasoning isStreaming={true} defaultOpen>
           <ReasoningTrigger />
           <ReasoningContent>
-            {thinkingLines?.[0] || 'Analyzing requirements and designing a scalable structure...'}
+            {thinkingLines?.join('') || 'Analyzing your request…'}
           </ReasoningContent>
         </Reasoning>
       )}
 
-      {/* Chain of Thought — shown during planning/building */}
+      {/* Reading files — animated file list */}
+      {phase === 'reading' && readLogs.length > 0 && (
+        <div className="space-y-1.5 animate-in fade-in duration-300">
+          {readLogs.map(log => (
+            <div key={log.id} className="flex items-center gap-2 text-[11px]">
+              <FileSearch size={11} className="text-blue-400 shrink-0" />
+              <span className="font-mono text-blue-400/80">{log.text}</span>
+              <Check size={9} className="text-emerald-400 ml-auto shrink-0" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Reading phase with no logs yet — shimmer placeholder */}
+      {phase === 'reading' && readLogs.length === 0 && (
+        <div className="space-y-1.5">
+          <Shimmer className="text-[11px] font-mono" duration={1.2}>Reading project files…</Shimmer>
+        </div>
+      )}
+
+      {/* Chain of Thought — shown during planning/building/reading/fixing */}
       {showChainOfThought && (
         <ChainOfThought defaultOpen>
           <ChainOfThoughtHeader>Reasoning</ChainOfThoughtHeader>
@@ -128,8 +156,8 @@ export const GenerationPhaseDisplay: React.FC<PhaseDisplayProps> = ({
         </ChainOfThought>
       )}
 
-      {/* Progress bar during building */}
-      {phase === 'building' && (
+      {/* Progress bar during building/fixing */}
+      {(phase === 'building' || phase === 'fixing') && (
         <div className="w-full h-[2px] bg-muted rounded-full overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-primary to-primary/70 transition-all duration-700 ease-out"

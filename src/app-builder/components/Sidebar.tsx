@@ -527,12 +527,14 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                   const isCodeGenerating = state.isGenerating && !hasConvStream && !hasTyping;
                   if (!isCodeGenerating) return null;
 
+                  const phase = (state as any)._generationPhase;
+
                   return (
                     <Message from="assistant">
-                      {/* Shimmer placeholder during code generation */}
-                      {(state as any)._generationPhase !== 'thinking' && (state as any)._generationPhase !== 'planning' && (
+                      {/* Shimmer placeholder only before any phase is received */}
+                      {!phase && (
                         <div className="space-y-2 mb-3 animate-in fade-in duration-500">
-                          <Shimmer className="text-[13px] font-medium" duration={1.5}>Generating your application…</Shimmer>
+                          <Shimmer className="text-[13px] font-medium" duration={1.5}>Analyzing your request…</Shimmer>
                           <div className="space-y-1.5 mt-2">
                             <div className="h-2 rounded-full bg-muted animate-pulse" style={{ width: '85%' }} />
                             <div className="h-2 rounded-full bg-muted animate-pulse" style={{ width: '65%', animationDelay: '0.15s' }} />
@@ -548,7 +550,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                         />
                       )}
                       <GenerationPhaseDisplay
-                        phase={(state as any)._generationPhase || 'thinking'}
+                        phase={phase || 'thinking'}
                         thinkingLines={(state as any)._thinkingLines}
                         planItems={(state as any)._planItems}
                         buildLogs={(state as any)._buildLogs}
