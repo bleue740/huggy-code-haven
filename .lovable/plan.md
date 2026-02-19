@@ -1,101 +1,138 @@
 
-# Build serveur containerise pour des vraies apps deployables
+# Architecture complète : Streaming conversationnel & Preview — Alignement avec Lovable.dev
 
-## Probleme actuel
+## Analyse des écarts identifiés
 
-Aujourd'hui, les applications generees par Blink AI ne sont pas de "vraies" apps web :
-- Le code est transpile cote client via Babel dans une iframe
-- Les librairies sont chargees via CDN (React UMD, Tailwind CDN, etc.)
-- Le "deploiement" consiste a sauvegarder le code brut en base et le re-servir dans une iframe avec Babel
-- Pas de vrai bundling (Vite/esbuild), pas de fichiers statiques optimises
-- Les apps deployees ne fonctionnent pas comme des apps React classiques
+Après exploration exhaustive du code, voici les 5 écarts critiques entre l'architecture actuelle de Blink AI et celle de Lovable.dev :
 
-## Solution : Edge Function `build-project`
+### Écart 1 — Curseur de frappe absent pendant le streaming
+**Actuel** : Les tokens arrivent token-par-token via `conv_delta`, mais s'affichent dans `ChatMessage` → `renderMarkdown()` qui reconstruit tout le DOM à chaque token. Aucun curseur clignotant n'est visible pendant la frappe.
+**Lovable** : Un curseur `█` animé apparaît à la fin du texte en cours de streaming, puis disparaît proprement à la fin.
 
-Creer une **edge function** qui prend les fichiers du projet, genere un vrai projet Vite complet, le build, et stocke le resultat (HTML/JS/CSS optimises) dans le storage pour servir des apps statiques reelles.
+### Écart 2 — Le markdown est rendu sur le texte final seulement
+**Actuel** : `ChatMessage` utilise un renderer maison (`renderMarkdown`) qui fonctionne bien sur le texte final, mais pendant le streaming le message `conv_stream_*` est passé brut sans rendu progressif du markdown.
+**Lovable** : Le markdown est rendu progressivement — les `**bold**`, `` `code` ``, listes etc. s'appliquent au fur et à mesure.
 
-Le build se fait **sans Docker** (pas disponible dans les edge functions) en utilisant **esbuild** (disponible en Deno) pour transpiler et bundler le code.
+### Écart 3 — Le `GeneratingOverlay` dans la preview est toujours visible même pour les réponses conversationnelles
+**Actuel** : `isBuilding` dans `CodePreview` est calculé via `_generationPhase !== 'preview_ready'`, ce qui fait que l'overlay s'affiche même quand l'agent répond simplement "Bonjour". La preview est masquée inutilement.
+**Lovable** : L'overlay ne s'affiche QUE si des fichiers sont réellement en cours de génération (phase `generating` ou `fixing`), pas pour les réponses conversationnelles.
 
-## Architecture
+### Écart 4 — Pas de transition fluide preview → app générée
+**Actuel** : Quand les fichiers sont prêts, l'iframe se recharge brusquement (le `key` change en `effectiveCode`). Il n'y a pas de transition visuelle.
+**Lovable** : Un fade-out de l'overlay puis un fade-in de l'app donnent une impression de fluidité. La preview s'anime vers l'état "ready".
 
-```text
-Frontend (Publish button)
-    |
-    v
-Edge Function: build-project
-    |
-    ├── 1. Recevoir les fichiers du projet (Record<string, string>)
-    ├── 2. Generer le squelette Vite (index.html, main.tsx, vite.config, package.json, tailwind.config)
-    ├── 3. Transpiler chaque fichier TSX via esbuild (transform, pas bundle)
-    ├── 4. Injecter les imports React necessaires
-    ├── 5. Creer le bundle final (index.html autonome avec inline JS/CSS)
-    ├── 6. Uploader dans Supabase Storage bucket "deployments"
-    └── 7. Retourner l'URL publique du build
-        |
-        v
-Supabase Storage (bucket: deployments)
-    /builds/{projectId}/index.html   <-- App statique complete
-    /builds/{projectId}/assets/...   <-- JS/CSS bundles
-        |
-        v
-URL publique: https://{supabase-url}/storage/v1/object/public/deployments/builds/{projectId}/index.html
+### Écart 5 — La phase de génération dans le chat manque de feedback visuel en temps réel sur ce que l'IA écrit
+**Actuel** : Pendant la génération de code, seul le `GenerationPhaseDisplay` (chain-of-thought, build logs) est visible. Le message de l'assistant n'est ajouté qu'après la génération complète.
+**Lovable** : Pendant la génération, un indicateur de "thinking" avec des shimmer lines est visible dans le chat, et quand les fichiers arrivent, le message final apparaît avec une animation d'entrée fluide.
+
+---
+
+## Plan d'implémentation
+
+### 1. Curseur de streaming dans `ChatMessage`
+Modifier `ChatMessage.tsx` pour détecter si le message est en cours de streaming (via une prop `isStreaming`) et ajouter un curseur clignotant `█` à la fin du texte rendu.
+
+### 2. Rendu markdown progressif pendant le streaming
+Remplacer le rendu brut des messages `conv_stream_*` par le même `renderMarkdown()` avec `isStreaming=true`, et ajouter un `StreamingCursor` à la fin.
+
+### 3. Corriger la condition `isBuilding` dans `App.tsx`
+`isBuilding` ne doit être `true` QUE si la phase est `building` ou `fixing` — pas `thinking`, `planning`, ou pour une réponse conversationnelle.
+
+**Actuel (erroné)** :
+```
+isBuilding={!!state._generationPhase && state._generationPhase !== 'preview_ready' && state._generationPhase !== 'error'}
 ```
 
-## Details techniques
+**Corrigé** :
+```
+isBuilding={state._generationPhase === 'building' && !state.history.some(m => m.id.startsWith('conv_stream_'))}
+```
 
-### 1. Creer le bucket Storage `deployments`
-- Bucket public pour servir les fichiers statiques
-- Politique RLS : insertion par utilisateur authentifie, lecture publique
+### 4. Transition fluide overlay → preview dans `GeneratingOverlay`
+Ajouter un état `isCompleting` avec un délai de 800ms entre la fin de génération et le masquage de l'overlay, avec une animation `opacity: 0 + scale(1.02)` en CSS.
 
-### 2. Edge Function `build-project`
+### 5. Message de génération avec shimmer dans le chat
+Pendant `isGenerating` et quand aucun `conv_stream_*` n'est en cours, afficher un message assistant avec `Shimmer` qui pulse — exactement comme Lovable montre "Generating..." pendant la phase de construction.
 
-La fonction recoit les fichiers du projet et produit une app statique autonome :
+### 6. Prop `isStreaming` dans `ChatMessage` + `Sidebar`
+Ajouter la prop `isStreaming` à `ChatMessage` pour activer le curseur :
+- Dans `Sidebar.tsx`, passer `isStreaming={msg.id.startsWith('conv_stream_') && state.isGenerating}` au `ChatMessage`.
 
-**Approche : Single-file HTML bundle**
-- Transpile chaque fichier `.tsx` en JavaScript via l'API `esbuild` de Deno
-- Concatene tout le JS transpile dans l'ordre correct (composants d'abord, App.tsx en dernier)
-- Genere un fichier `index.html` autonome avec :
-  - React 18 et ReactDOM via CDN (versions production minifiees)
-  - Tailwind CSS via CDN
-  - Le JS transpile inline dans une balise `<script>`
-  - Lucide, Recharts, Framer Motion en CDN production
-- Upload ce fichier dans Storage
+---
 
-**Avantage par rapport a l'existant** : le code est **pre-transpile** (plus de Babel runtime), plus rapide, plus fiable, et servi depuis une vraie URL statique.
+## Fichiers à modifier
 
-**Phase 2 (evolutive)** : pour un vrai bundling Vite, il faudrait un serveur Node.js externe. Cette premiere phase pose les bases avec un build leger mais fonctionnel.
+```text
+src/app-builder/components/ChatMessage.tsx
+  → Ajouter prop isStreaming
+  → Ajouter StreamingCursor composant
+  → Activer rendu markdown pendant streaming
 
-### 3. Modifier `usePublish.ts`
+src/app-builder/components/Sidebar.tsx
+  → Passer isStreaming au ChatMessage
+  → Améliorer l'indicateur de génération dans le chat
 
-- Appeler la nouvelle edge function `build-project` au lieu de simplement sauvegarder le snapshot
-- Stocker l'URL du build dans la table `deployments` (colonne `url` existante)
-- Afficher la vraie URL publique du build
+src/app-builder/App.tsx
+  → Corriger la condition isBuilding (ligne ~682)
+  → Ajouter suivi isDoing (conversational vs code)
 
-### 4. Modifier `PublishedDeployment.tsx`
+src/app-builder/components/GeneratingOverlay.tsx
+  → Ajouter transition de sortie fluide (fade + scale)
+  → Délai 800ms avant masquage complet
 
-- Detecter si le deploiement a une URL de build statique
-- Si oui, rediriger vers l'URL Storage au lieu de re-construire l'iframe avec Babel
-- Fallback sur l'ancien mode iframe pour les anciens deploiements
+src/app-builder/components/CodePreview.tsx
+  → Utiliser la nouvelle condition isBuilding corrigée
+  → Ajouter classe CSS de transition sur le conteneur iframe
+```
 
-### 5. Ajouter colonne `build_url` a `deployments`
+---
 
-Pour distinguer les anciens deploiements (iframe/Babel) des nouveaux (build statique).
+## Détails techniques
 
-### 6. Mettre a jour `TopNav.tsx` et le flux de publish
+### StreamingCursor (nouveau composant inline dans ChatMessage)
+```tsx
+const StreamingCursor = () => (
+  <span
+    className="inline-block w-[2px] h-[14px] bg-blue-400 ml-0.5 align-middle animate-pulse"
+    style={{ animationDuration: '0.7s' }}
+  />
+);
+```
 
-- Ajouter un indicateur de progression du build ("Building...", "Uploading...", "Live!")
-- Afficher la vraie URL de production apres le build
+### Logique isBuilding corrigée
+```tsx
+// Dans App.tsx → CodePreview props
+const isActuallyBuilding = 
+  state.isGenerating &&
+  (state._generationPhase === 'building' || state._generationPhase === 'fixing') &&
+  !state.history.some(m => m.id.startsWith('conv_stream_'));
+```
 
-## Fichiers crees
-- `supabase/functions/build-project/index.ts` -- Edge function de build
-- Migration SQL pour le bucket storage + colonne `build_url`
+### Transition de sortie de l'overlay (GeneratingOverlay)
+```tsx
+// Ajouter un état interne isExiting
+// Quand isVisible passe à false → déclencher fade-out 600ms avant de vraiment masquer
+const [visible, setVisible] = useState(false);
+useEffect(() => {
+  if (isVisible) { setVisible(true); }
+  else {
+    // Délai de sortie fluide
+    const t = setTimeout(() => setVisible(false), 800);
+    return () => clearTimeout(t);
+  }
+}, [isVisible]);
+```
 
-## Fichiers modifies
-- `src/app-builder/hooks/usePublish.ts` -- Appel a la nouvelle edge function
-- `src/pages/PublishedDeployment.tsx` -- Support du redirect vers build statique
-- `src/app-builder/components/TopNav.tsx` -- UX de build amelioree
+### Signal de streaming dans Sidebar
+```tsx
+// Identifier si le dernier message est en cours de streaming
+const lastMsg = state.history[state.history.length - 1];
+const isLastMsgStreaming = lastMsg?.id.startsWith('conv_stream_') && state.isGenerating;
 
-## Limites et evolution future
-- Phase 1 : build single-file HTML (transpilation esbuild, CDN pour libs). Fonctionnel et deployable immediatement.
-- Phase 2 : build multi-fichiers avec assets separes (JS chunks, CSS, images).
-- Phase 3 : vrai bundler Vite sur serveur Node.js externe pour support complet (HMR, code splitting, tree shaking).
+// Dans le rendu du message :
+<ChatMessage
+  message={msg}
+  onApprovePlan={onApprovePlan}
+  isStreaming={msg.id.startsWith('conv_stream_') && state.isGenerating}
+/>
+```
