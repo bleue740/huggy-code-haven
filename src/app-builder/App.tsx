@@ -50,6 +50,7 @@ const App: React.FC = () => {
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const streamingTextRef = useRef("");
+  const thinkingTextRef = useRef("");
 
   const { logs: consoleLogs, clearLogs: clearConsoleLogs } = useConsoleCapture();
   const { credits, isLoading: creditsLoading, refetch: refetchCredits } = useCredits();
@@ -281,6 +282,8 @@ const App: React.FC = () => {
       _generationPhase: undefined, _pipelineProgress: 0, _thinkingLines: [], _planItems: [], _buildLogs: [],
     }));
 
+    thinkingTextRef.current = "";
+
     const currentMode = state.chatMode || "agent";
     persistMessage(state.projectId, "user", input, false, 0, currentMode);
 
@@ -331,12 +334,12 @@ const App: React.FC = () => {
     await sendOrchestrator(chatMessages, vfsRef.current, ctxRef.current, {
       onPhase: (phase, message) => {
         const phaseMap: Record<string, { uiPhase: AppState['_generationPhase']; progress: number }> = {
-          planning: { uiPhase: "thinking", progress: 10 },
+          planning:   { uiPhase: "thinking", progress: 10 },
           generating: { uiPhase: "building", progress: 30 },
           validating: { uiPhase: "building", progress: 85 },
-          fixing: { uiPhase: "building", progress: 88 },
-          complete: { uiPhase: "preview_ready", progress: 100 },
-          error: { uiPhase: "error", progress: 0 },
+          fixing:     { uiPhase: "fixing",   progress: 88 },
+          complete:   { uiPhase: "preview_ready", progress: 100 },
+          error:      { uiPhase: "error",    progress: 0 },
         };
         const mapped = phaseMap[phase] || { uiPhase: undefined, progress: 0 };
         setState((prev) => ({
@@ -346,6 +349,23 @@ const App: React.FC = () => {
           _generationPhase: mapped.uiPhase,
           _pipelineProgress: mapped.progress,
           aiStatusText: message || null,
+        }));
+      },
+
+      onThinkingDelta: (delta) => {
+        thinkingTextRef.current += delta;
+        const text = thinkingTextRef.current;
+        setState((prev) => ({ ...prev, _thinkingLines: [text] }));
+      },
+
+      onFileRead: (path) => {
+        setState((prev) => ({
+          ...prev,
+          _generationPhase: "reading",
+          _buildLogs: [
+            ...(prev._buildLogs || []).filter(l => l.type === "read"),
+            { id: `read_${path}_${Date.now()}`, text: `Reading ${path}…`, done: true, type: "read" as const },
+          ],
         }));
       },
 
@@ -361,16 +381,21 @@ const App: React.FC = () => {
         }));
 
         setTimeout(() => {
-          setState((prev) => ({
-            ...prev,
-            _generationPhase: "building",
-            _pipelineProgress: 30,
-            _buildLogs: steps.map((s, i) => ({
-              id: `build_${i}`,
-              text: `${s.action === "create" ? "Creating" : s.action === "modify" ? "Updating" : "Removing"} ${s.target}…`,
-              done: false,
-            })),
-          }));
+          setState((prev) => {
+            // If onFileRead already moved us to "reading", don't override with stale buildLogs
+            if (prev._generationPhase === "reading") return prev;
+            return {
+              ...prev,
+              _generationPhase: "building",
+              _pipelineProgress: 30,
+              _buildLogs: steps.map((s, i) => ({
+                id: `build_${i}`,
+                text: `${s.action === "create" ? "Creating" : s.action === "modify" ? "Updating" : "Removing"} ${s.target}…`,
+                done: false,
+                type: "build" as const,
+              })),
+            };
+          });
         }, 1200);
       },
 

@@ -496,7 +496,7 @@ serve(async (req: Request) => {
     (async () => {
       try {
         // ════════════════════════════════════════════════════════════
-        // PHASE 1: PLANNER
+        // PHASE 0: THINKING STREAM (fast pre-planner reasoning)
         // ════════════════════════════════════════════════════════════
         await stream.sendEvent({
           type: "phase",
@@ -504,6 +504,23 @@ serve(async (req: Request) => {
           message: "Analyzing architecture…",
         });
 
+        // Stream real thinking tokens before the planner JSON is ready
+        const THINKING_SYSTEM = `You are briefly thinking about a user's request. Output 1-2 short sentences about what they want to build. Be direct, no formatting, no markdown.`;
+        try {
+          await callAgentStreaming(
+            THINKING_SYSTEM,
+            `User request: "${userPrompt.slice(0, 300)}"`,
+            "google/gemini-2.5-flash-lite",
+            async (chunk) => {
+              await stream.sendEvent({ type: "thinking_delta", delta: chunk });
+            },
+            60, // max 60 tokens — ultra fast ~300ms
+          );
+        } catch { /* non-blocking — pipeline continues regardless */ }
+
+        // ════════════════════════════════════════════════════════════
+        // PHASE 1: PLANNER
+        // ════════════════════════════════════════════════════════════
         const conversationHistory = messages
           .slice(-10)
           .map((m: { role: string; content: string }) => `[${m.role}]: ${m.content}`)
@@ -542,6 +559,13 @@ ${projectContext ? projectContext.slice(0, 12000) : "Empty project — only App.
         });
 
         await stream.sendEvent({ type: "plan", plan });
+
+        // ── Emit file_read events for files being modified (gives UI the "Reading" phase) ──
+        for (const step of (plan.steps || [])) {
+          if (step.action !== "create" && step.path) {
+            await stream.sendEvent({ type: "file_read", path: step.path });
+          }
+        }
 
         // ── Handle Conversational (streaming token-by-token) ──
         if (plan.conversational || (plan.clarification_needed && plan.clarification_question)) {
