@@ -20,9 +20,23 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
+// ─── Env validation ───
+const PUBLIC_URL = process.env.PUBLIC_URL || "";
+if (!PUBLIC_URL) {
+  console.warn("[server] ⚠️  PUBLIC_URL not set — dev preview URLs may be incorrect.");
+}
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.warn("[server] ⚠️  SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set — /build endpoint will fail.");
+}
+
 // ─── Health ───
 app.get("/health", (req, res) => {
-  res.json({ status: "ok", activeServers: getActiveServers().length });
+  res.json({
+    status: "ok",
+    activeServers: getActiveServers().length,
+    publicUrl: PUBLIC_URL || "not-set",
+    supabaseConfigured: !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
+  });
 });
 
 // ─── Dev Server: Start ───
@@ -34,8 +48,8 @@ app.post("/dev/start", async (req, res) => {
 
   try {
     const { port } = await startDevServer(projectId, files, projectName);
-    const publicBaseUrl = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
-    const devUrl = `${publicBaseUrl}/dev/${projectId}/`;
+    const baseUrl = PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const devUrl = `${baseUrl}/dev/${projectId}/`;
 
     res.json({
       success: true,
@@ -100,7 +114,7 @@ app.post("/build", async (req, res) => {
   const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !supabaseServiceKey) {
-    return res.status(500).json({ error: "Missing Supabase configuration on server" });
+    return res.status(500).json({ error: "Missing Supabase configuration on server. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY env vars." });
   }
 
   try {
@@ -112,8 +126,8 @@ app.post("/build", async (req, res) => {
   }
 });
 
-// ─── Dev Server Proxy (HTTP + WebSocket) ───
-// Proxy /dev/:projectId/* to the Vite dev server
+// ─── Dev Server HTTP Proxy (/dev/:projectId/*) ───
+// Must come BEFORE the HMR route
 app.use("/dev/:projectId", (req, res, next) => {
   const server = getDevServer(req.params.projectId);
   if (!server) {
@@ -123,14 +137,17 @@ app.use("/dev/:projectId", (req, res, next) => {
   const proxy = createProxyMiddleware({
     target: `http://127.0.0.1:${server.port}`,
     changeOrigin: true,
-    ws: true,
+    ws: false, // WS is handled separately via upgrade event
     pathRewrite: (pathStr) => {
-      // Strip /dev/:projectId prefix
       return pathStr.replace(`/dev/${req.params.projectId}`, "") || "/";
     },
     on: {
-      error: (err) => {
-        console.error(`Proxy error for ${req.params.projectId}:`, err.message);
+      error: (err, req, res) => {
+        console.error(`Proxy error for ${req.params?.projectId}:`, err.message);
+        if (!res.headersSent) {
+          res.writeHead(502, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Dev server unreachable" }));
+        }
       },
     },
   });
@@ -138,7 +155,8 @@ app.use("/dev/:projectId", (req, res, next) => {
   return proxy(req, res, next);
 });
 
-// ─── HMR WebSocket proxy ───
+// ─── HMR WebSocket proxy (/dev-hmr/:projectId) ───
+// This is only used to signal the route exists; actual WS upgrade is handled below
 app.use("/dev-hmr/:projectId", (req, res, next) => {
   const server = getDevServer(req.params.projectId);
   if (!server) {
@@ -146,32 +164,18 @@ app.use("/dev-hmr/:projectId", (req, res, next) => {
   }
 
   const proxy = createProxyMiddleware({
-    target: `ws://127.0.0.1:${server.port}`,
-    ws: true,
+    target: `http://127.0.0.1:${server.port}`,
     changeOrigin: true,
+    ws: false, // WS handled via upgrade event
     pathRewrite: () => "/",
+    on: {
+      error: (err) => {
+        console.error("HMR proxy error:", err.message);
+      },
+    },
   });
 
   return proxy(req, res, next);
-});
-
-// ─── Legacy: Docker preview ───
-app.post("/preview", (req, res) => {
-  const projectId = "demo";
-  const port = 5000 + Math.floor(Math.random() * 1000);
-  const projectPath = path.join(process.cwd(), "projects", projectId);
-
-  if (!fs.existsSync(projectPath)) {
-    fs.mkdirSync(projectPath, { recursive: true });
-    fs.writeFileSync(path.join(projectPath, "index.html"), "<h1>Hello Docker Preview 🚀</h1>");
-  }
-
-  const cmd = `docker run -d -p ${port}:3000 -v ${projectPath}:/app preview-image`;
-  exec(cmd, (err) => {
-    if (err) return res.status(500).json({ error: "docker failed" });
-    const publicBaseUrl = process.env.PUBLIC_URL || `http://localhost:${port}`;
-    res.json({ url: `${publicBaseUrl}:${port}` });
-  });
 });
 
 // ─── GitHub Bidirectional Sync ───
@@ -282,6 +286,7 @@ app.post("/github/pull", async (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 async function start() {
+  // Pre-warm base node_modules
   try {
     await setupBaseModules();
     console.log("[server] Base modules ready.");
@@ -292,13 +297,14 @@ async function start() {
 
   const server = app.listen(PORT, () => {
     console.log(`[server] Running on port ${PORT}`);
+    console.log(`[server] Public URL: ${PUBLIC_URL || "(not set — set PUBLIC_URL env var)"}`);
   });
 
-  // Handle WebSocket upgrade for HMR
-  server.on("upgrade", async (req, socket, head) => {
-    // Extract projectId from URL: /dev-hmr/:projectId or /dev/:projectId
-    const hmrMatch = req.url.match(/^\/dev-hmr\/([^/]+)/);
-    const devMatch = req.url.match(/^\/dev\/([^/]+)/);
+  // ─── WebSocket upgrade handling for Vite HMR ───
+  // We delegate all WS upgrades to http-proxy-middleware proxies
+  server.on("upgrade", (req, socket, head) => {
+    const hmrMatch = req.url.match(/^\/dev-hmr\/([^/?#]+)/);
+    const devMatch = req.url.match(/^\/dev\/([^/?#]+)/);
     const projectId = hmrMatch?.[1] || devMatch?.[1];
 
     if (!projectId) {
@@ -308,27 +314,27 @@ async function start() {
 
     const devServer = getDevServer(projectId);
     if (!devServer) {
+      console.warn(`[ws] No dev server for project ${projectId}`);
       socket.destroy();
       return;
     }
 
-    // For raw WebSocket proxying, we use a simpler approach
-    const net = await import("net");
-    const client = net.connect(devServer.port, "127.0.0.1", () => {
-      // Forward the original request
-      const reqLine = `${req.method} / HTTP/${req.httpVersion}\r\n`;
-      const headers = Object.entries(req.headers)
-        .map(([k, v]) => `${k}: ${v}`)
-        .join("\r\n");
-      client.write(reqLine + headers + "\r\n\r\n");
-
-      // Pipe in both directions
-      socket.pipe(client);
-      client.pipe(socket);
+    // Use http-proxy-middleware to proxy the WS upgrade
+    const wsProxy = createProxyMiddleware({
+      target: `ws://127.0.0.1:${devServer.port}`,
+      changeOrigin: true,
+      ws: true,
+      pathRewrite: hmrMatch ? () => "/" : (pathStr) => pathStr.replace(`/dev/${projectId}`, "") || "/",
+      on: {
+        error: (err) => {
+          console.error(`[ws] Proxy error for ${projectId}:`, err.message);
+          try { socket.destroy(); } catch {}
+        },
+      },
     });
 
-    client.on("error", () => socket.destroy());
-    socket.on("error", () => client.destroy());
+    // Emit a fake HTTP request so the middleware can handle the upgrade
+    wsProxy.upgrade(req, socket, head);
   });
 
   // Cleanup idle servers every 5 minutes

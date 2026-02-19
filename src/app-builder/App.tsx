@@ -30,7 +30,7 @@ import { getPhaseLabel, isConversationActive } from "./engine/ConversationStateM
 import { analyzeCodeSecurity } from "./utils/securityAnalyzer";
 import { exportProjectAsZip } from "./utils/exportZip";
 
-import { AppState, Message, AISuggestion, SecurityResult, BackendNeed, GenerationStep } from "./types";
+import { AppState, Message, AISuggestion, SecurityResult, BackendNeed, GenerationStep, BuildLog, PlanItem } from "./types";
 import type { ProjectTemplate } from "./data/templates";
 
 import { useNavigate } from "react-router-dom";
@@ -89,6 +89,14 @@ const App: React.FC = () => {
     backendHints: [],
     showSupabaseModal: false,
     generationSteps: [],
+    // Pipeline UI state
+    _generationPhase: undefined,
+    _pipelineProgress: 0,
+    _buildLogs: [],
+    _planItems: [],
+    _thinkingLines: [],
+    _totalExpectedFiles: 0,
+    _filesGeneratedCount: 0,
   });
 
   // Extracted hooks
@@ -239,7 +247,7 @@ const App: React.FC = () => {
     setState((prev) => ({
       ...prev, isGenerating: false, aiStatusText: null,
       _generationPhase: undefined, _pipelineProgress: 0, _planItems: [], _buildLogs: [], _thinkingLines: [],
-    } as any));
+    }));
   }, [stopStreaming, stopOrchestrator]);
 
   const handleSendMessage = useCallback(async (customPrompt?: string) => {
@@ -257,7 +265,7 @@ const App: React.FC = () => {
       currentInput: customPrompt ? prev.currentInput : "",
       generationSteps: [],
       _generationPhase: undefined, _pipelineProgress: 0, _thinkingLines: [], _planItems: [], _buildLogs: [],
-    } as any));
+    }));
 
     const currentMode = state.chatMode || "agent";
     persistMessage(state.projectId, "user", input, false, 0, currentMode);
@@ -308,7 +316,7 @@ const App: React.FC = () => {
     // AGENT MODE
     await sendOrchestrator(chatMessages, vfsRef.current, ctxRef.current, {
       onPhase: (phase, message) => {
-        const phaseMap: Record<string, { uiPhase: string; progress: number }> = {
+        const phaseMap: Record<string, { uiPhase: AppState['_generationPhase']; progress: number }> = {
           planning: { uiPhase: "thinking", progress: 10 },
           generating: { uiPhase: "building", progress: 30 },
           validating: { uiPhase: "building", progress: 85 },
@@ -316,46 +324,55 @@ const App: React.FC = () => {
           complete: { uiPhase: "preview_ready", progress: 100 },
           error: { uiPhase: "error", progress: 0 },
         };
-        const mapped = phaseMap[phase] || { uiPhase: phase, progress: (state as any)._pipelineProgress || 0 };
+        const mapped = phaseMap[phase] || { uiPhase: undefined, progress: 0 };
         setState((prev) => ({
-          ...prev, _generationPhase: mapped.uiPhase, _pipelineProgress: mapped.progress, aiStatusText: message || null,
-        } as any));
+          ...prev,
+          _generationPhase: mapped.uiPhase,
+          _pipelineProgress: mapped.progress,
+          aiStatusText: message || null,
+        }));
       },
 
       onPlanReady: (intent, steps) => {
         setState((prev) => ({
-          ...prev, _generationPhase: "planning", _pipelineProgress: 20, _thinkingLines: [],
+          ...prev,
+          _generationPhase: "planning",
+          _pipelineProgress: 20,
+          _thinkingLines: [],
           _planItems: steps.map((s) => ({ label: `${s.target}: ${s.description}`, done: false })),
-          _totalExpectedFiles: steps.filter((s) => s.action !== "delete").length, _filesGeneratedCount: 0,
-        } as any));
+          _totalExpectedFiles: steps.filter((s) => s.action !== "delete").length,
+          _filesGeneratedCount: 0,
+        }));
 
         setTimeout(() => {
           setState((prev) => ({
-            ...prev, _generationPhase: "building", _pipelineProgress: 30,
+            ...prev,
+            _generationPhase: "building",
+            _pipelineProgress: 30,
             _buildLogs: steps.map((s, i) => ({
               id: `build_${i}`,
               text: `${s.action === "create" ? "Creating" : s.action === "modify" ? "Updating" : "Removing"} ${s.target}…`,
               done: false,
             })),
-          } as any));
+          }));
         }, 1200);
       },
 
       onFileGenerated: (path) => {
         setState((prev) => {
-          const logs = ((prev as any)._buildLogs || []).map((l: any) =>
+          const logs: BuildLog[] = (prev._buildLogs || []).map((l) =>
             !l.done && l.text.toLowerCase().includes(path.toLowerCase().replace(".tsx", "").replace(".ts", ""))
               ? { ...l, done: true } : l,
           );
-          const anyMarked = logs.some((l: any, i: number) => l.done && !((prev as any)._buildLogs || [])[i]?.done);
+          const anyMarked = logs.some((l, i) => l.done && !(prev._buildLogs || [])[i]?.done);
           if (!anyMarked) {
-            const firstUndone = logs.findIndex((l: any) => !l.done);
+            const firstUndone = logs.findIndex((l) => !l.done);
             if (firstUndone >= 0) logs[firstUndone] = { ...logs[firstUndone], done: true };
           }
-          const newCount = ((prev as any)._filesGeneratedCount || 0) + 1;
-          const total = (prev as any)._totalExpectedFiles || 1;
+          const newCount = (prev._filesGeneratedCount || 0) + 1;
+          const total = prev._totalExpectedFiles || 1;
           const fileProgress = 30 + Math.round((newCount / total) * 50);
-          return { ...prev, _buildLogs: logs, _filesGeneratedCount: newCount, _pipelineProgress: Math.min(fileProgress, 80) } as any;
+          return { ...prev, _buildLogs: logs, _filesGeneratedCount: newCount, _pipelineProgress: Math.min(fileProgress, 80) };
         });
       },
 
@@ -368,19 +385,24 @@ const App: React.FC = () => {
           for (const f of files) newFiles[f.path] = f.content;
           for (const d of deletedFiles) { if (d !== "App.tsx") delete newFiles[d]; }
 
-          const doneLogs = ((prev as any)._buildLogs || []).map((l: any) => ({ ...l, done: true }));
+          const doneLogs: BuildLog[] = (prev._buildLogs || []).map((l) => ({ ...l, done: true }));
 
           return {
-            ...prev, files: newFiles,
+            ...prev,
+            files: newFiles,
             activeFile: files.find((f) => f.path === "App.tsx") ? "App.tsx" : files[0]?.path || prev.activeFile,
-            isGenerating: false, aiStatusText: null, generationSteps: [],
-            _generationPhase: "preview_ready", _pipelineProgress: 100, _buildLogs: doneLogs,
+            isGenerating: false,
+            aiStatusText: null,
+            generationSteps: [],
+            _generationPhase: "preview_ready",
+            _pipelineProgress: 100,
+            _buildLogs: doneLogs,
             history: [...prev.history, {
               id: `orch_${Date.now()}`, role: "assistant" as const,
               content: `Your application is ready.\n\n${files.length} file(s) generated and validated: ${files.map((f) => "`" + f.path + "`").join(", ")}`,
               timestamp: Date.now(), codeApplied: true, codeLineCount: totalLines,
             }],
-          } as any;
+          };
         });
 
         toast.success(`Your app is ready — ${files.length} file(s) applied.`);
@@ -400,7 +422,6 @@ const App: React.FC = () => {
                 files_snapshot: newFiles,
               } as any).select('id').single();
 
-              // Attach snapshotId to the last message in state
               if (snapshot?.id) {
                 setState((prev) => {
                   const lastMsg = prev.history[prev.history.length - 1];
@@ -415,7 +436,6 @@ const App: React.FC = () => {
                   return prev;
                 });
 
-                // Also persist snapshot_id in chat_messages
                 persistMessage(state.projectId, "assistant",
                   `Agent pipeline: ${files.map((f) => f.path).join(", ")}`,
                   true, totalLines, "agent"
@@ -425,32 +445,45 @@ const App: React.FC = () => {
           } catch { /* ignore */ }
         })();
 
-        // Push undo history
         fileHistory.pushSnapshot(state.files);
-
-        // persistMessage is now called inside the snapshot save block above
         refetchCredits();
         fetchSuggestions();
 
         setTimeout(() => setState((prev) => ({
-          ...prev, generationSteps: [], _generationPhase: undefined, _pipelineProgress: 0, _planItems: [], _buildLogs: [], _thinkingLines: [],
-        } as any)), 4000);
+          ...prev,
+          generationSteps: [],
+          _generationPhase: undefined,
+          _pipelineProgress: 0,
+          _planItems: [],
+          _buildLogs: [],
+          _thinkingLines: [],
+        })), 4000);
       },
 
       onConversationalReply: (reply) => {
         setRetryCount(0);
         setState((prev) => ({
-          ...prev, isGenerating: false, aiStatusText: null, generationSteps: [],
-          _generationPhase: undefined, _pipelineProgress: 0, _planItems: [], _buildLogs: [], _thinkingLines: [],
+          ...prev,
+          isGenerating: false,
+          aiStatusText: null,
+          generationSteps: [],
+          _generationPhase: undefined,
+          _pipelineProgress: 0,
+          _planItems: [],
+          _buildLogs: [],
+          _thinkingLines: [],
           history: [...prev.history, { id: `conv_${Date.now()}`, role: "assistant", content: reply, timestamp: Date.now() }],
-        } as any));
+        }));
         persistMessage(state.projectId, "assistant", reply, false, 0, "agent");
         refetchCredits();
       },
 
       onError: (error, code) => {
         setState((prev) => ({
-          ...prev, isGenerating: false, aiStatusText: null,
+          ...prev,
+          isGenerating: false,
+          aiStatusText: null,
+          _generationPhase: "error",
           history: [...prev.history, { id: `err_${Date.now()}`, role: "assistant", content: `⚠️ ${error}`, timestamp: Date.now() }],
         }));
         if (code === 401) {
@@ -615,8 +648,8 @@ const App: React.FC = () => {
           code={concatenatedCode}
           files={state.files}
           isGenerating={state.isGenerating}
-          isBuilding={!!(state as any)._generationPhase && (state as any)._generationPhase !== "preview_ready" && (state as any)._generationPhase !== "error"}
-          pipelineProgress={(state as any)._pipelineProgress || 0}
+          isBuilding={!!state._generationPhase && state._generationPhase !== "preview_ready" && state._generationPhase !== "error"}
+          pipelineProgress={state._pipelineProgress || 0}
           generationStatus={state.aiStatusText ?? undefined}
           supabaseUrl={state.supabaseUrl}
           supabaseAnonKey={state.supabaseAnonKey}
