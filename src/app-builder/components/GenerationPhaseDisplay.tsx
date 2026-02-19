@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Brain, ListChecks, Hammer, Eye, CheckCircle2, AlertCircle,
-  FileSearch, Check, Loader2, ChevronDown, ChevronRight, Pencil, Sparkles,
+  Brain, ListChecks, Hammer, CheckCircle2, AlertCircle,
+  FileSearch, Check, Loader2, ChevronDown, ChevronRight, Sparkles, Pencil,
 } from 'lucide-react';
 import {
   ChainOfThought,
@@ -12,14 +12,6 @@ import {
 } from '@/components/ai-elements/chain-of-thought';
 import { Reasoning, ReasoningTrigger, ReasoningContent } from '@/components/ai-elements/reasoning';
 import { Shimmer } from '@/components/ai-elements/shimmer';
-import {
-  StackTrace,
-  StackTraceHeader,
-  StackTraceError,
-  StackTraceContent,
-  StackTraceFrames,
-  StackTraceCopyButton,
-} from '@/components/ai-elements/stack-trace';
 
 export type PhaseType = 'thinking' | 'reading' | 'planning' | 'building' | 'fixing' | 'preview_ready' | 'error';
 
@@ -76,10 +68,10 @@ const ReadFilesSection: React.FC<{ readLogs: BuildLog[]; collapsed?: boolean }> 
   if (readLogs.length === 0) return null;
 
   return (
-    <div className="rounded-lg border border-blue-500/10 bg-blue-500/[0.03] overflow-hidden">
+    <div className="rounded-lg border border-border bg-muted/20 overflow-hidden">
       <button
         onClick={() => setIsOpen(o => !o)}
-        className="w-full flex items-center gap-2 px-3 py-2 text-[10px] font-semibold text-blue-400/70 uppercase tracking-widest hover:text-blue-400 transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest hover:text-foreground transition-colors"
       >
         {isOpen ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
         <FileSearch size={10} />
@@ -89,9 +81,9 @@ const ReadFilesSection: React.FC<{ readLogs: BuildLog[]; collapsed?: boolean }> 
         <div className="px-3 pb-2.5 space-y-1 animate-in fade-in duration-200">
           {readLogs.map(log => (
             <div key={log.id} className="flex items-center gap-2 text-[11px]">
-              <FileSearch size={10} className="text-blue-400/60 shrink-0" />
-              <span className="font-mono text-blue-400/70">{log.text.replace('Reading ', '').replace('…', '')}</span>
-              <Check size={9} className="text-emerald-400/70 ml-auto shrink-0" />
+              <FileSearch size={10} className="text-primary/50 shrink-0" />
+              <span className="font-mono text-muted-foreground">{log.text.replace('Reading ', '').replace('…', '')}</span>
+              <Check size={9} className="text-emerald-500/70 ml-auto shrink-0" />
             </div>
           ))}
         </div>
@@ -108,10 +100,10 @@ const WrittenFilesSection: React.FC<{ buildLogs: BuildLog[] }> = ({ buildLogs })
   if (doneLogs.length === 0) return null;
 
   return (
-    <div className="rounded-lg border border-emerald-500/10 bg-emerald-500/[0.03] overflow-hidden mt-3">
+    <div className="rounded-lg border border-border bg-muted/10 overflow-hidden mt-2">
       <button
         onClick={() => setIsOpen(o => !o)}
-        className="w-full flex items-center gap-2 px-3 py-2 text-[10px] font-semibold text-emerald-400/70 uppercase tracking-widest hover:text-emerald-400 transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest hover:text-foreground transition-colors"
       >
         {isOpen ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
         <CheckCircle2 size={10} />
@@ -121,43 +113,13 @@ const WrittenFilesSection: React.FC<{ buildLogs: BuildLog[] }> = ({ buildLogs })
         <div className="px-3 pb-2.5 space-y-1 animate-in fade-in duration-200">
           {doneLogs.map(log => (
             <div key={log.id} className="flex items-center gap-2 text-[11px]">
-              <CheckCircle2 size={10} className="text-emerald-400/60 shrink-0" />
+              <CheckCircle2 size={10} className="text-emerald-500/60 shrink-0" />
               <span className="font-mono text-muted-foreground">{log.text.replace('Writing ', '').replace('…', '')}</span>
               {log.linesCount && (
-                <span className="text-[9px] font-mono text-emerald-400/70 ml-auto shrink-0">{log.linesCount}L</span>
+                <span className="text-[9px] font-mono text-muted-foreground/60 ml-auto shrink-0">{log.linesCount}L</span>
               )}
             </div>
           ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ── Write indicator with mini progress bar ─────────────────────────
-
-const WriteIndicator: React.FC<{ log: BuildLog; isActive: boolean }> = ({ log, isActive }) => {
-  const linesText = log.linesCount ? ` (${log.linesCount} lines)` : '';
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-2 text-[11px]">
-        {log.done ? (
-          <CheckCircle2 size={11} className="text-emerald-400 shrink-0" />
-        ) : isActive ? (
-          <Pencil size={11} className="text-primary shrink-0 animate-pulse" />
-        ) : (
-          <div className="w-2.5 h-2.5 rounded-full border border-muted-foreground/30 shrink-0" />
-        )}
-        <span className={`font-mono truncate ${log.done ? 'text-muted-foreground' : isActive ? 'text-foreground' : 'text-muted-foreground/40'}`}>
-          {log.text}{linesText}
-        </span>
-        {log.done && log.linesCount && (
-          <span className="text-[9px] text-emerald-400/70 ml-auto font-mono shrink-0">{log.linesCount}L</span>
-        )}
-      </div>
-      {isActive && !log.done && (
-        <div className="ml-4 h-[2px] bg-muted rounded-full overflow-hidden">
-          <div className="h-full bg-primary/60 rounded-full animate-pulse" style={{ width: '60%' }} />
         </div>
       )}
     </div>
@@ -210,23 +172,11 @@ export const GenerationPhaseDisplay: React.FC<PhaseDisplayProps> = ({
   }));
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-3 duration-500 space-y-3">
-      {/* Phase badge */}
-      <div className="flex items-center gap-2">
-        {cfg.icon}
-        <span className={`text-[10px] font-extrabold uppercase tracking-[0.12em] ${cfg.color}`}>
-          {cfg.label}
-        </span>
-        <span className="text-[9px] font-mono text-muted-foreground/50 ml-auto">{elapsedSeconds}s</span>
-      </div>
+    <div className="animate-in fade-in slide-in-from-bottom-3 duration-500 space-y-2">
 
-      {/* ─── THINKING PHASE ───
-          Reasoning handles duration + auto-collapse natively via its built-in timer */}
-      {(phase === 'thinking' || (thinkingText && phase === 'planning')) && (
-        <Reasoning
-          isStreaming={phase === 'thinking'}
-          defaultOpen={true}
-        >
+      {/* ─── THINKING — "Thought for Xs" + inline text, no badge ─── */}
+      {(phase === 'thinking' || (thinkingText && (phase === 'planning' || phase === 'building'))) && (
+        <Reasoning isStreaming={phase === 'thinking'} defaultOpen>
           <ReasoningTrigger />
           <ReasoningContent>
             {thinkingText || 'Analyzing your request…'}
@@ -234,162 +184,188 @@ export const GenerationPhaseDisplay: React.FC<PhaseDisplayProps> = ({
         </Reasoning>
       )}
 
-      {/* ─── READING PHASE ─── */}
+      {/* ─── READING — shimmer or file list ─── */}
       {phase === 'reading' && (
-        <div className="space-y-2 animate-in fade-in duration-300">
-          {readLogs.length > 0 ? (
-            <div className="space-y-1.5">
-              {readLogs.map(log => (
-                <div key={log.id} className="flex items-center gap-2 text-[11px] animate-in fade-in slide-in-from-left-2 duration-300">
-                  <FileSearch size={11} className="text-blue-400 shrink-0" />
-                  <span className="font-mono text-blue-400/80">{log.text}</span>
-                  <Check size={9} className="text-emerald-400 ml-auto shrink-0" />
-                </div>
-              ))}
+        <div className="space-y-1.5 animate-in fade-in duration-300">
+          {readLogs.length > 0 ? readLogs.map(log => (
+            <div key={log.id} className="flex items-center gap-2 text-xs animate-in fade-in slide-in-from-left-2 duration-300">
+              <FileSearch size={11} className="text-primary/60 shrink-0" />
+              <span className="font-mono text-muted-foreground">{log.text.replace('Reading ', '').replace('…', '')}</span>
+              <Check size={9} className="text-emerald-500 ml-auto shrink-0" />
             </div>
-          ) : (
-            <Shimmer className="text-[11px] font-mono" duration={1.2}>Reading project files…</Shimmer>
+          )) : (
+            <Shimmer className="text-xs font-mono" duration={1.2}>Reading project files…</Shimmer>
           )}
         </div>
       )}
 
-      {/* ─── PLANNING PHASE ─── */}
+      {/* ─── PLANNING — "Editing [file]" ChainOfThought like Lovable ─── */}
       {phase === 'planning' && planItems && planItems.length > 0 && (
         <motion.div
-          initial={{ opacity: 0, y: 6 }}
+          initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, ease: 'easeOut' }}
-          className="space-y-2"
+          transition={{ duration: 0.3, ease: 'easeOut' }}
         >
-          <p className="text-[11px] text-muted-foreground">Here's how your app will be built</p>
           <ChainOfThought defaultOpen>
-            <ChainOfThoughtHeader>Application plan</ChainOfThoughtHeader>
+            {/* Header: "Editing" + first critical file as badge */}
+            <ChainOfThoughtHeader>
+              {(() => {
+                const criticalItem = planItems.find(p => p.priority === 'critical') || planItems[0];
+                const filePath = criticalItem?.path || null;
+                return (
+                  <span className="flex items-center gap-2">
+                    <Pencil size={13} className="text-muted-foreground shrink-0" />
+                    <span className="text-xs font-medium text-muted-foreground">Planning</span>
+                    {filePath && (
+                      <span className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono text-foreground/80 border border-border">
+                        {filePath}
+                      </span>
+                    )}
+                    <PriorityBadge priority={criticalItem?.priority} />
+                  </span>
+                );
+              })()}
+            </ChainOfThoughtHeader>
             <ChainOfThoughtContent>
-              {planCotSteps.map((step, i) => (
-                <div key={i} className="flex items-start gap-0">
+              {planItems.map((item, i) => {
+                const isActive = !item.done && i === planItems.findIndex(p => !p.done);
+                const status = item.done ? 'complete' : isActive ? 'active' : 'pending';
+                return (
                   <ChainOfThoughtStep
-                    icon={step.icon}
+                    key={i}
+                    icon={item.done ? CheckCircle2 : isActive ? Loader2 : ListChecks}
                     label={
-                      <span className="flex items-center gap-1 flex-wrap">
-                        <span>{step.label}</span>
-                        <PriorityBadge priority={step.priority} />
+                      <span className="flex items-center gap-1.5 flex-wrap">
+                        <span>{item.label}</span>
+                        <PriorityBadge priority={item.priority} />
                       </span>
                     }
-                    status={step.status}
+                    status={status}
                   />
-                </div>
-              ))}
+                );
+              })}
             </ChainOfThoughtContent>
           </ChainOfThought>
         </motion.div>
       )}
 
-      {/* ─── BUILDING PHASE ─── */}
+      {/* ─── BUILDING — "Editing [file]" + checklist like Lovable ─── */}
       {phase === 'building' && (
-        <div className="space-y-3 animate-in fade-in duration-300">
-          {/* Read files — collapsed subsection */}
-          {readLogs.length > 0 && (
-            <ReadFilesSection readLogs={readLogs} collapsed={true} />
-          )}
+        <div className="space-y-2 animate-in fade-in duration-300">
+          {/* Collapsed files read */}
+          {readLogs.length > 0 && <ReadFilesSection readLogs={readLogs} collapsed />}
 
-          {/* Write indicators with per-file mini progress */}
+          {/* Lovable-style: ChainOfThought with "Editing [activeFile]" header */}
           {buildOnlyLogs.length > 0 ? (
-            <div className="space-y-2">
-              {buildOnlyLogs.map((log, i) => (
-                <WriteIndicator
-                  key={log.id}
-                  log={log}
-                  isActive={i === firstActiveIdx}
-                />
-              ))}
-            </div>
+            <ChainOfThought defaultOpen>
+              <ChainOfThoughtHeader>
+                {(() => {
+                  const activeLog = buildOnlyLogs[firstActiveIdx] || buildOnlyLogs[buildOnlyLogs.length - 1];
+                  const filePath = activeLog?.text.replace('Writing ', '').replace('…', '').trim();
+                  return (
+                    <span className="flex items-center gap-2">
+                      <Pencil size={13} className="text-muted-foreground shrink-0 animate-pulse" />
+                      <span className="text-xs font-medium text-muted-foreground">Editing</span>
+                      {filePath && (
+                        <span className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-mono text-foreground/80 border border-border">
+                          {filePath}
+                        </span>
+                      )}
+                    </span>
+                  );
+                })()}
+              </ChainOfThoughtHeader>
+              <ChainOfThoughtContent>
+                {buildOnlyLogs.map((log, i) => {
+                  const isActive = i === firstActiveIdx;
+                  const linesText = log.linesCount ? ` (${log.linesCount} lines)` : '';
+                  return (
+                    <ChainOfThoughtStep
+                      key={log.id}
+                      icon={log.done ? CheckCircle2 : isActive ? Loader2 : ListChecks}
+                      label={
+                        <span className="flex items-center gap-1.5 font-mono text-[11px]">
+                          {log.text.replace('Writing ', '').replace('…', '')}
+                          {linesText && <span className="text-[9px] text-muted-foreground/60">{linesText}</span>}
+                        </span>
+                      }
+                      status={log.done ? 'complete' : isActive ? 'active' : 'pending'}
+                    />
+                  );
+                })}
+              </ChainOfThoughtContent>
+            </ChainOfThought>
           ) : (
-            <Shimmer className="text-[11px] font-mono" duration={1.2}>Generating files…</Shimmer>
+            <Shimmer className="text-xs font-mono" duration={1.2}>Generating files…</Shimmer>
           )}
 
           {/* Global progress bar */}
           <div className="w-full h-[2px] bg-muted rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-primary to-primary/70 transition-all duration-700 ease-out"
-              style={{ width: `${Math.max(5, Math.min(buildProgress, 100))}%` }}
+            <motion.div
+              className="h-full bg-gradient-to-r from-primary to-primary/60"
+              animate={{ width: `${Math.max(5, Math.min(buildProgress, 100))}%` }}
+              transition={{ duration: 0.6, ease: 'easeOut' }}
             />
           </div>
         </div>
       )}
 
-      {/* ─── FIXING PHASE ─── */}
+      {/* ─── FIXING ─── */}
       {phase === 'fixing' && (
         <div className="space-y-2 animate-in fade-in duration-300">
-          <p className="text-[11px] text-muted-foreground">Reviewing and correcting generated code…</p>
+          <p className="text-xs text-muted-foreground">Reviewing and correcting generated code…</p>
           <div className="w-full h-[2px] bg-muted rounded-full overflow-hidden">
-            <div className="h-full bg-yellow-500/70 transition-all duration-700 ease-out animate-pulse" style={{ width: '70%' }} />
+            <div className="h-full bg-yellow-500/70 animate-pulse" style={{ width: '70%' }} />
           </div>
         </div>
       )}
 
-      {/* ─── PREVIEW READY — framer-motion celebration ─── */}
+      {/* ─── PREVIEW READY ─── */}
       {phase === 'preview_ready' && (
         <AnimatePresence>
           <motion.div
-            initial={{ scale: 0.92, opacity: 0, y: 8 }}
+            initial={{ scale: 0.93, opacity: 0, y: 6 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            transition={{ type: 'spring', stiffness: 280, damping: 22 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+            className="space-y-2"
           >
-            <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-5">
-              <div className="flex items-center gap-3 mb-1">
-                {/* Sparkles burst animation */}
-                <motion.div
-                  className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center"
-                  initial={{ rotate: -10, scale: 0.8 }}
-                  animate={{ rotate: 0, scale: 1 }}
-                  transition={{ type: 'spring', stiffness: 350, damping: 18, delay: 0.1 }}
+            <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl px-4 py-3 flex items-center gap-3">
+              <motion.div
+                className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0"
+                initial={{ rotate: -15, scale: 0.7 }}
+                animate={{ rotate: 0, scale: 1 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 18, delay: 0.08 }}
+              >
+                <Sparkles size={16} className="text-emerald-500" />
+              </motion.div>
+              <div>
+                <motion.p
+                  className="text-sm text-foreground font-semibold"
+                  initial={{ opacity: 0, x: -5 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.12, duration: 0.25 }}
                 >
-                  <Sparkles size={18} className="text-emerald-500" />
-                </motion.div>
-                <div>
-                  <motion.p
-                    className="text-[14px] text-foreground font-semibold"
-                    initial={{ opacity: 0, x: -6 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.15, duration: 0.3 }}
-                  >
-                    Your app is ready.
-                  </motion.p>
-                  <motion.p
-                    className="text-[11px] text-muted-foreground"
-                    initial={{ opacity: 0, x: -6 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.25, duration: 0.3 }}
-                  >
-                    Preview it live, share the link, or ask me to iterate.
-                  </motion.p>
-                </div>
+                  Your app is ready.
+                </motion.p>
+                <motion.p
+                  className="text-[11px] text-muted-foreground"
+                  initial={{ opacity: 0, x: -5 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.22, duration: 0.25 }}
+                >
+                  Preview it live, share the link, or ask me to iterate.
+                </motion.p>
               </div>
             </div>
-
-            {/* Written files — collapsible, shown below the celebration block */}
             <WrittenFilesSection buildLogs={allBuildLogs} />
           </motion.div>
         </AnimatePresence>
       )}
 
       {/* ─── ERROR ─── */}
-      {phase === 'error' && errorMessage && isStackTrace(errorMessage) && (
-        <StackTrace trace={errorMessage} defaultOpen>
-          <StackTraceHeader>Runtime Error</StackTraceHeader>
-          <StackTraceError />
-          <StackTraceContent>
-            <StackTraceFrames showInternalFrames={false} />
-            <div className="flex justify-end mt-2">
-              <StackTraceCopyButton />
-            </div>
-          </StackTraceContent>
-        </StackTrace>
-      )}
-
-      {phase === 'error' && (!errorMessage || !isStackTrace(errorMessage)) && (
-        <div className="bg-destructive/5 border border-destructive/15 rounded-xl p-5">
-          <p className="text-[13px] text-destructive font-medium">{errorMessage || 'Something went wrong.'}</p>
+      {phase === 'error' && (
+        <div className="bg-destructive/5 border border-destructive/15 rounded-xl px-4 py-3">
+          <p className="text-xs text-destructive font-medium">{errorMessage || 'Something went wrong.'}</p>
           <p className="text-[11px] text-muted-foreground mt-1">Try rephrasing your request or simplify the scope.</p>
         </div>
       )}
