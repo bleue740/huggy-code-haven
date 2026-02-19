@@ -1,285 +1,437 @@
 
-# Architecture Lovable Complète : Typing Indicator, Intent Detection & Dashboard Persistence
+# Architecture Streaming Complète — Alignement exact avec Lovable.dev
 
-## Résumé des 3 problèmes à résoudre
+## Audit final : ce qui fonctionne vs ce qui manque
 
-### Problème 1 — Aucun indicateur "typing..." avant le 1er token
-Quand l'utilisateur envoie un message, il y a un blanc de 2-4 secondes pendant que l'orchestrateur charge (auth check + appel Planner). Pendant ce temps, aucun feedback visuel n'est donné dans le chat. Solution : ajouter un message `typing_indicator` dans `App.tsx` dès que `setState({ isGenerating: true })` est appelé, et le supprimer quand le premier vrai event SSE arrive (`conv_start` ou `phase`).
+### Ce qui est déjà correct
+- Typing indicator 3-dots (WhatsApp style) dans `ChatMessage` ✅
+- `StreamingCursor` clignotant sur `conv_stream_*` ✅
+- `renderMarkdown` progressif pendant streaming ✅
+- `GeneratingOverlay` avec exit 800ms fluide ✅
+- `isBuilding` ne se déclenche pas pendant une conv ✅
+- `intent_classified` tracé dans la console ✅
+- Pipeline SSE 4 phases (Planner → Generator → Validator → Fixer) ✅
 
-### Problème 2 — Détection d'intention par mots-clés vs sémantique
-L'orchestrateur utilise actuellement une `detectComplexity()` basée sur des mots-clés bruts (`"dashboard"`, `"auth"`, etc.). C'est fragile. La vraie solution est de laisser le **Planner Agent** (déjà en place) décider via son flag `conversational: boolean` — ce qu'il fait déjà. Le problème réel est que le **log du intent decision n'est pas tracé** pour le debug. Solution : améliorer le Planner prompt pour être encore plus précis sur la détection conversationnelle, ajouter un event SSE `intent_classified` avec la décision et sa raison, et tracer cela dans la console.
+### Les 6 écarts critiques à corriger
 
-### Problème 3 — Dashboard sans persistance correcte & liste projets récents
-Le Dashboard existe (`src/pages/Dashboard.tsx`) mais charge déjà les projets depuis la DB. L'auto-save dans `useProject.ts` existe (debounce 900ms). Le **vrai problème** est que :
-1. Le dashboard n'affiche pas de section "Récents" (les projets les plus récemment modifiés en premier, déjà supportés par le tri `updated_at`)
-2. Le dashboard ne navigue pas vers l'app-builder avec le bon `projectId` chargé — il manque une intégration `handleOpenProject` dans le flux de navigation `Dashboard → AppBuilder`
-3. Il n'y a pas de lien **Dashboard → AppBuilder avec un projet spécifique ouvert**, le dashboard navigue vers `/` sans passer l'ID
+**Écart 1 — READING phase absente**
+Le vrai Lovable affiche "Reading src/App.tsx..." avec des icônes `FileSearch` avant la phase Building. Dans notre code, il n'y a aucun signal de lecture de fichiers. Quand le Planner planifie de modifier un fichier, on ne le voit pas "lire" ce fichier.
 
-### Problème 4 (Bonus) — Nettoyage des doublons architecturaux
-- `GenerationPhaseDisplay` et `Shimmer` sont bien utilisés
-- `BuildProgress` est dupliqué avec `GenerationPhaseDisplay` pour les logs → consolider
-- Le `Sidebar.tsx` a 2 blocs de rendering pendant la génération (Shimmer + GenerationPhaseDisplay + BuildProgress) → simplifier en un seul `<GenerationFeedback>` clair
+**Écart 2 — THINKING n'a pas de contenu réel streamé**
+Le `Reasoning` dans `GenerationPhaseDisplay` affiche `thinkingLines?.[0] || 'Analyzing requirements...'`. Mais `_thinkingLines` est **toujours vide** — l'orchestrateur n'émet aucun `thinking_delta` avant le Planner JSON. L'IA ne "pense" pas vraiment à voix haute.
+
+**Écart 3 — Le flux de phases est incorrect**
+Actuellement le mapping dans `App.tsx` est :
+```
+planning → uiPhase: "thinking"   ← FAUX, thinking devrait être AVANT planning
+generating → uiPhase: "building"
+```
+Le flow correct est : `thinking → reading → planning → building → preview_ready`
+
+**Écart 4 — `GenerationPhaseDisplay` ne gère pas la phase `reading`**
+Le type `PhaseType` dans `GenerationPhaseDisplay` ne contient pas `'reading'`. Cette phase n'a donc aucun affichage dédié (liste de fichiers lus, icône FileSearch).
+
+**Écart 5 — Pas de `thinking_delta` streamé depuis l'orchestrateur**
+La fonction `callAgentStreaming` existe déjà dans `ai-orchestrator`. Il suffit d'ajouter un appel rapide (~60 tokens, `gemini-2.5-flash-lite`) AVANT le Planner JSON pour streamer le raisonnement de l'IA en temps réel.
+
+**Écart 6 — `file_read` events non implémentés**
+Après réception du plan, l'orchestrateur ne signale pas quels fichiers il va lire. Il faut émettre un `file_read` event pour chaque step avec `action: "modify"`, que le frontend reçoit via un nouveau callback `onFileRead`.
 
 ---
 
-## Architecture Lovable Complète Cible
+## Architecture cible : Flux SSE complet
 
 ```text
-USER SENDS MESSAGE
-      │
-      ▼
-[App.tsx: handleSendMessage]
-      │ setState → isGenerating: true
-      │ + ajoute {id: 'typing_...', role: 'assistant', isTyping: true} dans history
-      ▼
-[SSE Stream démarre → useOrchestrator]
-      │
-      ├── event "phase" (planning) → retire typing_indicator → montre Reasoning
-      │
-      ├── event "intent_classified" → console.log intent decision
-      │
-      ├── event "conv_start" → ajoute conv_stream_ message (streaming)
-      │     └── event "conv_delta" → tokens progressifs avec cursor
-      │
-      ├── event "plan" → montre ChainOfThought steps
-      │
-      ├── event "file_generated" → update build logs
-      │
-      └── event "result"
-            ├── conversational=true → finalise conv_stream_ → persistMessage
-            └── conversational=false → apply files → Checkpoint → toast
+T=0ms     → User envoie message
+T=0ms     → setState: isGenerating=true + typing_indicator {isTyping:true}
+T=~50ms   → TypingIndicator visible (3 dots)
+
+T=~200ms  → SSE event: "phase" { phase:"planning", message:"Analyzing..." }
+            → RETIRE typing_indicator
+            → uiPhase = "thinking" (la vraie phase thinking démarre ICI)
+            → Reasoning ouvert avec isStreaming=true
+
+T=~300ms  → SSE event: "thinking_delta" { delta:"The user wants to..." }
+T=~400ms  → SSE event: "thinking_delta" { delta:" build a dashboard..." }
+T=~600ms  → SSE event: "thinking_delta" { delta:" with charts." }
+            → _thinkingLines accumulé token par token
+            → Reasoning affiche le VRAI raisonnement de l'IA
+
+T=~1200ms → (thinking streaming terminé, Planner JSON reçu)
+T=~1200ms → SSE event: "intent_classified" → console.group debug
+T=~1200ms → SSE event: "plan" { plan: { steps: [...] } }
+            → uiPhase = "planning"
+            → _planItems populé depuis plan.steps
+
+T=~1300ms → (pour chaque step action:"modify")
+            SSE event: "file_read" { path: "App.tsx" }
+            SSE event: "file_read" { path: "Dashboard.tsx" }
+            → uiPhase = "reading"
+            → Liste de fichiers lus affichée avec FileSearch icons
+
+T=~2400ms → setTimeout 1200ms → uiPhase = "building"
+            → _buildLogs créés
+
+T=~4000ms → SSE event: "file_generated" { path: "App.tsx" }
+            → BuildLog marqué done, progress avance
+
+T=~5000ms → SSE event: "result" { conversational: false, files: [...] }
+            → applique les fichiers
+            → uiPhase = "preview_ready"
+            → GeneratingOverlay fade-out 800ms
 ```
 
 ---
 
-## Plan d'implémentation en 5 parties
+## Plan d'implémentation en 6 fichiers
 
-### Partie 1 — Typing Indicator (WhatsApp/Slack style)
+### Fichier 1 : `src/app-builder/types.ts`
+**1 changement** : Ajouter `"reading"` dans `GenerationPhase` et `type?: "read" | "build"` dans `BuildLog`.
 
-**Fichier : `src/app-builder/types.ts`**
-Ajouter `isTyping?: boolean` à l'interface `Message`.
+```typescript
+// GenerationPhase — ajouter "reading"
+export type GenerationPhase =
+  | 'thinking'
+  | 'reading'     // ← NOUVEAU
+  | 'planning'
+  | 'building'
+  | 'fixing'
+  | 'preview_ready'
+  | 'error';
 
-**Fichier : `src/app-builder/components/ChatMessage.tsx`**
-Créer un composant `TypingIndicator` avec 3 points animés (bulles pulsantes) identique à WhatsApp :
-```tsx
-const TypingIndicator = () => (
-  <div className="flex gap-1 items-center py-1">
-    <span className="w-2 h-2 rounded-full bg-neutral-400 animate-bounce" style={{animationDelay: '0ms'}} />
-    <span className="w-2 h-2 rounded-full bg-neutral-400 animate-bounce" style={{animationDelay: '150ms'}} />
-    <span className="w-2 h-2 rounded-full bg-neutral-400 animate-bounce" style={{animationDelay: '300ms'}} />
-  </div>
-);
+// BuildLog — ajouter type optionnel
+export interface BuildLog {
+  id: string;
+  text: string;
+  done: boolean;
+  type?: 'read' | 'build';  // ← NOUVEAU
+}
 ```
-Intégrer dans `ChatMessage` : si `message.isTyping === true`, afficher uniquement le `TypingIndicator`.
-
-**Fichier : `src/app-builder/App.tsx`**
-Dans `handleSendMessage`, juste après `setState({ ...prev, isGenerating: true, history: [...prev.history, userMessage] })`, ajouter immédiatement un message typing dans le même setState :
-```tsx
-history: [
-  ...prev.history, 
-  userMessage, 
-  { id: `typing_${now}`, role: 'assistant', content: '', timestamp: now, isTyping: true }
-]
-```
-
-Dans `onPhase` callback (premier event SSE reçu), supprimer le message typing :
-```tsx
-// Dans onPhase:
-history: prev.history.filter(m => !m.id.startsWith('typing_'))
-```
-
-Dans `onConversationalDelta` (conv_start signal, delta === ""), supprimer aussi le typing indicator avant d'ajouter conv_stream_.
-
-Dans `onFilesGenerated` et `onConversationalReply`, s'assurer que le typing est bien retiré.
 
 ---
 
-### Partie 2 — Intent Detection améliorée + Logs debug
+### Fichier 2 : `supabase/functions/ai-orchestrator/index.ts`
+**3 changements** dans la pipeline principale :
 
-**Fichier : `supabase/functions/ai-orchestrator/index.ts`**
+**2a — Thinking streaming AVANT le Planner JSON**
+Juste avant `callAgent(PLANNER_PROMPT, ...)`, ajouter un appel `callAgentStreaming` rapide (~60 tokens, `google/gemini-2.5-flash-lite`) pour émettre les tokens de raisonnement :
 
-**Amélioration du PLANNER_PROMPT** : renforcer la classification conversationnelle avec des exemples plus précis (salutations, questions de clarification, questions sur le code, discussions générales, questions sur l'architecture) et s'assurer qu'il ne génère pas de code pour les messages non-techniques.
-
-**Nouvel event SSE `intent_classified`** émis juste après la réception du résultat du planner :
 ```typescript
-await stream.sendEvent({
-  type: "intent_classified",
-  intent: plan.intent,
-  conversational: plan.conversational,
-  risk_level: plan.risk_level,
-  steps_count: plan.steps?.length ?? 0,
-  reasoning: plan.conversational 
-    ? "Classified as conversational — no code changes needed"
-    : `Code generation required: ${plan.steps?.length} step(s)`,
-});
+// AVANT callAgent(PLANNER_PROMPT, ...)
+const THINKING_SYSTEM = `You are thinking briefly about what the user wants. 
+Output 1-2 short sentences about their goal. Be direct, no formatting.`;
+const thinkingInput = `User says: "${userPrompt.slice(0, 300)}"`;
+
+try {
+  await callAgentStreaming(
+    THINKING_SYSTEM,
+    thinkingInput,
+    "google/gemini-2.5-flash-lite",
+    async (chunk) => {
+      await stream.sendEvent({ type: "thinking_delta", delta: chunk });
+    },
+    60 // max 60 tokens — ultra fast
+  );
+} catch { /* ignore — non-blocking */ }
 ```
 
-**Améliorer `detectComplexity()`** : En plus des mots-clés, tenir compte du nombre de steps du plan (déjà partiellement fait) et de la longueur de la réponse conversationnelle.
+**2b — File read events APRÈS reception du plan**
+Après `sendEvent({ type: "plan", plan })`, pour chaque step `action !== "create"` :
 
-**Fichier : `src/app-builder/hooks/useOrchestrator.ts`**
-
-Gérer le nouvel event `intent_classified` dans le switch SSE :
 ```typescript
-case "intent_classified":
-  console.group("🧠 Intent Classification");
-  console.log("Intent:", event.intent);
-  console.log("Conversational:", event.conversational);
-  console.log("Risk:", event.risk_level);
-  console.log("Steps:", event.steps_count);
-  console.log("Reasoning:", event.reasoning);
-  console.groupEnd();
-  callbacks.onPhase?.("intent_classified", event.reasoning || "");
+// Émettre les "file_read" events pour les fichiers à modifier
+for (const step of plan.steps) {
+  if (step.action !== "create" && step.path) {
+    await stream.sendEvent({ type: "file_read", path: step.path });
+  }
+}
+```
+
+**2c — Thinking pour les réponses conversationnelles**
+Avant `conv_start`, émettre 1-2 thinking deltas rapides :
+
+```typescript
+// AVANT stream.sendEvent({ type: "conv_start" })
+try {
+  await callAgentStreaming(
+    `Think briefly (1 sentence max) about how to help this user.`,
+    `User: "${userPrompt.slice(0, 200)}"`,
+    "google/gemini-2.5-flash-lite",
+    async (chunk) => {
+      await stream.sendEvent({ type: "thinking_delta", delta: chunk });
+    },
+    30
+  );
+} catch { /* ignore */ }
+```
+
+---
+
+### Fichier 3 : `src/app-builder/hooks/useOrchestrator.ts`
+**2 changements** dans l'interface `OrchestratorCallbacks` et le switch SSE :
+
+```typescript
+interface OrchestratorCallbacks {
+  // ... existing ...
+  onThinkingDelta?: (delta: string) => void;  // ← NOUVEAU
+  onFileRead?: (path: string) => void;         // ← NOUVEAU
+}
+
+// Dans le switch SSE :
+case "thinking_delta":
+  callbacks.onThinkingDelta?.(event.delta);
+  break;
+
+case "file_read":
+  callbacks.onFileRead?.(event.path);
   break;
 ```
 
 ---
 
-### Partie 3 — Dashboard : Projets récents + Navigation correcte
+### Fichier 4 : `src/app-builder/App.tsx`
+**4 changements** dans les callbacks de `sendOrchestrator` :
 
-**Fichier : `src/pages/Dashboard.tsx`**
-
-**Correction du tri "Récents"** : les projets sont déjà triés par `updated_at` DESC. Ajouter une section "Récents" visuellement distincte pour les 3 projets les plus récemment modifiés (dans les 7 derniers jours), avec un badge `"Recent"`.
-
-**Correction de la navigation `handleOpenProject`** : 
-Actuellement le dashboard fait `navigate('/')` sans passer l'ID. Il faut utiliser `sessionStorage` pour passer le `projectId` cible, que `useProject.ts` lira au démarrage pour charger le bon projet.
-
-Dans `Dashboard.tsx` :
+**4a — thinkingTextRef pour accumuler les tokens**
 ```typescript
-const handleOpenProject = (projectId: string) => {
-  sessionStorage.setItem('blink_open_project_id', projectId);
-  navigate('/');
-};
+const thinkingTextRef = useRef("");
 ```
 
-Dans `useProject.ts`, après l'auth check, lire `blink_open_project_id` en priorité sur le projet le plus récent :
+**4b — Reset dans `handleSendMessage`**
 ```typescript
-const targetProjectId = sessionStorage.getItem('blink_open_project_id');
-sessionStorage.removeItem('blink_open_project_id');
-
-// Si targetProjectId existe, charger ce projet spécifique
-// Sinon, charger le projet le plus récent (comportement actuel)
+thinkingTextRef.current = "";
 ```
 
-**Ajouter section "Projets récents"** dans le header du dashboard avec les 3 projets les plus récents affichés comme chips cliquables.
+**4c — Correction du mapping de phase** (écart 3)
+```typescript
+onPhase: (phase, message) => {
+  const phaseMap: Record<string, { uiPhase: AppState['_generationPhase']; progress: number }> = {
+    planning:   { uiPhase: "thinking", progress: 10 },   // phase planning du backend = thinking pour l'UI
+    generating: { uiPhase: "building", progress: 30 },
+    validating: { uiPhase: "building", progress: 85 },
+    fixing:     { uiPhase: "fixing",   progress: 88 },   // fixing → phase UI distincte
+    complete:   { uiPhase: "preview_ready", progress: 100 },
+    error:      { uiPhase: "error",    progress: 0 },
+  };
+  // ...
+}
+```
+
+**4d — Nouveaux callbacks `onThinkingDelta` et `onFileRead`**
+```typescript
+onThinkingDelta: (delta) => {
+  thinkingTextRef.current += delta;
+  const text = thinkingTextRef.current;
+  setState(prev => ({ ...prev, _thinkingLines: [text] }));
+},
+
+onFileRead: (path) => {
+  setState(prev => ({
+    ...prev,
+    _generationPhase: "reading",
+    _buildLogs: [
+      ...(prev._buildLogs || []),
+      { id: `read_${path}_${Date.now()}`, text: `Reading ${path}…`, done: true, type: "read" as const },
+    ],
+  }));
+},
+```
+
+**4e — Modification du `onPlanReady`** pour passer par `reading` AVANT `building`
+Conserver le setTimeout de 1200ms mais changer l'ordre :
+```typescript
+onPlanReady: (intent, steps) => {
+  setState(prev => ({
+    ...prev,
+    _generationPhase: "planning",  // affiche le plan
+    _pipelineProgress: 20,
+    _planItems: steps.map(s => ({ label: `${s.target}: ${s.description}`, done: false })),
+    _totalExpectedFiles: steps.filter(s => s.action !== "delete").length,
+    _filesGeneratedCount: 0,
+  }));
+  // setTimeout restant pour building — mais reading est géré par onFileRead
+  setTimeout(() => {
+    setState(prev => {
+      // Ne passer à building que si on n'est pas déjà en reading
+      if (prev._generationPhase === 'reading') return prev; // onFileRead a déjà mis reading
+      return {
+        ...prev,
+        _generationPhase: "building",
+        _pipelineProgress: 30,
+        _buildLogs: steps.map((s, i) => ({
+          id: `build_${i}`,
+          text: `${s.action === "create" ? "Creating" : s.action === "modify" ? "Updating" : "Removing"} ${s.target}…`,
+          done: false,
+          type: "build" as const,
+        })),
+      };
+    });
+  }, 1200);
+},
+```
+
+**4f — Transition reading → building après un délai**
+Dans `onFileRead`, après avoir mis `_generationPhase: "reading"`, déclencher un timeout pour passer à `building` avec les build logs si ce n'est pas déjà fait :
+```typescript
+onFileRead: (path) => {
+  setState(prev => ({
+    ...prev,
+    _generationPhase: "reading",
+    _buildLogs: [
+      ...(prev._buildLogs || []).filter(l => l.type === "read"),
+      { id: `read_${path}`, text: `Reading ${path}…`, done: true, type: "read" as const },
+    ],
+  }));
+},
+```
 
 ---
 
-### Partie 4 — Nettoyage des doublons Sidebar (Génération UI)
+### Fichier 5 : `src/app-builder/components/GenerationPhaseDisplay.tsx`
+**4 changements** :
 
-**Fichier : `src/app-builder/components/Sidebar.tsx`**
+**5a — Ajouter `reading` dans `PhaseType`**
+```typescript
+export type PhaseType = 'thinking' | 'reading' | 'planning' | 'building' | 'preview_ready' | 'error';
+```
 
-Le bloc de génération actuel contient 3 composants empilés :
-1. `Shimmer` (shimmer lines)
-2. `BuildProgress` (SSE Railway logs)
-3. `GenerationPhaseDisplay` (chain-of-thought + plan items)
+**5b — Ajouter `type?: 'read' | 'build'` dans `BuildLog`**
+```typescript
+export interface BuildLog {
+  id: string;
+  text: string;
+  done: boolean;
+  type?: 'read' | 'build';
+}
+```
 
-Ces 3 composants se chevauchent visuellement et certains ont du contenu redondant. Le plan est :
-
-- **Garder `GenerationPhaseDisplay`** comme composant principal (il contient Reasoning + ChainOfThought + StackTrace)
-- **Garder `BuildProgress`** conditionnel uniquement si `buildLogs.length > 0` (Railway SSE actif)
-- **Remplacer le bloc Shimmer manuel** par un affichage propre :
-  - Si `isTypingIndicator` → afficher le `TypingIndicator` du `ChatMessage`
-  - Si `hasConvStream` → afficher le `ChatMessage` avec `isStreaming=true`
-  - Si `isCodeGenerating` → afficher `GenerationPhaseDisplay` + `BuildProgress`
-
-Logique condensée dans Sidebar (pseudo-code) :
+**5c — Phase badge pour `reading`**
 ```tsx
-{state.isGenerating && (() => {
-  const hasConvStream = state.history.some(m => m.id.startsWith('conv_stream_'));
-  const hasTyping = state.history.some(m => m.id.startsWith('typing_'));
-  
-  // Si typing ou conv en cours → messages gèrent l'affichage, pas de bloc séparé
-  if (hasConvStream || hasTyping) return null;
-  
-  // Code generation en cours → bloc de feedback
-  return (
-    <Message from="assistant">
-      <GenerationPhaseDisplay ... />
-      {buildLogs.length > 0 && <BuildProgress ... />}
-    </Message>
-  );
-})()}
+{phase === 'reading' && <FileSearch size={14} className="text-blue-400 animate-pulse" />}
+// ...
+{phase === 'reading' && 'Reading Files'}
+```
+
+**5d — Bloc visuel pour la phase `reading`**
+Entre le Reasoning et le ChainOfThought, ajouter :
+```tsx
+{phase === 'reading' && buildLogs && buildLogs.filter(l => l.type === 'read').length > 0 && (
+  <div className="space-y-1.5 animate-in fade-in duration-300">
+    {buildLogs.filter(l => l.type === 'read').map(log => (
+      <div key={log.id} className="flex items-center gap-2 text-[11px]">
+        <FileSearch size={11} className="text-blue-400 shrink-0" />
+        <span className="font-mono text-blue-400/80">{log.text}</span>
+        <Check size={9} className="text-emerald-400 ml-auto shrink-0" />
+      </div>
+    ))}
+  </div>
+)}
+```
+
+**5e — Spinner sur ChainOfThoughtStep actif** (Écart 5)
+Pour les steps avec status `active`, ajouter un loader CSS au lieu du point statique. Passer `icon={Loader2}` (avec `className="animate-spin"`) quand `status === 'active'`.
+
+Comme `ChainOfThoughtStep` prend un `icon` prop, créer un wrapper :
+```tsx
+// Dans GenerationPhaseDisplay, construire les cotSteps avec un icône "actif" :
+cotSteps.push({
+  icon: log.done ? CheckCircle2 : Loader2,  // Loader2 pour l'étape en cours
+  label: log.text,
+  status: log.done ? 'complete' : 'active',
+});
+```
+
+**5f — Inclure `reading` dans `showChainOfThought`** :
+```typescript
+const showChainOfThought = cotSteps.length > 0 && 
+  (phase === 'planning' || phase === 'building' || phase === 'reading');
+```
+
+**5g — Réel contenu dans le Reasoning** :
+```tsx
+<ReasoningContent>
+  {thinkingLines?.join('') || 'Analyzing your request…'}
+</ReasoningContent>
 ```
 
 ---
 
-### Partie 5 — Consolidation des types TypeScript
+### Fichier 6 : `src/app-builder/components/Sidebar.tsx`
+**1 changement** : Ajuster la condition qui affiche le bloc génération pour inclure la phase `reading`.
 
-**Fichier : `src/app-builder/types.ts`**
-- Ajouter `isTyping?: boolean` à `Message`
-- S'assurer que `"fixing"` est dans `GenerationPhase` (déjà fait dans un message précédent)
-- Ajouter `intentClassified?: { intent: string; conversational: boolean }` à `AppState` pour debug
+Actuellement :
+```tsx
+const isCodeGenerating = state.isGenerating && !hasConvStream && !hasTyping;
+```
+Cela est correct. Mais il faut s'assurer que le Shimmer ne s'affiche plus quand on est en `reading` ou `planning` — la `GenerationPhaseDisplay` gère déjà ces phases.
+
+```tsx
+// Supprimer le Shimmer conditionnel pour thinking/planning (il fait doublon)
+// Avant : affiché quand phase !== 'thinking' && phase !== 'planning'
+// Après : affiché uniquement quand il n'y a pas encore de _generationPhase définie
+{!state._generationPhase && (
+  <div className="space-y-2 mb-3 animate-in fade-in duration-500">
+    <Shimmer className="text-[13px] font-medium" duration={1.5}>Analyzing your request…</Shimmer>
+    <div className="space-y-1.5 mt-2">
+      <div className="h-2 rounded-full bg-muted animate-pulse" style={{ width: '85%' }} />
+      <div className="h-2 rounded-full bg-muted animate-pulse" style={{ width: '65%', animationDelay: '0.15s' }} />
+    </div>
+  </div>
+)}
+```
 
 ---
 
-## Fichiers à modifier
+## Tableau récapitulatif des fichiers modifiés
 
 ```text
-src/app-builder/types.ts
-  → Ajouter isTyping?: boolean à Message
-  → Ajouter intentClassified? à AppState (debug)
-
-src/app-builder/App.tsx
-  → handleSendMessage: ajouter typing_indicator dans history
-  → onPhase: retirer typing_indicator au premier event SSE
-  → onConversationalDelta (conv_start): retirer typing_indicator
-  → onFilesGenerated: assurer cleanup du typing
-
-src/app-builder/components/ChatMessage.tsx
-  → Ajouter TypingIndicator (3 dots bounce)
-  → Si message.isTyping → render uniquement TypingIndicator
+supabase/functions/ai-orchestrator/index.ts  [BACKEND]
+  → Thinking streaming (~60 tokens) AVANT Planner JSON
+  → Émettre "thinking_delta" events en temps réel
+  → Émettre "file_read" events après réception du plan (pour steps modify)
+  → Thinking court AVANT conv_start pour les réponses conversationnelles
 
 src/app-builder/hooks/useOrchestrator.ts
-  → Gérer event "intent_classified" → console.group debug
+  → Ajouter onThinkingDelta et onFileRead dans OrchestratorCallbacks
+  → Handler case "thinking_delta" → callbacks.onThinkingDelta?.(event.delta)
+  → Handler case "file_read" → callbacks.onFileRead?.(event.path)
 
-supabase/functions/ai-orchestrator/index.ts
-  → Émettre event "intent_classified" après le Planner
-  → Améliorer PLANNER_PROMPT pour détection conversationnelle plus précise
-  → Ajouter exemples de phrases conversationnelles
+src/app-builder/App.tsx
+  → Ajouter thinkingTextRef (useRef)
+  → Reset thinkingTextRef dans handleSendMessage
+  → Implémenter onThinkingDelta → accumule dans _thinkingLines
+  → Implémenter onFileRead → _buildLogs (type:"read") + phase "reading"
+  → Corriger mapping phase "fixing" → uiPhase "fixing" (distinct de building)
+
+src/app-builder/types.ts
+  → Ajouter "reading" dans GenerationPhase
+  → Ajouter type?: 'read' | 'build' dans BuildLog
+
+src/app-builder/components/GenerationPhaseDisplay.tsx
+  → Ajouter "reading" dans PhaseType
+  → Badge + icône FileSearch pour phase reading
+  → Bloc visuel fichiers lus (liste avec FileSearch + Check icons)
+  → ReasoningContent affiche le vrai contenu streamé (thinkingLines?.join(''))
+  → Spinner (Loader2 animate-spin) sur ChainOfThoughtStep actif
+  → showChainOfThought inclut "reading"
 
 src/app-builder/components/Sidebar.tsx
-  → Simplifier le bloc génération (supprimer Shimmer manuel redondant)
-  → Ne pas afficher le bloc génération si typing_indicator ou conv_stream_ est déjà dans history
-
-src/pages/Dashboard.tsx
-  → handleOpenProject: sessionStorage.setItem('blink_open_project_id', id) + navigate('/')
-  → Section "Récents" : afficher badge sur les 3 projets modifiés récemment
-
-src/app-builder/hooks/useProject.ts
-  → Au démarrage auth check: lire 'blink_open_project_id' depuis sessionStorage
-  → Si présent: charger ce projet spécifique au lieu du plus récent
+  → Shimmer uniquement quand !_generationPhase (supprime le doublon visuel)
 ```
 
 ---
 
-## Détails Techniques Critiques
+## Détails techniques critiques
 
-### Typing Indicator — Timing précis
-```
-T=0ms   : utilisateur clique Envoyer
-T=0ms   : setState({ isGenerating: true, history: [..., userMsg, typingMsg] })
-T=0ms   : fetch SSE vers orchestrateur démarre
-T=~50ms : TypingIndicator visible dans le chat
-T=~2000ms: Premier event SSE "phase" → retire typingMsg, affiche GenerationPhaseDisplay
-T=~2500ms: Si conversationnel: "conv_start" → ajoute conv_stream_ msg avec StreamingCursor
-T=~2500ms+: conv_delta tokens → texte progressif avec StreamingCursor à la fin
-```
+### Pourquoi le thinking streaming est non-bloquant
+L'appel `callAgentStreaming` pour le thinking est wrappé dans `try/catch` et limité à 60 tokens maximum (~500ms). S'il échoue, le pipeline continue normalement. Le Planner JSON est appelé **en série après** (pas en parallèle) pour garantir que les thinking lines arrivent en premier dans l'UI.
 
-### Intent Classification — Event SSE
-```typescript
-// Ordre des events SSE:
-1. "phase" { phase: "planning", message: "Analyzing..." }
-2. "intent_classified" { intent, conversational, risk_level, steps_count, reasoning }
-3. "plan" { plan: { intent, steps, ... } }
-4. (si conversational) "conv_start" → "conv_delta"*N → "result"
-4. (si code) "phase" generating → "file_generated"*N → "validation" → "result"
-```
+### Pourquoi reading → building est géré par timeout + state
+Le passage `reading → building` se fait en deux temps :
+1. `onFileRead` met `_generationPhase: "reading"` immédiatement
+2. Le timeout de 1200ms dans `onPlanReady` vérifie si on est en `reading` — si oui, il attend que le building démarre naturellement via `onFileGenerated`
 
-### Dashboard Navigation — sessionStorage flow
-```
-Dashboard        →  sessionStorage.set('blink_open_project_id', id)  →  navigate('/')
-useProject init  →  sessionStorage.get('blink_open_project_id')       →  charger projet spécifique
-                 →  sessionStorage.remove('blink_open_project_id')    →  (cleanup)
-```
+Cela évite une race condition où `planning → building` (via timeout) écraserait `reading` (via `onFileRead`).
 
-Ce mécanisme est identique à `blink_pending_prompt` déjà en place — cohérent avec l'architecture existante.
+### Modèle utilisé pour le thinking
+`google/gemini-2.5-flash-lite` — le plus rapide et le moins cher. 60 tokens = ~300ms. Imperceptible pour l'utilisateur mais donne l'illusion d'un raisonnement en temps réel.
