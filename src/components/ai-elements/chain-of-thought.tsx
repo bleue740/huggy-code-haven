@@ -147,6 +147,7 @@ export const ChainOfThoughtContent = memo(
 
 export type ChainOfThoughtStepProps = ComponentProps<"div"> & {
   icon?: LucideIcon;
+  iconClassName?: string;
   label: ReactNode;
   description?: ReactNode;
   status?: "complete" | "active" | "pending";
@@ -156,6 +157,7 @@ export const ChainOfThoughtStep = memo(
   ({
     className,
     icon: Icon = DotIcon,
+    iconClassName,
     label,
     description,
     status = "complete",
@@ -171,7 +173,7 @@ export const ChainOfThoughtStep = memo(
     return (
       <div className={cn("flex gap-3", statusStyles[status], className)} {...props}>
         <div className="flex flex-col items-center pt-0.5">
-          <Icon className="size-4 shrink-0" />
+          <Icon className={cn("size-4 shrink-0", iconClassName)} />
           <div className="flex-1 w-px bg-border mt-1" />
         </div>
         <div className="flex-1 min-w-0 pb-3">
