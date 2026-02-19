@@ -234,6 +234,7 @@ export const GenerationPhaseDisplay: React.FC<PhaseDisplayProps> = ({
                   <ChainOfThoughtStep
                     key={i}
                     icon={item.done ? CheckCircle2 : isActive ? Loader2 : ListChecks}
+                    iconClassName={isActive && !item.done ? 'animate-spin' : undefined}
                     label={
                       <span className="flex items-center gap-1.5 flex-wrap">
                         <span>{item.label}</span>
@@ -278,17 +279,17 @@ export const GenerationPhaseDisplay: React.FC<PhaseDisplayProps> = ({
               <ChainOfThoughtContent>
                 {buildOnlyLogs.map((log, i) => {
                   const isActive = i === firstActiveIdx;
-                  const linesText = log.linesCount ? ` (${log.linesCount} lines)` : '';
                   return (
                     <ChainOfThoughtStep
                       key={log.id}
                       icon={log.done ? CheckCircle2 : isActive ? Loader2 : ListChecks}
+                      iconClassName={isActive && !log.done ? 'animate-spin' : undefined}
                       label={
-                        <span className="flex items-center gap-1.5 font-mono text-[11px]">
+                        <span className="font-mono text-[11px]">
                           {log.text.replace('Writing ', '').replace('…', '')}
-                          {linesText && <span className="text-[9px] text-muted-foreground/60">{linesText}</span>}
                         </span>
                       }
+                      description={log.linesCount ? `${log.linesCount} lines` : undefined}
                       status={log.done ? 'complete' : isActive ? 'active' : 'pending'}
                     />
                   );
