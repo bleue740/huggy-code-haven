@@ -95,13 +95,16 @@ export function useProject(
       }
 
       const pendingPrompt = sessionStorage.getItem("blink_pending_prompt");
+      // Priority: explicit project opened from Dashboard via sessionStorage
+      const targetProjectId = sessionStorage.getItem("blink_open_project_id");
+      if (targetProjectId) sessionStorage.removeItem("blink_open_project_id");
 
       const { data: existing } = await supabase
         .from("projects")
         .select("id, name, schema, code, updated_at, supabase_url, supabase_anon_key, firecrawl_enabled")
         .eq("user_id", userId)
         .order("updated_at", { ascending: false })
-        .limit(1);
+        .limit(20);
 
       if (!mounted) return;
 
@@ -112,8 +115,13 @@ export function useProject(
         return;
       }
 
-      if (existing && existing.length > 0) {
-        const proj = existing[0] as any;
+      // Find target project (from Dashboard) or fall back to most recently modified
+      const allProjects = (existing || []) as any[];
+      const proj = targetProjectId
+        ? (allProjects.find((p: any) => p.id === targetProjectId) ?? allProjects[0])
+        : allProjects[0];
+
+      if (proj) {
         const files = deserializeFiles(proj.code);
 
         let loadedHistory: Message[] = [initialMessage("Describe the application you want to build. I'll design, plan, and generate production-ready code for you.")];

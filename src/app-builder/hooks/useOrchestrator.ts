@@ -123,6 +123,19 @@ export function useOrchestrator() {
                   callbacks.onPhase?.(event.phase, event.message || "");
                   break;
 
+                case "intent_classified":
+                  // Debug tracing — always logged to browser console
+                  console.group("🧠 Intent Classification");
+                  console.log("Intent:", event.intent);
+                  console.log("Conversational:", event.conversational);
+                  console.log("Risk level:", event.risk_level);
+                  console.log("Steps planned:", event.steps_count);
+                  console.log("Reasoning:", event.reasoning);
+                  console.groupEnd();
+                  // Surface in UI via onPhase so phase display can update
+                  callbacks.onPhase?.("intent_classified", event.reasoning || "");
+                  break;
+
                 case "plan":
                   if (event.plan?.steps) {
                     dispatch({ type: "SET_PLAN", steps: event.plan.steps });

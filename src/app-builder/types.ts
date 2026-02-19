@@ -6,6 +6,8 @@ export interface Message {
   codeApplied?: boolean;
   codeLineCount?: number;
   snapshotId?: string;
+  /** True while waiting for the first SSE event — shows typing indicator */
+  isTyping?: boolean;
 }
 
 export interface AISuggestion {
