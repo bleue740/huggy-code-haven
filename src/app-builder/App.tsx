@@ -270,7 +270,12 @@ const App: React.FC = () => {
     setState((prev) => ({
       ...prev,
       isGenerating: true, aiStatusText: null,
-      history: [...prev.history, userMessage],
+      history: [
+        ...prev.history,
+        userMessage,
+        // Typing indicator — removed on first SSE event
+        { id: `typing_${now}`, role: "assistant" as const, content: "", timestamp: now, isTyping: true },
+      ],
       currentInput: customPrompt ? prev.currentInput : "",
       generationSteps: [],
       _generationPhase: undefined, _pipelineProgress: 0, _thinkingLines: [], _planItems: [], _buildLogs: [],
@@ -336,6 +341,8 @@ const App: React.FC = () => {
         const mapped = phaseMap[phase] || { uiPhase: undefined, progress: 0 };
         setState((prev) => ({
           ...prev,
+          // Remove typing indicator on first real SSE event
+          history: prev.history.filter((m) => !m.id.startsWith("typing_")),
           _generationPhase: mapped.uiPhase,
           _pipelineProgress: mapped.progress,
           aiStatusText: message || null,
@@ -406,7 +413,8 @@ const App: React.FC = () => {
             _generationPhase: "preview_ready",
             _pipelineProgress: 100,
             _buildLogs: doneLogs,
-            history: [...prev.history, {
+            // Remove any leftover typing indicators
+            history: [...prev.history.filter((m) => !m.id.startsWith("typing_")), {
               id: `orch_${Date.now()}`, role: "assistant" as const,
               content: `Your application is ready.\n\n${files.length} file(s) generated and validated: ${files.map((f) => "`" + f.path + "`").join(", ")}`,
               timestamp: Date.now(), codeApplied: true, codeLineCount: totalLines,
@@ -479,8 +487,9 @@ const App: React.FC = () => {
             return { ...prev, history: prev.history.map((m, i) => i === prev.history.length - 1 ? { ...m, content: currentText } : m) };
           }
           if (delta === "") {
-            // conv_start signal — add placeholder
-            return { ...prev, history: [...prev.history, { id: `conv_stream_${Date.now()}`, role: "assistant" as const, content: "", timestamp: Date.now() }] };
+            // conv_start signal — remove typing indicator, add streaming placeholder
+            const withoutTyping = prev.history.filter((m) => !m.id.startsWith("typing_"));
+            return { ...prev, history: [...withoutTyping, { id: `conv_stream_${Date.now()}`, role: "assistant" as const, content: "", timestamp: Date.now() }] };
           }
           return { ...prev, history: prev.history.map((m, i) => i === prev.history.length - 1 ? { ...m, content: currentText } : m) };
         });

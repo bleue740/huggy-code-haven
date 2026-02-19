@@ -10,6 +10,28 @@ interface ChatMessageProps {
   isStreaming?: boolean;
 }
 
+/** WhatsApp/Slack-style 3-dot animated typing indicator */
+const TypingIndicator: React.FC = () => (
+  <div className="flex gap-1.5 items-center py-1.5 px-1">
+    {[0, 150, 300].map((delay) => (
+      <span
+        key={delay}
+        className="w-2 h-2 rounded-full bg-muted-foreground/50"
+        style={{
+          animation: `typing-dot 1.2s ease-in-out infinite`,
+          animationDelay: `${delay}ms`,
+        }}
+      />
+    ))}
+    <style>{`
+      @keyframes typing-dot {
+        0%, 80%, 100% { transform: scale(0.7); opacity: 0.4; }
+        40% { transform: scale(1); opacity: 1; }
+      }
+    `}</style>
+  </div>
+);
+
 /** Strip fenced code blocks and [FILE:...] markers from text */
 function stripCodeBlocks(text: string): string {
   return text
@@ -132,6 +154,11 @@ function renderInline(text: string): React.ReactNode[] {
 }
 
 export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onApprovePlan, isStreaming = false }) => {
+  // Typing indicator — shown while waiting for first SSE token
+  if (message.isTyping) {
+    return <TypingIndicator />;
+  }
+
   const displayText = stripCodeBlocks(message.content);
   const showCodeIndicator = message.codeApplied;
 

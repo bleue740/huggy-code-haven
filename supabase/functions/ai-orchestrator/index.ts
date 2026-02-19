@@ -527,6 +527,20 @@ ${projectContext ? projectContext.slice(0, 12000) : "Empty project — only App.
           FAST_MODEL,
         );
 
+        // ── Emit intent classification for frontend debug tracing ──
+        await stream.sendEvent({
+          type: "intent_classified",
+          intent: plan.intent,
+          conversational: plan.conversational,
+          risk_level: plan.risk_level,
+          steps_count: plan.steps?.length ?? 0,
+          reasoning: plan.conversational
+            ? "Classified as conversational — no code changes needed"
+            : plan.clarification_needed
+            ? `Clarification needed: ${plan.clarification_question}`
+            : `Code generation required: ${plan.steps?.length ?? 0} step(s) planned`,
+        });
+
         await stream.sendEvent({ type: "plan", plan });
 
         // ── Handle Conversational (streaming token-by-token) ──

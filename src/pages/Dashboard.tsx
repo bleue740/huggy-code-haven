@@ -407,12 +407,15 @@ const Dashboard: React.FC = () => {
 
     setIsCreating(false);
     if (inserted) {
-      navigate(`/?project=${(inserted as any).id}`);
+      // Use sessionStorage so useProject picks up the right project
+      sessionStorage.setItem("blink_open_project_id", (inserted as any).id);
+      navigate("/");
     }
   };
 
   const handleOpenProject = (id: string) => {
-    navigate(`/?project=${id}`);
+    sessionStorage.setItem("blink_open_project_id", id);
+    navigate("/");
   };
 
   const handleDeleteProject = async () => {

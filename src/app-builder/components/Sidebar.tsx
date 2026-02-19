@@ -518,15 +518,19 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                   />
                 )}
 
-                {/* Generating state */}
+                {/* Generating state — only shown when no typing/conv_stream is handling display */}
                 {(() => {
-                  // Detect if a conversational stream is active vs code generation
+                  // Detect active streaming / typing states — they handle their own display
                   const hasConvStream = state.history.some(m => m.id.startsWith('conv_stream_'));
-                  const isCodeGenerating = state.isGenerating && !hasConvStream;
-                  return state.isGenerating ? (
+                  const hasTyping = state.history.some(m => m.id.startsWith('typing_') && (m as any).isTyping);
+                  // Only show generation block during code generation (not conv replies)
+                  const isCodeGenerating = state.isGenerating && !hasConvStream && !hasTyping;
+                  if (!isCodeGenerating) return null;
+
+                  return (
                     <Message from="assistant">
-                      {/* Shimmer placeholder during pure code generation (no conv stream) */}
-                      {isCodeGenerating && (state as any)._generationPhase !== 'thinking' && (
+                      {/* Shimmer placeholder during code generation */}
+                      {(state as any)._generationPhase !== 'thinking' && (state as any)._generationPhase !== 'planning' && (
                         <div className="space-y-2 mb-3 animate-in fade-in duration-500">
                           <Shimmer className="text-[13px] font-medium" duration={1.5}>Generating your application…</Shimmer>
                           <div className="space-y-1.5 mt-2">
@@ -536,11 +540,13 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                           </div>
                         </div>
                       )}
-                      {/* Build pipeline progress — shown when SSE logs from Railway are available */}
-                      <BuildProgress
-                        pipeline={buildPipeline}
-                        isVisible={buildLogs.length > 0}
-                      />
+                      {/* Build pipeline — only when Railway SSE logs are available */}
+                      {buildLogs.length > 0 && (
+                        <BuildProgress
+                          pipeline={buildPipeline}
+                          isVisible={true}
+                        />
+                      )}
                       <GenerationPhaseDisplay
                         phase={(state as any)._generationPhase || 'thinking'}
                         thinkingLines={(state as any)._thinkingLines}
@@ -558,7 +564,7 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                         </div>
                       )}
                     </Message>
-                  ) : null;
+                  );
                 })()}
               </ConversationContent>
 
