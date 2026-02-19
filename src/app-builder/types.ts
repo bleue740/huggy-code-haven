@@ -74,6 +74,8 @@ export interface BuildLog {
 export interface PlanItem {
   label: string;
   done: boolean;
+  path?: string;
+  priority?: 'critical' | 'normal' | 'optional';
 }
 
 export interface AppState {

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Brain, ListChecks, Hammer, Eye, CheckCircle2, AlertCircle,
-  FileSearch, Check, Loader2, ChevronDown, ChevronRight, Pencil,
+  FileSearch, Check, Loader2, ChevronDown, ChevronRight, Pencil, Sparkles,
 } from 'lucide-react';
 import {
   ChainOfThought,
@@ -25,6 +26,8 @@ export type PhaseType = 'thinking' | 'reading' | 'planning' | 'building' | 'fixi
 export interface PlanItem {
   label: string;
   done?: boolean;
+  path?: string;
+  priority?: 'critical' | 'normal' | 'optional';
 }
 
 export interface BuildLog {
@@ -48,13 +51,32 @@ export interface PhaseDisplayProps {
 const isStackTrace = (msg: string) =>
   msg.includes('\n    at ') || /^\w+Error:/.test(msg);
 
-// Sub-component: Read files section (collapsed by default in building phase)
+// ── Priority badge ─────────────────────────────────────────────────
+
+const PriorityBadge: React.FC<{ priority?: PlanItem['priority'] }> = ({ priority }) => {
+  if (!priority || priority === 'normal') return null;
+  const styles = {
+    critical: 'bg-destructive/10 text-destructive border-destructive/20',
+    optional: 'bg-muted text-muted-foreground border-border',
+  } as const;
+  const labels = { critical: 'critical', optional: 'optional' } as const;
+  const style = styles[priority as keyof typeof styles];
+  if (!style) return null;
+  return (
+    <span className={`ml-2 text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${style}`}>
+      {labels[priority as keyof typeof labels]}
+    </span>
+  );
+};
+
+// ── Read files section (collapsible) ──────────────────────────────
+
 const ReadFilesSection: React.FC<{ readLogs: BuildLog[]; collapsed?: boolean }> = ({ readLogs, collapsed = false }) => {
   const [isOpen, setIsOpen] = useState(!collapsed);
   if (readLogs.length === 0) return null;
 
   return (
-    <div className="rounded-lg border border-blue-500/10 bg-blue-500/3 overflow-hidden">
+    <div className="rounded-lg border border-blue-500/10 bg-blue-500/[0.03] overflow-hidden">
       <button
         onClick={() => setIsOpen(o => !o)}
         className="w-full flex items-center gap-2 px-3 py-2 text-[10px] font-semibold text-blue-400/70 uppercase tracking-widest hover:text-blue-400 transition-colors"
@@ -78,7 +100,42 @@ const ReadFilesSection: React.FC<{ readLogs: BuildLog[]; collapsed?: boolean }> 
   );
 };
 
-// Sub-component: Write indicator with mini progress bar
+// ── Written files section in preview_ready ─────────────────────────
+
+const WrittenFilesSection: React.FC<{ buildLogs: BuildLog[] }> = ({ buildLogs }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const doneLogs = buildLogs.filter(l => l.type === 'build' && l.done);
+  if (doneLogs.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-emerald-500/10 bg-emerald-500/[0.03] overflow-hidden mt-3">
+      <button
+        onClick={() => setIsOpen(o => !o)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-[10px] font-semibold text-emerald-400/70 uppercase tracking-widest hover:text-emerald-400 transition-colors"
+      >
+        {isOpen ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+        <CheckCircle2 size={10} />
+        <span>{doneLogs.length} file(s) written</span>
+      </button>
+      {isOpen && (
+        <div className="px-3 pb-2.5 space-y-1 animate-in fade-in duration-200">
+          {doneLogs.map(log => (
+            <div key={log.id} className="flex items-center gap-2 text-[11px]">
+              <CheckCircle2 size={10} className="text-emerald-400/60 shrink-0" />
+              <span className="font-mono text-muted-foreground">{log.text.replace('Writing ', '').replace('…', '')}</span>
+              {log.linesCount && (
+                <span className="text-[9px] font-mono text-emerald-400/70 ml-auto shrink-0">{log.linesCount}L</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Write indicator with mini progress bar ─────────────────────────
+
 const WriteIndicator: React.FC<{ log: BuildLog; isActive: boolean }> = ({ log, isActive }) => {
   const linesText = log.linesCount ? ` (${log.linesCount} lines)` : '';
   return (
@@ -91,14 +148,13 @@ const WriteIndicator: React.FC<{ log: BuildLog; isActive: boolean }> = ({ log, i
         ) : (
           <div className="w-2.5 h-2.5 rounded-full border border-muted-foreground/30 shrink-0" />
         )}
-        <span className={`font-mono ${log.done ? 'text-muted-foreground line-through' : isActive ? 'text-foreground' : 'text-muted-foreground/50'}`}>
+        <span className={`font-mono truncate ${log.done ? 'text-muted-foreground' : isActive ? 'text-foreground' : 'text-muted-foreground/40'}`}>
           {log.text}{linesText}
         </span>
         {log.done && log.linesCount && (
           <span className="text-[9px] text-emerald-400/70 ml-auto font-mono shrink-0">{log.linesCount}L</span>
         )}
       </div>
-      {/* Mini progress bar — shown for active file being written */}
       {isActive && !log.done && (
         <div className="ml-4 h-[2px] bg-muted rounded-full overflow-hidden">
           <div className="h-full bg-primary/60 rounded-full animate-pulse" style={{ width: '60%' }} />
@@ -107,6 +163,8 @@ const WriteIndicator: React.FC<{ log: BuildLog; isActive: boolean }> = ({ log, i
     </div>
   );
 };
+
+// ── Main component ─────────────────────────────────────────────────
 
 export const GenerationPhaseDisplay: React.FC<PhaseDisplayProps> = ({
   phase,
@@ -118,28 +176,14 @@ export const GenerationPhaseDisplay: React.FC<PhaseDisplayProps> = ({
 }) => {
   const buildOnlyLogs = buildLogs?.filter(l => l.type !== 'read') ?? [];
   const readLogs = buildLogs?.filter(l => l.type === 'read') ?? [];
+  const allBuildLogs = buildLogs ?? [];
 
-  // Determine the first "active" (not-done) build log
+  // First "active" (not-done) build log index
   const firstActiveIdx = buildOnlyLogs.findIndex(l => !l.done);
 
   const buildProgress = buildOnlyLogs.length > 0
     ? (buildOnlyLogs.filter(l => l.done).length / buildOnlyLogs.length) * 100
     : 0;
-
-  /* Build chain-of-thought steps from current state */
-  const cotSteps: Array<{ icon?: any; label: string; status: 'complete' | 'active' | 'pending' }> = [];
-
-  if (planItems && planItems.length > 0) {
-    planItems.forEach(item => {
-      cotSteps.push({
-        icon: item.done ? CheckCircle2 : ListChecks,
-        label: item.label,
-        status: item.done ? 'complete' : phase === 'planning' ? 'active' : 'pending',
-      });
-    });
-  }
-
-  const showChainOfThought = cotSteps.length > 0 && (phase === 'planning' || phase === 'reading');
 
   // Phase badge config
   const phaseConfig: Record<PhaseType, { icon: React.ReactNode; label: string; color: string }> = {
@@ -148,11 +192,22 @@ export const GenerationPhaseDisplay: React.FC<PhaseDisplayProps> = ({
     planning: { icon: <ListChecks size={13} className="text-emerald-500" />, label: 'Planning', color: 'text-emerald-500' },
     building: { icon: <Hammer size={13} className="text-orange-500 animate-pulse" />, label: 'Building', color: 'text-orange-500' },
     fixing: { icon: <Loader2 size={13} className="text-yellow-500 animate-spin" />, label: 'Auto-fixing', color: 'text-yellow-500' },
-    preview_ready: { icon: <Eye size={13} className="text-emerald-500" />, label: 'Preview Ready', color: 'text-emerald-500' },
+    preview_ready: { icon: <Sparkles size={13} className="text-emerald-500" />, label: 'Ready', color: 'text-emerald-500' },
     error: { icon: <AlertCircle size={13} className="text-destructive" />, label: 'Error', color: 'text-destructive' },
   };
 
   const cfg = phaseConfig[phase] || phaseConfig.thinking;
+
+  // Thinking text accumulated
+  const thinkingText = thinkingLines?.join('') || '';
+
+  // Plan chain-of-thought steps
+  const planCotSteps = (planItems ?? []).map(item => ({
+    icon: item.done ? CheckCircle2 : ListChecks,
+    label: item.label,
+    status: (item.done ? 'complete' : phase === 'planning' ? 'active' : 'complete') as 'complete' | 'active' | 'pending',
+    priority: item.priority,
+  }));
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-3 duration-500 space-y-3">
@@ -165,12 +220,16 @@ export const GenerationPhaseDisplay: React.FC<PhaseDisplayProps> = ({
         <span className="text-[9px] font-mono text-muted-foreground/50 ml-auto">{elapsedSeconds}s</span>
       </div>
 
-      {/* ─── THINKING PHASE ─── */}
-      {phase === 'thinking' && (
-        <Reasoning isStreaming={true} defaultOpen>
+      {/* ─── THINKING PHASE ───
+          Reasoning handles duration + auto-collapse natively via its built-in timer */}
+      {(phase === 'thinking' || (thinkingText && phase === 'planning')) && (
+        <Reasoning
+          isStreaming={phase === 'thinking'}
+          defaultOpen={true}
+        >
           <ReasoningTrigger />
           <ReasoningContent>
-            {thinkingLines?.join('') || 'Analyzing your request…'}
+            {thinkingText || 'Analyzing your request…'}
           </ReasoningContent>
         </Reasoning>
       )}
@@ -191,38 +250,38 @@ export const GenerationPhaseDisplay: React.FC<PhaseDisplayProps> = ({
           ) : (
             <Shimmer className="text-[11px] font-mono" duration={1.2}>Reading project files…</Shimmer>
           )}
-          {/* Chain of thought during reading (shows the plan) */}
-          {showChainOfThought && (
-            <ChainOfThought defaultOpen>
-              <ChainOfThoughtHeader>Application plan</ChainOfThoughtHeader>
-              <ChainOfThoughtContent>
-                {cotSteps.map((step, i) => (
-                  <ChainOfThoughtStep key={i} icon={step.icon} label={step.label} status={step.status} />
-                ))}
-              </ChainOfThoughtContent>
-            </ChainOfThought>
-          )}
         </div>
       )}
 
       {/* ─── PLANNING PHASE ─── */}
       {phase === 'planning' && planItems && planItems.length > 0 && (
-        <div className="space-y-2 animate-in fade-in duration-300">
+        <motion.div
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: 'easeOut' }}
+          className="space-y-2"
+        >
           <p className="text-[11px] text-muted-foreground">Here's how your app will be built</p>
           <ChainOfThought defaultOpen>
             <ChainOfThoughtHeader>Application plan</ChainOfThoughtHeader>
             <ChainOfThoughtContent>
-              {planItems.map((item, i) => (
-                <ChainOfThoughtStep
-                  key={i}
-                  icon={item.done ? CheckCircle2 : ListChecks}
-                  label={item.label}
-                  status={item.done ? 'complete' : 'active'}
-                />
+              {planCotSteps.map((step, i) => (
+                <div key={i} className="flex items-start gap-0">
+                  <ChainOfThoughtStep
+                    icon={step.icon}
+                    label={
+                      <span className="flex items-center gap-1 flex-wrap">
+                        <span>{step.label}</span>
+                        <PriorityBadge priority={step.priority} />
+                      </span>
+                    }
+                    status={step.status}
+                  />
+                </div>
               ))}
             </ChainOfThoughtContent>
           </ChainOfThought>
-        </div>
+        </motion.div>
       )}
 
       {/* ─── BUILDING PHASE ─── */}
@@ -234,7 +293,7 @@ export const GenerationPhaseDisplay: React.FC<PhaseDisplayProps> = ({
           )}
 
           {/* Write indicators with per-file mini progress */}
-          {buildOnlyLogs.length > 0 && (
+          {buildOnlyLogs.length > 0 ? (
             <div className="space-y-2">
               {buildOnlyLogs.map((log, i) => (
                 <WriteIndicator
@@ -244,6 +303,8 @@ export const GenerationPhaseDisplay: React.FC<PhaseDisplayProps> = ({
                 />
               ))}
             </div>
+          ) : (
+            <Shimmer className="text-[11px] font-mono" duration={1.2}>Generating files…</Shimmer>
           )}
 
           {/* Global progress bar */}
@@ -266,19 +327,50 @@ export const GenerationPhaseDisplay: React.FC<PhaseDisplayProps> = ({
         </div>
       )}
 
-      {/* ─── PREVIEW READY ─── */}
+      {/* ─── PREVIEW READY — framer-motion celebration ─── */}
       {phase === 'preview_ready' && (
-        <div className="bg-emerald-500/5 border border-emerald-500/15 rounded-xl p-5 animate-in fade-in zoom-in-95 duration-500">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-              <CheckCircle2 size={18} className="text-emerald-500" />
+        <AnimatePresence>
+          <motion.div
+            initial={{ scale: 0.92, opacity: 0, y: 8 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            transition={{ type: 'spring', stiffness: 280, damping: 22 }}
+          >
+            <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-5">
+              <div className="flex items-center gap-3 mb-1">
+                {/* Sparkles burst animation */}
+                <motion.div
+                  className="w-9 h-9 rounded-lg bg-emerald-500/10 flex items-center justify-center"
+                  initial={{ rotate: -10, scale: 0.8 }}
+                  animate={{ rotate: 0, scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 350, damping: 18, delay: 0.1 }}
+                >
+                  <Sparkles size={18} className="text-emerald-500" />
+                </motion.div>
+                <div>
+                  <motion.p
+                    className="text-[14px] text-foreground font-semibold"
+                    initial={{ opacity: 0, x: -6 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.15, duration: 0.3 }}
+                  >
+                    Your app is ready.
+                  </motion.p>
+                  <motion.p
+                    className="text-[11px] text-muted-foreground"
+                    initial={{ opacity: 0, x: -6 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.25, duration: 0.3 }}
+                  >
+                    Preview it live, share the link, or ask me to iterate.
+                  </motion.p>
+                </div>
+              </div>
             </div>
-            <div>
-              <p className="text-[14px] text-foreground font-semibold">Your app is ready.</p>
-              <p className="text-[11px] text-muted-foreground">Preview it live, share the link, or ask me to iterate.</p>
-            </div>
-          </div>
-        </div>
+
+            {/* Written files — collapsible, shown below the celebration block */}
+            <WrittenFilesSection buildLogs={allBuildLogs} />
+          </motion.div>
+        </AnimatePresence>
       )}
 
       {/* ─── ERROR ─── */}
