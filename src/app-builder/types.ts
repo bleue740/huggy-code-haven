@@ -68,6 +68,7 @@ export interface BuildLog {
   text: string;
   done: boolean;
   type?: 'read' | 'build';
+  linesCount?: number;
 }
 
 export interface PlanItem {

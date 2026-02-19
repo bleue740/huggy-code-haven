@@ -20,7 +20,7 @@ interface OrchestratorCallbacks {
   onConversationalDelta?: (delta: string) => void; // streaming token-by-token
   onError: (error: string, code?: number) => void;
   onPlanReady: (intent: string, steps: Array<{ id: number; action: string; target: string; description: string }>) => void;
-  onFileGenerated?: (path: string) => void;
+  onFileGenerated?: (path: string, linesCount?: number) => void;
   onPhase?: (phase: string, message: string) => void;
   onThinkingDelta?: (delta: string) => void; // real-time thinking tokens
   onFileRead?: (path: string) => void;       // file being read before building
@@ -167,7 +167,7 @@ export function useOrchestrator() {
 
                 case "file_generated":
                   dispatch({ type: "FILE_GENERATED", path: event.path });
-                  callbacks.onFileGenerated?.(event.path);
+                  callbacks.onFileGenerated?.(event.path, event.linesCount);
                   break;
 
                 case "validation":
