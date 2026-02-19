@@ -1,12 +1,16 @@
 {
   "name": "ai-builder-server",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "express": "^4.19.2",
-    "serve": "^14.2.0"
+    "cors": "^2.8.5",
+    "http-proxy-middleware": "^3.0.3",
+    "serve": "^14.2.0",
+    "@supabase/supabase-js": "^2.49.1",
+    "tree-kill": "^1.2.2"
   }
 }
