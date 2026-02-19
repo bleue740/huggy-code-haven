@@ -23,12 +23,87 @@ app.use(express.json({ limit: "50mb" }));
 // ─── Env ───
 const PUBLIC_URL = (process.env.PUBLIC_URL || "").replace(/\/$/, "");
 const PORT = parseInt(process.env.PORT || "3000", 10);
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!PUBLIC_URL) {
   console.warn("[server] ⚠️  PUBLIC_URL not set — preview URLs will be localhost-based.");
 }
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.warn("[server] ⚠️  SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set — /build will fail.");
+}
+
+// ─── In-memory Rate Limiter ───────────────────────────────────────
+// Simple sliding-window rate limiter without external dependencies.
+// Buckets: { ip -> { count, windowStart } }
+
+const rateLimitWindows = new Map(); // ip -> { count, windowStart }
+
+function rateLimit(maxRequests, windowMs, label = "endpoint") {
+  return (req, res, next) => {
+    const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+    const now = Date.now();
+    const bucket = rateLimitWindows.get(ip) || { count: 0, windowStart: now };
+
+    // Reset window if expired
+    if (now - bucket.windowStart > windowMs) {
+      bucket.count = 0;
+      bucket.windowStart = now;
+    }
+
+    bucket.count++;
+    rateLimitWindows.set(ip, bucket);
+
+    if (bucket.count > maxRequests) {
+      const retryAfter = Math.ceil((windowMs - (now - bucket.windowStart)) / 1000);
+      console.warn(`[rate-limit] ${label} blocked for IP ${ip} (${bucket.count}/${maxRequests})`);
+      return res.status(429).json({
+        error: "Too many requests. Please slow down.",
+        retryAfterSeconds: retryAfter,
+      });
+    }
+
+    next();
+  };
+}
+
+// Clean up old rate-limit buckets every 5 minutes
+setInterval(() => {
+  const cutoff = Date.now() - 10 * 60 * 1000; // 10 min old
+  for (const [ip, bucket] of rateLimitWindows.entries()) {
+    if (bucket.windowStart < cutoff) rateLimitWindows.delete(ip);
+  }
+}, 5 * 60 * 1000);
+
+// ─── JWT Auth Middleware ──────────────────────────────────────────
+// Validates Supabase JWT on protected endpoints.
+
+async function requireAuth(req, res, next) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return next(); // skip if not configured
+
+  const authHeader = req.headers["authorization"] || "";
+  const token = authHeader.replace(/^Bearer\s+/i, "");
+  if (!token) {
+    return res.status(401).json({ error: "Missing Authorization header" });
+  }
+
+  try {
+    const resp = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: SUPABASE_SERVICE_ROLE_KEY,
+      },
+    });
+    if (!resp.ok) {
+      return res.status(401).json({ error: "Invalid or expired token" });
+    }
+    const user = await resp.json();
+    req.userId = user.id;
+    next();
+  } catch (err) {
+    console.error("[auth] Token validation error:", err.message);
+    return res.status(401).json({ error: "Auth validation failed" });
+  }
 }
 
 // ─── Health ───
@@ -43,7 +118,8 @@ app.get("/health", (_req, res) => {
 });
 
 // ─── Dev: Start ───
-app.post("/dev/start", async (req, res) => {
+// 10 starts per 10 minutes per IP
+app.post("/dev/start", rateLimit(10, 10 * 60 * 1000, "dev/start"), async (req, res) => {
   const { projectId, files, projectName } = req.body;
   if (!projectId || !files) {
     return res.status(400).json({ error: "projectId and files are required" });
@@ -63,7 +139,8 @@ app.post("/dev/start", async (req, res) => {
 });
 
 // ─── Dev: Sync files ───
-app.post("/dev/sync", (req, res) => {
+// 120 syncs per minute per IP (high freq needed for HMR)
+app.post("/dev/sync", rateLimit(120, 60 * 1000, "dev/sync"), (req, res) => {
   const { projectId, files } = req.body;
   if (!projectId || !files) {
     return res.status(400).json({ error: "projectId and files are required" });
@@ -101,7 +178,8 @@ app.get("/dev/status/:projectId", (req, res) => {
 });
 
 // ─── Build (Production) ───
-app.post("/build", async (req, res) => {
+// Rate-limited: 5 builds per hour per IP
+app.post("/build", rateLimit(5, 60 * 60 * 1000, "build"), requireAuth, async (req, res) => {
   const { projectId, files, projectName } = req.body;
   if (!projectId || !files) {
     return res.status(400).json({ error: "projectId and files are required" });

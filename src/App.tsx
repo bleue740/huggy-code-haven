@@ -19,6 +19,7 @@ import PrivacyPage from "./pages/Privacy";
 import TermsPage from "./pages/Terms";
 import LegalNoticePage from "./pages/LegalNotice";
 import ContactPage from "./pages/Contact";
+import DashboardPage from "./pages/Dashboard";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +39,7 @@ function AnimatedRoutes() {
         <Route path="/legal" element={<LegalNoticePage />} />
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/p/:deploymentId" element={<PublishedDeploymentPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/app" element={<Index />} />
         <Route path="/" element={<Index />} />
         <Route path="*" element={<NotFound />} />

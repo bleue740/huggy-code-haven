@@ -469,8 +469,26 @@ const App: React.FC = () => {
         })), 4000);
       },
 
+      onConversationalDelta: (delta) => {
+        // Token-by-token streaming: build message progressively
+        streamingTextRef.current = delta === "" ? "" : streamingTextRef.current + delta;
+        const currentText = streamingTextRef.current;
+        setState((prev) => {
+          const last = prev.history[prev.history.length - 1];
+          if (last?.role === "assistant" && last.id.startsWith("conv_stream_")) {
+            return { ...prev, history: prev.history.map((m, i) => i === prev.history.length - 1 ? { ...m, content: currentText } : m) };
+          }
+          if (delta === "") {
+            // conv_start signal — add placeholder
+            return { ...prev, history: [...prev.history, { id: `conv_stream_${Date.now()}`, role: "assistant" as const, content: "", timestamp: Date.now() }] };
+          }
+          return { ...prev, history: prev.history.map((m, i) => i === prev.history.length - 1 ? { ...m, content: currentText } : m) };
+        });
+      },
+
       onConversationalReply: (reply) => {
         setRetryCount(0);
+        streamingTextRef.current = "";
         setState((prev) => ({
           ...prev,
           isGenerating: false,
@@ -481,7 +499,10 @@ const App: React.FC = () => {
           _planItems: [],
           _buildLogs: [],
           _thinkingLines: [],
-          history: [...prev.history, { id: `conv_${Date.now()}`, role: "assistant", content: reply, timestamp: Date.now() }],
+          // Replace streaming placeholder with final reply
+          history: prev.history.map((m) =>
+            m.id.startsWith("conv_stream_") ? { ...m, id: `conv_${Date.now()}`, content: reply } : m
+          ),
         }));
         persistMessage(state.projectId, "assistant", reply, false, 0, "agent");
         refetchCredits();

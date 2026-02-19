@@ -307,6 +307,81 @@ async function callAgent<T>(
   }
 }
 
+// ── Streaming AI Call (token-by-token) ────────────────────────────
+// Used for conversational replies so they appear word-by-word in the UI.
+
+async function callAgentStreaming(
+  systemPrompt: string,
+  userMessage: string,
+  model: string,
+  onToken: (chunk: string) => Promise<void>,
+  maxTokens = 1024,
+): Promise<string> {
+  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+  if (!LOVABLE_API_KEY) throw new Error("AI gateway not configured");
+
+  const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
+      ],
+      temperature: 0.7,
+      max_tokens: maxTokens,
+      stream: true,
+    }),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    if (resp.status === 429) throw new Error("Rate limit exceeded — please try again shortly.");
+    if (resp.status === 402) throw new Error("AI credits exhausted — top up your workspace.");
+    throw new Error(`Agent streaming call failed: ${resp.status} — ${errText.slice(0, 200)}`);
+  }
+
+  if (!resp.body) throw new Error("No response body for streaming");
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let fullText = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let newlineIdx: number;
+    while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
+      const line = buffer.slice(0, newlineIdx).trim();
+      buffer = buffer.slice(newlineIdx + 1);
+
+      if (!line.startsWith("data: ")) continue;
+      const jsonStr = line.slice(6).trim();
+      if (jsonStr === "[DONE]") break;
+
+      try {
+        const parsed = JSON.parse(jsonStr);
+        const delta = parsed.choices?.[0]?.delta?.content;
+        if (delta) {
+          fullText += delta;
+          await onToken(delta);
+        }
+      } catch {
+        // skip malformed chunks
+      }
+    }
+  }
+
+  return fullText;
+}
+
 // ── SSE Stream ────────────────────────────────────────────────────
 
 function createSSEStream() {
@@ -454,12 +529,41 @@ ${projectContext ? projectContext.slice(0, 12000) : "Empty project — only App.
 
         await stream.sendEvent({ type: "plan", plan });
 
-        // ── Handle Conversational ──
-        if (plan.conversational && plan.reply) {
+        // ── Handle Conversational (streaming token-by-token) ──
+        if (plan.conversational || (plan.clarification_needed && plan.clarification_question)) {
+          const baseReply = plan.clarification_needed
+            ? `🤔 ${plan.clarification_question}`
+            : (plan.reply || plan.intent || "Comment puis-je vous aider ?");
+
+          // Stream tokens as they arrive
+          await stream.sendEvent({ type: "conv_start" });
+
+          const CONVERSATIONAL_SYSTEM = `Tu es un assistant expert en développement d'applications web. Réponds de manière concise, utile et professionnelle. Tu peux utiliser du markdown. Réfère-toi au contexte du projet si pertinent.`;
+          const convInput = `Contexte du projet:\n${projectContext ? projectContext.slice(0, 2000) : "Nouveau projet"}\n\nMessage utilisateur: ${userPrompt}`;
+
+          let fullReply = "";
+          try {
+            fullReply = await callAgentStreaming(
+              CONVERSATIONAL_SYSTEM,
+              convInput,
+              FAST_MODEL,
+              async (chunk) => {
+                await stream.sendEvent({ type: "conv_delta", delta: chunk });
+              },
+              1024,
+            );
+          } catch {
+            // fallback to pre-computed reply if streaming fails
+            fullReply = baseReply;
+            for (const word of fullReply.split(" ")) {
+              await stream.sendEvent({ type: "conv_delta", delta: word + " " });
+            }
+          }
+
           await stream.sendEvent({
             type: "result",
             conversational: true,
-            reply: plan.reply,
+            reply: fullReply,
             files: [],
             deletedFiles: [],
           });
@@ -468,7 +572,7 @@ ${projectContext ? projectContext.slice(0, 12000) : "Empty project — only App.
           return;
         }
 
-        // ── Handle Clarification ──
+        // ── Handle Clarification (kept for non-conversational edge case) ──
         if (plan.clarification_needed && plan.clarification_question) {
           await stream.sendEvent({
             type: "result",
