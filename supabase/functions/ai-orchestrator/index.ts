@@ -347,7 +347,7 @@ function pickGeneratorModel(complexity: "simple" | "complex"): string {
   return complexity === "complex" ? "openai/gpt-5" : "google/gemini-3-flash-preview";
 }
 
-const FAST_MODEL = "google/gemini-3-flash-preview";
+const FAST_MODEL = "google/gemini-2.5-flash";
 
 // ── Main Handler ───────────────────────────────────────────────────
 
@@ -463,7 +463,7 @@ ${projectContext ? projectContext.slice(0, 12000) : "Empty project — only App.
             files: [],
             deletedFiles: [],
           });
-          await deductCredit(adminClient, userId, currentCredits, creditRow?.lifetime_used ?? 0);
+          await deductCredit(adminClient, userId, 0, 0);
           await stream.close();
           return;
         }
@@ -477,7 +477,7 @@ ${projectContext ? projectContext.slice(0, 12000) : "Empty project — only App.
             files: [],
             deletedFiles: [],
           });
-          await deductCredit(adminClient, userId, currentCredits, creditRow?.lifetime_used ?? 0);
+          await deductCredit(adminClient, userId, 0, 0);
           await stream.close();
           return;
         }
@@ -653,7 +653,7 @@ ${currentFilesStr}`;
           warnings: validation.warnings || [],
         });
 
-        await deductCredit(adminClient, userId, currentCredits, creditRow?.lifetime_used ?? 0);
+        await deductCredit(adminClient, userId, 0, 0);
 
       } catch (e) {
         console.error("Orchestrator pipeline error:", e);
@@ -691,21 +691,23 @@ ${currentFilesStr}`;
   }
 });
 
-// ── Helper: Deduct Credit ─────────────────────────────────────────
+// ── Helper: Deduct Credit via secure RPC ─────────────────────────
 
 async function deductCredit(
   adminClient: ReturnType<typeof createClient>,
   userId: string,
-  currentCredits: number,
-  lifetimeUsed: number,
+  _currentCredits: number,
+  _lifetimeUsed: number,
 ) {
-  await adminClient
-    .from("users_credits")
-    .update({
-      credits: currentCredits - 1,
-      lifetime_used: lifetimeUsed + 1,
-    })
-    .eq("user_id", userId);
+  const { data, error } = await adminClient.rpc("deduct_credits", {
+    p_user_id: userId,
+    p_amount: 1,
+    p_description: "Orchestrator pipeline",
+  });
+  if (error) {
+    console.error("Failed to deduct credit:", error.message);
+  }
+  return data;
 }
 
 // ── Helper: Revalidate after fix ──────────────────────────────────

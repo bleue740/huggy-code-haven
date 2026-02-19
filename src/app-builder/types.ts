@@ -52,6 +52,24 @@ export interface GenerationStep {
 
 export type BackendNeed = 'database' | 'auth' | 'storage' | 'scraping';
 
+export type GenerationPhase =
+  | 'thinking'
+  | 'planning'
+  | 'building'
+  | 'preview_ready'
+  | 'error';
+
+export interface BuildLog {
+  id: string;
+  text: string;
+  done: boolean;
+}
+
+export interface PlanItem {
+  label: string;
+  done: boolean;
+}
+
 export interface AppState {
   projectId?: string;
   credits: number;
@@ -88,4 +106,12 @@ export interface AppState {
   showSupabaseModal?: boolean;
   chatMode?: 'plan' | 'agent';
   generationSteps?: GenerationStep[];
+  // Pipeline UI state (fully typed — no more any casts)
+  _generationPhase?: GenerationPhase;
+  _pipelineProgress?: number;
+  _buildLogs?: BuildLog[];
+  _planItems?: PlanItem[];
+  _thinkingLines?: string[];
+  _totalExpectedFiles?: number;
+  _filesGeneratedCount?: number;
 }
