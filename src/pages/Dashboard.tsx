@@ -55,6 +55,76 @@ function getFileCount(code: string | null): number {
   return 1;
 }
 
+/** Extract the main App.tsx source code (first 40 lines) for syntax preview */
+function getCodePreview(code: string | null): string {
+  if (!code) return "// Nouveau projet";
+  try {
+    const parsed = JSON.parse(code);
+    if (parsed?.__multifile && typeof parsed.files === "object") {
+      const appCode: string = parsed.files["App.tsx"] || Object.values(parsed.files)[0] || "";
+      return appCode.split("\n").slice(0, 30).join("\n");
+    }
+  } catch {}
+  return code.split("\n").slice(0, 30).join("\n");
+}
+
+/** Minimal token-based syntax highlighter (no external deps) */
+function SyntaxHighlight({ code }: { code: string }) {
+  const lines = code.split("\n");
+  return (
+    <div className="font-mono text-[9px] leading-[14px] text-left overflow-hidden">
+      {lines.map((line, i) => {
+        let html = line
+          .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        html = html
+          .replace(/\b(import|export|from|const|let|var|function|return|if|else|for|while|class|extends|new|typeof|interface|type|async|await|default)\b/g,
+            '<span style="color:#a78bfa">$1</span>')
+          .replace(/(\/\/[^\n]*)/g, '<span style="color:#6b7280;font-style:italic">$1</span>')
+          .replace(/(&quot;[^&]*&quot;|&#39;[^&]*&#39;|`[^`]*`)/g, '<span style="color:#34d399">$1</span>');
+        return (
+          <div key={i} className="flex gap-2">
+            <span className="text-gray-600 dark:text-neutral-700 select-none w-5 text-right shrink-0">{i + 1}</span>
+            <span dangerouslySetInnerHTML={{ __html: html || " " }} className="text-gray-300 dark:text-neutral-400 truncate" />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Hover preview: iframe if deployed, else syntax-highlighted code */
+const ProjectPreviewHover: React.FC<{ deployedUrl?: string | null; code: string | null; gradient: string }> = ({ deployedUrl, code, gradient }) => {
+  const [iframeLoaded, setIframeLoaded] = useState(false);
+  const codeSnippet = getCodePreview(code);
+
+  return deployedUrl ? (
+    <div className="absolute inset-0 bg-[#0a0a0a] rounded-t-2xl overflow-hidden">
+      {!iframeLoaded && (
+        <div className={`absolute inset-0 bg-gradient-to-br ${gradient} flex items-center justify-center`}>
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 size={16} className="text-white/70 animate-spin" />
+            <span className="text-[10px] text-white/60">Chargement…</span>
+          </div>
+        </div>
+      )}
+      <iframe
+        src={deployedUrl}
+        className="w-full h-full border-0"
+        style={{ transform: "scale(0.5)", transformOrigin: "top left", width: "200%", height: "200%", pointerEvents: "none" }}
+        onLoad={() => setIframeLoaded(true)}
+        sandbox="allow-scripts allow-same-origin"
+        title="App preview"
+      />
+      <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-black/40 to-transparent" />
+    </div>
+  ) : (
+    <div className="absolute inset-0 bg-[#0d0d14] rounded-t-2xl overflow-hidden p-2">
+      <SyntaxHighlight code={codeSnippet} />
+      <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-[#0d0d14] to-transparent" />
+    </div>
+  );
+};
+
 const ProjectCard: React.FC<{
   project: Project;
   deployment?: Deployment;
@@ -67,6 +137,7 @@ const ProjectCard: React.FC<{
   const [showMenu, setShowMenu] = useState(false);
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(project.name);
+  const [isHovered, setIsHovered] = useState(false);
   const gradient = getProjectPreviewColor(project.id);
   const fileCount = getFileCount(project.code);
   const deployedUrl = deployment?.build_url || deployment?.url;
@@ -144,17 +215,34 @@ const ProjectCard: React.FC<{
       whileHover={{ y: -2 }}
       className="group relative bg-white dark:bg-[#111] border border-gray-200 dark:border-[#222] rounded-2xl overflow-hidden hover:border-blue-500/40 hover:shadow-xl hover:shadow-blue-500/5 dark:hover:shadow-blue-500/10 transition-all cursor-pointer"
       onClick={() => onOpen(project.id)}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Preview area */}
       <div className={`h-36 bg-gradient-to-br ${gradient} relative overflow-hidden`}>
+        {/* Default gradient bg (always rendered as background) */}
         <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)", backgroundSize: "20px 20px" }} />
         <div className="absolute bottom-3 left-3 right-3 bg-black/20 backdrop-blur-sm rounded-lg px-3 py-1.5">
           <div className="flex gap-1.5">
             <div className="w-2 h-2 rounded-full bg-white/40" /><div className="w-2 h-2 rounded-full bg-white/40" /><div className="w-2 h-2 rounded-full bg-white/40" />
           </div>
         </div>
+        {/* Hover preview overlay: iframe or syntax code */}
+        <AnimatePresence>
+          {isHovered && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="absolute inset-0"
+            >
+              <ProjectPreviewHover deployedUrl={deployedUrl} code={project.code} gradient={gradient} />
+            </motion.div>
+          )}
+        </AnimatePresence>
         {deployedUrl && (
-          <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 bg-emerald-500 text-white text-[10px] font-bold rounded-full shadow-lg">
+          <div className="absolute top-3 right-3 flex items-center gap-1 px-2 py-1 bg-emerald-500 text-white text-[10px] font-bold rounded-full shadow-lg z-10">
             <Globe size={9} /> Live
           </div>
         )}
