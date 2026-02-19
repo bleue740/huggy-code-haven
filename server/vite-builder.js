@@ -7,6 +7,21 @@ const TEMPLATES_DIR = path.join(process.cwd(), "templates");
 const PROJECTS_DIR = path.join(process.cwd(), "projects");
 const BASE_NODE_MODULES = path.join(process.cwd(), "_base_modules");
 
+// Log emitter — injected by index.js to avoid circular deps
+let _emitLog = (projectId, text, level) => {
+  // Default: just console.log
+  console.log(`[${projectId}] ${text}`);
+};
+
+export function setLogEmitter(fn) {
+  _emitLog = fn;
+}
+
+function log(projectId, text, level = "log") {
+  _emitLog(projectId, text, level);
+}
+
+
 // Active dev servers: projectId -> { port, process, lastAccess, projectDir }
 const devServers = new Map();
 
@@ -309,8 +324,12 @@ export async function startDevServer(projectId, files, projectName) {
     }, 60_000);
 
     viteProcess.stdout.on("data", (data) => {
-      const text = data.toString();
+      const text = data.toString().trimEnd();
       output += text;
+      // Stream stdout to SSE clients
+      for (const line of text.split("\n")) {
+        if (line.trim()) log(projectId, line, "log");
+      }
       if (!started && (text.includes("Local:") || text.includes("ready in"))) {
         started = true;
         clearTimeout(timeout);
@@ -322,13 +341,18 @@ export async function startDevServer(projectId, files, projectName) {
           projectDir,
         });
 
+        log(projectId, `✅ Dev server ready on port ${port}`, "info");
         console.log(`[vite-builder] ✅ Dev server for ${projectId} on port ${port}`);
         resolve({ port, projectId });
       }
     });
 
     viteProcess.stderr.on("data", (data) => {
-      output += data.toString();
+      const text = data.toString().trimEnd();
+      output += text;
+      for (const line of text.split("\n")) {
+        if (line.trim()) log(projectId, line, "warn");
+      }
     });
 
     viteProcess.on("exit", (code) => {
@@ -401,8 +425,25 @@ export async function buildProject(projectId, files, projectName, supabaseUrl, s
   }
 
   // Run vite build
+  log(projectId, "🔨 Starting Vite production build...", "info");
   console.log(`[vite-builder] Building project ${projectId}...`);
-  await execAsync("npx vite build", { cwd: projectDir });
+
+  try {
+    const { stdout, stderr } = await execAsync("npx vite build", { cwd: projectDir });
+    if (stdout) {
+      for (const line of stdout.split("\n")) {
+        if (line.trim()) log(projectId, line, "log");
+      }
+    }
+    if (stderr) {
+      for (const line of stderr.split("\n")) {
+        if (line.trim()) log(projectId, line, "warn");
+      }
+    }
+  } catch (buildErr) {
+    log(projectId, `❌ Build error: ${buildErr.message}`, "error");
+    throw buildErr;
+  }
 
   const distDir = path.join(projectDir, "dist");
   if (!fs.existsSync(distDir)) {
@@ -410,6 +451,7 @@ export async function buildProject(projectId, files, projectName, supabaseUrl, s
   }
 
   // Upload to Supabase Storage
+  log(projectId, "📦 Uploading build assets...", "info");
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
   const distFiles = getAllFiles(distDir, distDir);
   const uploadedUrls = {};
@@ -432,7 +474,10 @@ export async function buildProject(projectId, files, projectName, supabaseUrl, s
       });
 
     if (error) {
+      log(projectId, `⚠️ Upload error for ${file}: ${error.message}`, "warn");
       console.error(`[vite-builder] Upload error for ${file}:`, error.message);
+    } else {
+      log(projectId, `✓ Uploaded ${file}`, "log");
     }
 
     const { data: urlData } = supabase.storage
@@ -443,6 +488,7 @@ export async function buildProject(projectId, files, projectName, supabaseUrl, s
   }
 
   const buildUrl = uploadedUrls["index.html"];
+  log(projectId, `✅ Build complete: ${buildUrl}`, "info");
   console.log(`[vite-builder] ✅ Build complete: ${buildUrl}`);
 
   return {
