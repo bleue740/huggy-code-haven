@@ -51,6 +51,23 @@ const App: React.FC = () => {
   const [retryCount, setRetryCount] = useState(0);
   const streamingTextRef = useRef("");
   const thinkingTextRef = useRef("");
+  // SSE watchdog: reset on every event, fires onError if silent for 30s
+  const sseWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resetSseWatchdog = useCallback((onTimeout: () => void) => {
+    if (sseWatchdogRef.current) clearTimeout(sseWatchdogRef.current);
+    sseWatchdogRef.current = setTimeout(() => {
+      console.warn("[SSE] Watchdog: no event in 30s — aborting generation");
+      onTimeout();
+    }, 30_000);
+  }, []);
+
+  const clearSseWatchdog = useCallback(() => {
+    if (sseWatchdogRef.current) {
+      clearTimeout(sseWatchdogRef.current);
+      sseWatchdogRef.current = null;
+    }
+  }, []);
 
   const { logs: consoleLogs, clearLogs: clearConsoleLogs } = useConsoleCapture();
   const { credits, isLoading: creditsLoading, refetch: refetchCredits } = useCredits();
@@ -284,6 +301,30 @@ const App: React.FC = () => {
 
     thinkingTextRef.current = "";
 
+    // ── SSE Watchdog: triggers onError if no event arrives in 30s ──
+    const triggerTimeout = () => {
+      clearSseWatchdog();
+      stopOrchestrator();
+      stopStreaming();
+      const timeoutMsg = "Aucune réponse du serveur depuis 30 secondes. Vérifiez votre connexion et réessayez.";
+      setState((prev) => ({
+        ...prev,
+        isGenerating: false,
+        aiStatusText: null,
+        _generationPhase: undefined,
+        _pipelineProgress: 0,
+        _planItems: [],
+        _buildLogs: [],
+        _thinkingLines: [],
+        history: [
+          ...prev.history.filter((m) => !m.id.startsWith("typing_")),
+          { id: `timeout_${Date.now()}`, role: "assistant" as const, content: `⏱️ ${timeoutMsg}`, timestamp: Date.now() },
+        ],
+      }));
+      toast.error(timeoutMsg);
+    };
+    resetSseWatchdog(triggerTimeout);
+
     const currentMode = state.chatMode || "agent";
     persistMessage(state.projectId, "user", input, false, 0, currentMode);
 
@@ -333,6 +374,8 @@ const App: React.FC = () => {
     // AGENT MODE
     await sendOrchestrator(chatMessages, vfsRef.current, ctxRef.current, {
       onPhase: (phase, message) => {
+        // Reset watchdog on every phase event
+        resetSseWatchdog(triggerTimeout);
         const phaseMap: Record<string, { uiPhase: AppState['_generationPhase']; progress: number }> = {
           planning:   { uiPhase: "thinking", progress: 10 },
           generating: { uiPhase: "building", progress: 30 },
@@ -353,12 +396,14 @@ const App: React.FC = () => {
       },
 
       onThinkingDelta: (delta) => {
+        resetSseWatchdog(triggerTimeout);
         thinkingTextRef.current += delta;
         const text = thinkingTextRef.current;
         setState((prev) => ({ ...prev, _thinkingLines: [text] }));
       },
 
       onFileRead: (path) => {
+        resetSseWatchdog(triggerTimeout);
         setState((prev) => ({
           ...prev,
           _generationPhase: "reading",
@@ -411,18 +456,38 @@ const App: React.FC = () => {
       },
 
       onFileGenerated: (path, linesCount) => {
+        resetSseWatchdog(triggerTimeout);
         setState((prev) => {
-          const logs: BuildLog[] = (prev._buildLogs || []).map((l) => {
-            if (!l.done && l.text.toLowerCase().includes(path.toLowerCase().replace(".tsx", "").replace(".ts", ""))) {
+          // Normalize path for exact matching (strip leading ./ or /)
+          const normPath = path.replace(/^\.?\//, '').toLowerCase();
+          const prevLogs = prev._buildLogs || [];
+
+          // 1) Try exact match: log text must contain the exact path
+          let matched = false;
+          const logs: BuildLog[] = prevLogs.map((l) => {
+            if (matched || l.type === 'read' || l.done) return l;
+            // Extract filename from the log text "Writing App.tsx…"
+            const logPath = l.text
+              .replace(/^Writing\s+/i, '')
+              .replace(/…$/, '')
+              .trim()
+              .replace(/^\.?\//, '')
+              .toLowerCase();
+            if (logPath === normPath) {
+              matched = true;
               return { ...l, done: true, linesCount };
             }
             return l;
           });
-          const anyMarked = logs.some((l, i) => l.done && !(prev._buildLogs || [])[i]?.done);
-          if (!anyMarked) {
-            const firstUndone = logs.findIndex((l) => !l.done);
-            if (firstUndone >= 0) logs[firstUndone] = { ...logs[firstUndone], done: true, linesCount };
+
+          // 2) Fallback: mark first undone build log if no exact match
+          if (!matched) {
+            const firstUndone = logs.findIndex((l) => l.type !== 'read' && !l.done);
+            if (firstUndone >= 0) {
+              logs[firstUndone] = { ...logs[firstUndone], done: true, linesCount };
+            }
           }
+
           const newCount = (prev._filesGeneratedCount || 0) + 1;
           const total = prev._totalExpectedFiles || 1;
           const fileProgress = 30 + Math.round((newCount / total) * 50);
@@ -442,6 +507,7 @@ const App: React.FC = () => {
       },
 
       onFilesGenerated: (files, deletedFiles) => {
+        clearSseWatchdog();
         setRetryCount(0);
         const totalLines = files.reduce((sum, f) => sum + f.content.split("\n").length, 0);
 
@@ -527,6 +593,7 @@ const App: React.FC = () => {
       },
 
       onConversationalDelta: (delta) => {
+        resetSseWatchdog(triggerTimeout);
         // Token-by-token streaming: build message progressively
         streamingTextRef.current = delta === "" ? "" : streamingTextRef.current + delta;
         const currentText = streamingTextRef.current;
@@ -545,6 +612,7 @@ const App: React.FC = () => {
       },
 
       onConversationalReply: (reply) => {
+        clearSseWatchdog();
         setRetryCount(0);
         streamingTextRef.current = "";
         setState((prev) => ({
@@ -567,12 +635,13 @@ const App: React.FC = () => {
       },
 
       onError: (error, code) => {
+        clearSseWatchdog();
         setState((prev) => ({
           ...prev,
           isGenerating: false,
           aiStatusText: null,
           _generationPhase: "error",
-          history: [...prev.history, { id: `err_${Date.now()}`, role: "assistant", content: `⚠️ ${error}`, timestamp: Date.now() }],
+          history: [...prev.history.filter(m => !m.id.startsWith("typing_")), { id: `err_${Date.now()}`, role: "assistant", content: `⚠️ ${error}`, timestamp: Date.now() }],
         }));
         if (code === 401) {
           toast.info("Redirection vers la connexion…");
@@ -582,7 +651,7 @@ const App: React.FC = () => {
         toast.error(error);
       },
     });
-  }, [state.currentInput, state.isGenerating, state.history, state.files, state.chatMode, state.supabaseUrl, state.supabaseAnonKey, state.firecrawlEnabled, project.showLanding, sendAIMessage, sendOrchestrator, refetchCredits, fetchSuggestions]);
+  }, [state.currentInput, state.isGenerating, state.history, state.files, state.chatMode, state.supabaseUrl, state.supabaseAnonKey, state.firecrawlEnabled, project.showLanding, sendAIMessage, sendOrchestrator, refetchCredits, fetchSuggestions, resetSseWatchdog, clearSseWatchdog, stopOrchestrator, stopStreaming]);
 
   // Undo / Redo
   const handleUndo = useCallback(() => {
