@@ -43,6 +43,7 @@ import {
 } from '@/components/ai-elements/confirmation';
 import type { BuildLogEntry } from '../hooks/useBuildLogs';
 import { useBuildPipeline } from '../hooks/useBuildPipeline';
+import { Shimmer } from '@/components/ai-elements/shimmer';
 
 interface SidebarProps {
   state: AppState;
@@ -453,7 +454,15 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                       <Message from={msg.role}>
                         {msg.role === 'assistant' ? (
                           <>
-                            <ChatMessage message={msg} onApprovePlan={onApprovePlan} />
+                            <ChatMessage
+                              message={msg}
+                              onApprovePlan={onApprovePlan}
+                              isStreaming={
+                                msg.id.startsWith('conv_stream_') &&
+                                state.isGenerating &&
+                                idx === state.history.length - 1
+                              }
+                            />
                             <MessageActions
                               content={msg.content}
                               messageId={msg.id}
@@ -510,31 +519,47 @@ export const Sidebar = React.forwardRef<HTMLDivElement, SidebarProps>(
                 )}
 
                 {/* Generating state */}
-                {state.isGenerating && (
-                  <Message from="assistant">
-                    {/* Build pipeline progress — shown when SSE logs from Railway are available */}
-                    <BuildProgress
-                      pipeline={buildPipeline}
-                      isVisible={buildLogs.length > 0}
-                    />
-                    <GenerationPhaseDisplay
-                      phase={(state as any)._generationPhase || 'thinking'}
-                      thinkingLines={(state as any)._thinkingLines}
-                      planItems={(state as any)._planItems}
-                      buildLogs={(state as any)._buildLogs}
-                      errorMessage={undefined}
-                      elapsedSeconds={elapsedSeconds}
-                      onStop={onStop}
-                    />
-                    {onStop && (
-                      <div className="flex justify-end mt-3">
-                        <button onClick={onStop} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-semibold bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/20 transition-all hover:scale-[1.02]">
-                          <Square size={12} /> Stop
-                        </button>
-                      </div>
-                    )}
-                  </Message>
-                )}
+                {(() => {
+                  // Detect if a conversational stream is active vs code generation
+                  const hasConvStream = state.history.some(m => m.id.startsWith('conv_stream_'));
+                  const isCodeGenerating = state.isGenerating && !hasConvStream;
+                  return state.isGenerating ? (
+                    <Message from="assistant">
+                      {/* Shimmer placeholder during pure code generation (no conv stream) */}
+                      {isCodeGenerating && (state as any)._generationPhase !== 'thinking' && (
+                        <div className="space-y-2 mb-3 animate-in fade-in duration-500">
+                          <Shimmer className="text-[13px] font-medium" duration={1.5}>Generating your application…</Shimmer>
+                          <div className="space-y-1.5 mt-2">
+                            <div className="h-2 rounded-full bg-muted animate-pulse" style={{ width: '85%' }} />
+                            <div className="h-2 rounded-full bg-muted animate-pulse" style={{ width: '65%', animationDelay: '0.15s' }} />
+                            <div className="h-2 rounded-full bg-muted animate-pulse" style={{ width: '75%', animationDelay: '0.3s' }} />
+                          </div>
+                        </div>
+                      )}
+                      {/* Build pipeline progress — shown when SSE logs from Railway are available */}
+                      <BuildProgress
+                        pipeline={buildPipeline}
+                        isVisible={buildLogs.length > 0}
+                      />
+                      <GenerationPhaseDisplay
+                        phase={(state as any)._generationPhase || 'thinking'}
+                        thinkingLines={(state as any)._thinkingLines}
+                        planItems={(state as any)._planItems}
+                        buildLogs={(state as any)._buildLogs}
+                        errorMessage={undefined}
+                        elapsedSeconds={elapsedSeconds}
+                        onStop={onStop}
+                      />
+                      {onStop && (
+                        <div className="flex justify-end mt-3">
+                          <button onClick={onStop} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[11px] font-semibold bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/20 transition-all hover:scale-[1.02]">
+                            <Square size={12} /> Stop
+                          </button>
+                        </div>
+                      )}
+                    </Message>
+                  ) : null;
+                })()}
               </ConversationContent>
 
               <ConversationScrollButton />

@@ -146,6 +146,24 @@ export const GeneratingOverlay: React.FC<GeneratingOverlayProps> = ({
   progress: externalProgress,
 }) => {
   const [showSparkles, setShowSparkles] = useState(false);
+  // Internal visibility: stays true for 800ms after isVisible → false for smooth exit
+  const [internalVisible, setInternalVisible] = useState(false);
+  const [isExiting, setIsExiting] = useState(false);
+
+  useEffect(() => {
+    if (isVisible) {
+      setInternalVisible(true);
+      setIsExiting(false);
+    } else {
+      // Trigger fade-out then hide
+      setIsExiting(true);
+      const t = setTimeout(() => {
+        setInternalVisible(false);
+        setIsExiting(false);
+      }, 800);
+      return () => clearTimeout(t);
+    }
+  }, [isVisible]);
 
   // Use real progress from props (0-100), default to 5 when visible but no data yet
   const progress = externalProgress ?? (isVisible ? 5 : 0);
@@ -161,12 +179,19 @@ export const GeneratingOverlay: React.FC<GeneratingOverlayProps> = ({
     }
   }, [isVisible, progress, showSparkles]);
 
-  if (!isVisible) return null;
+  if (!internalVisible) return null;
 
   const currentPhase = PHASES[phaseIndex];
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center overflow-hidden">
+    <div
+      className="absolute inset-0 z-50 flex items-center justify-center overflow-hidden"
+      style={{
+        opacity: isExiting ? 0 : 1,
+        transform: isExiting ? 'scale(1.01)' : 'scale(1)',
+        transition: 'opacity 0.7s ease-out, transform 0.7s ease-out',
+      }}
+    >
       {/* Backdrop */}
       <div className="absolute inset-0 bg-[#020010]/93 backdrop-blur-xl" />
 
