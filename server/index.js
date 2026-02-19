@@ -11,6 +11,7 @@ import {
   buildProject,
   cleanupIdleServers,
   getActiveServers,
+  setLogEmitter,
 } from "./vite-builder.js";
 
 const app = express();
@@ -175,7 +176,70 @@ app.use("/dev-hmr/:projectId", (req, res, next) => {
   proxy(req, res, next);
 });
 
+// ─── Build Logs: SSE streaming ───
+//
+// Clients connect via GET /logs/:projectId and receive real-time build/dev logs
+// via Server-Sent Events (text/event-stream).
+//
+// Log producers (startDevServer, buildProject) call `emitLog(projectId, text, level)`.
+
+const logClients = new Map(); // projectId -> Set<res>
+const logBuffers = new Map(); // projectId -> string[] (last 200 lines)
+
+export function emitLog(projectId, text, level = "log") {
+  const entry = JSON.stringify({ text, level, ts: Date.now() });
+
+  // Buffer
+  if (!logBuffers.has(projectId)) logBuffers.set(projectId, []);
+  const buf = logBuffers.get(projectId);
+  buf.push(entry);
+  if (buf.length > 200) buf.shift();
+
+  // Broadcast to SSE clients
+  const clients = logClients.get(projectId);
+  if (clients) {
+    for (const res of clients) {
+      try { res.write(`data: ${entry}\n\n`); } catch {}
+    }
+  }
+}
+
+app.get("/logs/:projectId", (req, res) => {
+  const { projectId } = req.params;
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.flushHeaders();
+
+  // Send buffered logs first
+  const buf = logBuffers.get(projectId) || [];
+  for (const entry of buf) {
+    res.write(`data: ${entry}\n\n`);
+  }
+
+  // Register client
+  if (!logClients.has(projectId)) logClients.set(projectId, new Set());
+  logClients.get(projectId).add(res);
+
+  // Heartbeat every 20s
+  const heartbeat = setInterval(() => {
+    try { res.write(": ping\n\n"); } catch {}
+  }, 20_000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    const clients = logClients.get(projectId);
+    if (clients) {
+      clients.delete(res);
+      if (clients.size === 0) logClients.delete(projectId);
+    }
+  });
+});
+
 // ─── GitHub: Push ───
+
 app.post("/github/push", async (req, res) => {
   const { repo, token, files, message } = req.body;
   if (!repo || !token || !files) {
@@ -300,6 +364,9 @@ app.post("/github/pull", async (req, res) => {
 
 // ─── Start server ───
 async function start() {
+  // Inject log emitter into vite-builder so it can stream logs to SSE clients
+  setLogEmitter(emitLog);
+
   // Pre-warm base node_modules
   try {
     await setupBaseModules();

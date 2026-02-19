@@ -23,6 +23,7 @@ import { useProject, DEFAULT_FILES, serializeFiles } from "./hooks/useProject";
 import { useFileHistory } from "./hooks/useFileHistory";
 import { usePublish } from "./hooks/usePublish";
 import { useDevServer } from "./hooks/useDevServer";
+import { useBuildLogs } from "./hooks/useBuildLogs";
 
 import { VirtualFS } from "./engine/VirtualFS";
 import { ProjectContext } from "./engine/ProjectContext";
@@ -107,6 +108,14 @@ const App: React.FC = () => {
     devUrl, isStarting: isDevServerStarting, isConnected: isDevServerConnected,
     startDevServer, isAvailable: isDevServerAvailable,
   } = useDevServer(state.projectId, state.files);
+
+  // Build logs streamed from Railway server via SSE
+  const {
+    logs: buildLogs,
+    isConnected: buildLogsConnected,
+    clearLogs: clearBuildLogs,
+    isAvailable: buildLogsAvailable,
+  } = useBuildLogs(state.projectId);
 
   // Modal visibility state
   const [showFirecrawlModal, setShowFirecrawlModal] = useState(false);
@@ -658,7 +667,20 @@ const App: React.FC = () => {
           isDevServerStarting={isDevServerStarting}
           onStartDevServer={isDevServerAvailable ? () => startDevServer(state.projectName) : undefined}
         />
-        <ConsolePanel logs={consoleLogs} onClear={clearConsoleLogs} isOpen={consoleOpen} onToggle={() => setConsoleOpen(!consoleOpen)} />
+        <ConsolePanel
+          logs={[
+            ...consoleLogs,
+            ...(buildLogsAvailable ? buildLogs.map(l => ({
+              id: l.id,
+              type: (l.level === "error" ? "error" : l.level === "warn" ? "warn" : l.level === "info" ? "info" : "log") as "log" | "warn" | "error" | "info",
+              message: l.text,
+              timestamp: l.ts,
+            })) : []),
+          ].sort((a, b) => a.timestamp - b.timestamp)}
+          onClear={() => { clearConsoleLogs(); clearBuildLogs(); }}
+          isOpen={consoleOpen}
+          onToggle={() => setConsoleOpen(!consoleOpen)}
+        />
       </div>
 
       {/* Modals */}
