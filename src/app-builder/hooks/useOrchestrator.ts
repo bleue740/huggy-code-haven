@@ -17,6 +17,7 @@ const ORCHESTRATOR_URL = import.meta.env.VITE_BACKEND_URL
 interface OrchestratorCallbacks {
   onFilesGenerated: (files: Array<{ path: string; content: string }>, deletedFiles: string[]) => void;
   onConversationalReply: (reply: string) => void;
+  onConversationalDelta?: (delta: string) => void; // streaming token-by-token
   onError: (error: string, code?: number) => void;
   onPlanReady: (intent: string, steps: Array<{ id: number; action: string; target: string; description: string }>) => void;
   onFileGenerated?: (path: string) => void;
@@ -126,6 +127,18 @@ export function useOrchestrator() {
                   if (event.plan?.steps) {
                     dispatch({ type: "SET_PLAN", steps: event.plan.steps });
                     callbacks.onPlanReady(event.plan.intent, event.plan.steps);
+                  }
+                  break;
+
+                case "conv_start":
+                  // Signal that streaming conversation is beginning
+                  callbacks.onConversationalDelta?.("");
+                  break;
+
+                case "conv_delta":
+                  // Token-by-token streaming for conversational replies
+                  if (event.delta) {
+                    callbacks.onConversationalDelta?.(event.delta);
                   }
                   break;
 
