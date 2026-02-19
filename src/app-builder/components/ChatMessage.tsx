@@ -6,6 +6,8 @@ import { PlanMessage } from './PlanMessage';
 interface ChatMessageProps {
   message: Message;
   onApprovePlan?: (plan: string) => void;
+  /** True when this message is the active streaming token accumulator */
+  isStreaming?: boolean;
 }
 
 /** Strip fenced code blocks and [FILE:...] markers from text */
@@ -17,12 +19,22 @@ function stripCodeBlocks(text: string): string {
     .trim();
 }
 
+/** Blinking cursor shown at end of streaming text — identical to Lovable's */
+const StreamingCursor: React.FC = () => (
+  <span
+    className="inline-block w-[2px] h-[14px] bg-blue-400 ml-0.5 align-middle rounded-sm"
+    style={{ animation: 'blink-cursor 0.7s steps(1) infinite' }}
+  />
+);
+
 /** Very lightweight markdown-ish renderer — no dependencies */
-function renderMarkdown(text: string): React.ReactNode[] {
+function renderMarkdown(text: string, isStreaming = false): React.ReactNode[] {
   const lines = text.split('\n');
   const nodes: React.ReactNode[] = [];
 
   lines.forEach((line, i) => {
+    const isLastLine = i === lines.length - 1;
+
     if (!line.trim()) {
       nodes.push(<br key={`br-${i}`} />);
       return;
@@ -30,11 +42,21 @@ function renderMarkdown(text: string): React.ReactNode[] {
 
     // Headings
     if (line.startsWith('### ')) {
-      nodes.push(<h4 key={i} className="text-sm font-bold text-gray-900 dark:text-white mt-3 mb-1">{renderInline(line.slice(4))}</h4>);
+      nodes.push(
+        <h4 key={i} className="text-sm font-bold text-gray-900 dark:text-white mt-3 mb-1">
+          {renderInline(line.slice(4))}
+          {isStreaming && isLastLine && <StreamingCursor />}
+        </h4>
+      );
       return;
     }
     if (line.startsWith('## ')) {
-      nodes.push(<h3 key={i} className="text-sm font-bold text-gray-900 dark:text-white mt-3 mb-1">{renderInline(line.slice(3))}</h3>);
+      nodes.push(
+        <h3 key={i} className="text-sm font-bold text-gray-900 dark:text-white mt-3 mb-1">
+          {renderInline(line.slice(3))}
+          {isStreaming && isLastLine && <StreamingCursor />}
+        </h3>
+      );
       return;
     }
 
@@ -44,7 +66,10 @@ function renderMarkdown(text: string): React.ReactNode[] {
       nodes.push(
         <div key={i} className="flex gap-2 ml-1">
           <span className="text-blue-400 mt-[2px]">•</span>
-          <span>{renderInline(listMatch[1])}</span>
+          <span>
+            {renderInline(listMatch[1])}
+            {isStreaming && isLastLine && <StreamingCursor />}
+          </span>
         </div>
       );
       return;
@@ -56,14 +81,22 @@ function renderMarkdown(text: string): React.ReactNode[] {
       nodes.push(
         <div key={i} className="flex gap-2 ml-1">
           <span className="text-blue-400 font-mono text-xs mt-[2px]">{numMatch[1]}.</span>
-          <span>{renderInline(numMatch[2])}</span>
+          <span>
+            {renderInline(numMatch[2])}
+            {isStreaming && isLastLine && <StreamingCursor />}
+          </span>
         </div>
       );
       return;
     }
 
     // Regular paragraph
-    nodes.push(<p key={i} className="mb-0.5">{renderInline(line)}</p>);
+    nodes.push(
+      <p key={i} className="mb-0.5">
+        {renderInline(line)}
+        {isStreaming && isLastLine && <StreamingCursor />}
+      </p>
+    );
   });
 
   return nodes;
@@ -98,7 +131,7 @@ function renderInline(text: string): React.ReactNode[] {
   return parts;
 }
 
-export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onApprovePlan }) => {
+export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onApprovePlan, isStreaming = false }) => {
   const displayText = stripCodeBlocks(message.content);
   const showCodeIndicator = message.codeApplied;
 
@@ -112,8 +145,17 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onApprovePlan
   return (
     <div className="space-y-2">
       {textWithoutPlan && (
+        <div
+          className="text-[13px] leading-relaxed text-gray-700 dark:text-neutral-200"
+          style={isStreaming ? { animation: 'fade-in-message 0.15s ease-out' } : undefined}
+        >
+          {renderMarkdown(textWithoutPlan, isStreaming)}
+        </div>
+      )}
+      {/* Show cursor even when content is empty (conv_start just triggered) */}
+      {isStreaming && !textWithoutPlan && (
         <div className="text-[13px] leading-relaxed text-gray-700 dark:text-neutral-200">
-          {renderMarkdown(textWithoutPlan)}
+          <StreamingCursor />
         </div>
       )}
       {planContent && onApprovePlan && (
@@ -134,6 +176,18 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, onApprovePlan
           </span>
         </div>
       )}
+
+      {/* CSS animations injected once */}
+      <style>{`
+        @keyframes blink-cursor {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+        @keyframes fade-in-message {
+          from { opacity: 0.6; }
+          to { opacity: 1; }
+        }
+      `}</style>
     </div>
   );
 };

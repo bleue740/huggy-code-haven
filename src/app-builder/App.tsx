@@ -679,7 +679,11 @@ const App: React.FC = () => {
           code={concatenatedCode}
           files={state.files}
           isGenerating={state.isGenerating}
-          isBuilding={!!state._generationPhase && state._generationPhase !== "preview_ready" && state._generationPhase !== "error"}
+          isBuilding={
+            state.isGenerating &&
+            (state._generationPhase === "building" || state._generationPhase === "fixing") &&
+            !state.history.some((m) => m.id.startsWith("conv_stream_"))
+          }
           pipelineProgress={state._pipelineProgress || 0}
           generationStatus={state.aiStatusText ?? undefined}
           supabaseUrl={state.supabaseUrl}

@@ -56,6 +56,7 @@ export type GenerationPhase =
   | 'thinking'
   | 'planning'
   | 'building'
+  | 'fixing'
   | 'preview_ready'
   | 'error';
 
